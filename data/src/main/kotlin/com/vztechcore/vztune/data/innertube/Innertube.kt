@@ -21,6 +21,8 @@ object InnerTube {
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
 
+    // ================= CONTEXTOS =================
+
     private fun webRemixBody(): JSONObject = JSONObject().apply {
         put("context", JSONObject().apply {
             put("client", JSONObject().apply {
@@ -62,14 +64,23 @@ object InnerTube {
         })
     }
 
+    // ================= ENDPOINTS =================
+
     fun search(query: String, params: String? = null): JSONObject =
         post("search", webRemixBody().apply {
             put("query", query)
             if (params != null) put("params", params)
         })
 
+    fun searchContinuation(token: String): JSONObject =
+        post("search", webRemixBody().apply {
+            put("continuation", token)
+        })
+
     fun searchSuggestions(input: String): JSONObject =
-        post("music/get_search_suggestions", webRemixBody().apply { put("input", input) })
+        post("music/get_search_suggestions", webRemixBody().apply {
+            put("input", input)
+        })
 
     suspend fun player(videoId: String): JSONObject = coroutineScope {
         val clients = listOf(::androidMusicBody, ::androidVrBody)
@@ -87,6 +98,8 @@ object InnerTube {
         select { deferreds.forEach { d -> d.onAwait { it } } }
     }
 
+    // ================= HTTP =================
+
     private fun post(endpoint: String, body: JSONObject): JSONObject {
         val request = Request.Builder()
             .url("$API/$endpoint?prettyPrint=false")
@@ -94,7 +107,7 @@ object InnerTube {
             .addHeader(
                 "User-Agent",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             )
             .addHeader("X-Goog-Api-Format-Version", "2")
             .addHeader("X-YouTube-Client-Name", "67")
@@ -108,6 +121,8 @@ object InnerTube {
             return JSONObject(text)
         }
     }
+
+    // ================= HELPERS =================
 
     fun extractBestAudioUrl(playerJson: JSONObject): String? {
         val streaming = playerJson.optJSONObject("streamingData") ?: return null
@@ -146,10 +161,20 @@ object InnerTube {
                     ?.optString("token")
                     ?.takeIf { it.isNotBlank() && it != "null" }
                     ?.let { return it }
+                node.optJSONObject("nextContinuationData")
+                    ?.optString("continuation")
+                    ?.takeIf { it.isNotBlank() && it != "null" }
+                    ?.let { return it }
                 val keys = node.keys()
-                while (keys.hasNext()) findContinuationToken(node.opt(keys.next()))?.let { return it }
+                while (keys.hasNext()) {
+                    findContinuationToken(node.opt(keys.next()))?.let { return it }
+                }
             }
-            is JSONArray -> for (i in 0 until node.length()) findContinuationToken(node.opt(i))?.let { return it }
+            is JSONArray -> {
+                for (i in 0 until node.length()) {
+                    findContinuationToken(node.opt(i))?.let { return it }
+                }
+            }
         }
         return null
     }

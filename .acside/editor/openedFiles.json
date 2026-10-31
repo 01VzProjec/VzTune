@@ -1,0 +1,20 @@
+{
+  "allFiles": [
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/gradle/libs.versions.toml",
+      "selection": {
+        "end": {
+          "column": 70,
+          "index": 7078,
+          "line": 152
+        },
+        "start": {
+          "column": 70,
+          "index": 7078,
+          "line": 152
+        }
+      }
+    }
+  ],
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/gradle/libs.versions.toml"
+}

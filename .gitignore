@@ -1,0 +1,69 @@
+# ============================================================
+# VzTune - .gitignore
+# ============================================================
+
+# ---------- Gradle ----------
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+**/build/
+.gradle-cache/
+.gradle-configuration-cache/
+
+# ---------- Configuração local ----------
+local.properties
+keystore.properties
+
+# ---------- Assinatura (NUNCA commitar) ----------
+*.jks
+*.keystore
+*.b64
+release-keystore.jks
+vztune-release.jks
+
+# ---------- Android Studio / IntelliJ ----------
+.idea/
+*.iml
+*.iws
+*.ipr
+*.hprof
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ---------- Build outputs ----------
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+release/
+
+# ---------- Logs ----------
+*.log
+hs_err_pid*
+
+# ---------- Kotlin ----------
+.kotlin/
+
+# ---------- OS ----------
+.DS_Store
+Thumbs.db
+
+# ---------- Segredos / credenciais ----------
+.env
+*.pem
+google-services.json
+firebase.json
+
+# ---------- VzSync temporários ----------
+.vzsync/
+*.vzsync-tmp
+
+# ---------- Outros ----------
+*.swp
+*.swo

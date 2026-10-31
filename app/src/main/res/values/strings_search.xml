@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_hint">Search songs, artists, albums…</string>
+    <string name="search_action">Search</string>
+    <string name="search_clear">Clear search</string>
+
+    <string name="search_tab_all">All</string>
+    <string name="search_tab_songs">Songs</string>
+    <string name="search_tab_artists">Artists</string>
+    <string name="search_tab_albums">Albums</string>
+    <string name="search_tab_playlists">Playlists</string>
+    <string name="search_tab_videos">Videos</string>
+
+    <string name="search_empty_title">Start searching</string>
+    <string name="search_empty_description">Type a song, artist, album or playlist to get started.</string>
+
+    <string name="search_no_results_title">No results</string>
+    <string name="search_no_results_description">Nothing matched your search. Try different keywords.</string>
+
+    <string name="search_error_retry">Try again</string>
+</resources>

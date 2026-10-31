@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 object Routes {
     @Serializable data object Home
-    @Serializable data object Search
+    @Serializable data object Analytics
     @Serializable data object Library
-    @Serializable data object Settings
+    @Serializable data object Search
 }

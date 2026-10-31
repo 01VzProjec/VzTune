@@ -2,10 +2,17 @@ package com.vztechcore.vztune.ui.screens.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.vztechcore.vztune.core.domain.search.SearchFilter
+import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.core.domain.search.SearchResult
+import com.vztechcore.vztune.core.domain.search.SearchSuggestions
+import com.vztechcore.vztune.data.music.MusicRepository
+import com.vztechcore.vztune.data.player.PlayerController
 import com.vztechcore.vztune.data.prefs.AppSettingsStore
-import com.vztechcore.vztune.data.youtube.YouTubeRepository
+import com.vztechcore.vztune.data.prefs.SearchHistoryStore
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,57 +23,148 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val youTubeRepository: YouTubeRepository,
+    private val musicRepository: MusicRepository,
+    private val historyStore: SearchHistoryStore,
     private val appSettingsStore: AppSettingsStore,
+    private val playerController: PlayerController,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
+    private var suggestJob: Job? = null
+    private var searchJob: Job? = null
+
     init {
-        // Restore last selected search tab
+        // Restore last selected filter from settings
         viewModelScope.launch {
             val saved = appSettingsStore.settings.first().lastSearchTab
-            val tab = runCatching { SearchTab.valueOf(saved) }.getOrDefault(SearchTab.ALL)
-            _uiState.update { it.copy(selectedTab = tab) }
+            val filter = runCatching { SearchFilter.valueOf(saved) }.getOrDefault(SearchFilter.ALL)
+            _uiState.update { it.copy(selectedFilter = filter) }
+        }
+        // Observe persisted search history
+        viewModelScope.launch {
+            historyStore.history.collect { list ->
+                _uiState.update { it.copy(history = list) }
+            }
         }
     }
 
     fun onQueryChange(value: String) {
-        _uiState.update { it.copy(query = value, errorMessage = null) }
+        searchJob?.cancel()
+        _uiState.update {
+            it.copy(
+                query = value,
+                errorMessage = null,
+                hasSearched = false,
+                hits = emptyList(),
+                hasMore = false,
+                isLoading = false,
+                isLoadingMore = false,
+                isRefreshing = false,
+            )
+        }
+
+        suggestJob?.cancel()
+        if (value.isBlank()) {
+            _uiState.update { it.copy(suggestions = SearchSuggestions()) }
+            return
+        }
+
+        suggestJob = viewModelScope.launch {
+            delay(200)
+            val s = musicRepository.suggestions(value)
+            _uiState.update { it.copy(suggestions = s) }
+        }
     }
 
-    fun onTabSelect(tab: SearchTab) {
-        _uiState.update { it.copy(selectedTab = tab) }
-        viewModelScope.launch {
-            appSettingsStore.setLastSearchTab(tab.name)
-        }
-        // Re-run search if there is already a query
-        if (_uiState.value.query.isNotBlank()) {
-            onSubmit()
+    fun onFocusChanged(focused: Boolean) {
+        _uiState.update { it.copy(isFocused = focused) }
+    }
+
+    fun onFilterSelect(filter: SearchFilter) {
+        if (filter == _uiState.value.selectedFilter) return
+        _uiState.update { it.copy(selectedFilter = filter) }
+        viewModelScope.launch { appSettingsStore.setLastSearchTab(filter.name) }
+
+        if (_uiState.value.query.isNotBlank() && _uiState.value.hasSearched) {
+            runSearch(_uiState.value.query, filter, isRefresh = false)
         }
     }
 
     fun onSubmit() {
-        val query = _uiState.value.query.trim()
-        if (query.isEmpty()) return
+        val q = _uiState.value.query.trim()
+        if (q.isEmpty()) return
+        _uiState.update { it.copy(isFocused = false) }
+        viewModelScope.launch { historyStore.add(q) }
+        runSearch(q, _uiState.value.selectedFilter, isRefresh = false)
+    }
 
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+    fun onRefresh() {
+        if (_uiState.value.query.isBlank()) return
+        runSearch(_uiState.value.query, _uiState.value.selectedFilter, isRefresh = true)
+    }
 
-            when (val result = youTubeRepository.search(query, _uiState.value.selectedTab.name)) {
+    fun onRemoveHistory(query: String) {
+        viewModelScope.launch { historyStore.remove(query) }
+    }
+
+    fun onClearHistory() {
+        viewModelScope.launch { historyStore.clear() }
+    }
+
+    fun onLoadMore() {
+        if (!_uiState.value.hasMore ||
+            _uiState.value.isLoadingMore ||
+            _uiState.value.isLoading
+        ) return
+        // Stub: pagination not implemented yet.
+        _uiState.update { it.copy(hasMore = false) }
+    }
+
+    fun onHitClick(hit: SearchHit) {
+        when (hit) {
+            is SearchHit.SongHit -> playerController.play(hit.track)
+            is SearchHit.VideoHit -> playerController.play(hit.track)
+            is SearchHit.ArtistHit -> {
+                // TODO: navigate to artist detail
+            }
+            is SearchHit.AlbumHit -> {
+                // TODO: navigate to album detail
+            }
+            is SearchHit.PlaylistHit -> {
+                // TODO: navigate to playlist detail
+            }
+        }
+    }
+
+    private fun runSearch(query: String, filter: SearchFilter, isRefresh: Boolean) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isLoading = !isRefresh,
+                    isRefreshing = isRefresh,
+                    hasSearched = true,
+                    errorMessage = null,
+                )
+            }
+
+            when (val result = musicRepository.search(query, filter)) {
                 is SearchResult.Success -> _uiState.update {
                     it.copy(
                         isLoading = false,
-                        tracks = result.tracks,
-                        artists = result.artists,
-                        albums = result.albums,
-                        playlists = result.playlists,
-                        videos = result.videos,
+                        isRefreshing = false,
+                        hits = result.hits,
+                        hasMore = false,
                     )
                 }
                 is SearchResult.Failure -> _uiState.update {
-                    it.copy(isLoading = false, errorMessage = result.message)
+                    it.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        errorMessage = result.message,
+                    )
                 }
             }
         }

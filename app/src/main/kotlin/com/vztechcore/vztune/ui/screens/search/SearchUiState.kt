@@ -1,31 +1,33 @@
 package com.vztechcore.vztune.ui.screens.search
 
-import com.vztechcore.vztune.core.domain.music.Album
-import com.vztechcore.vztune.core.domain.music.Artist
-import com.vztechcore.vztune.core.domain.music.Playlist
-import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.core.domain.search.SearchFilter
+import com.vztechcore.vztune.core.domain.search.SearchHit
+import com.vztechcore.vztune.core.domain.search.SearchSuggestions
 
 data class SearchUiState(
     val query: String = "",
-    val selectedTab: SearchTab = SearchTab.ALL,
+    val isFocused: Boolean = false,
+    val selectedFilter: SearchFilter = SearchFilter.ALL,
+    val hits: List<SearchHit> = emptyList(),
+    val history: List<String> = emptyList(),
+    val suggestions: SearchSuggestions = SearchSuggestions(),
     val isLoading: Boolean = false,
+    val isLoadingMore: Boolean = false,
+    val isRefreshing: Boolean = false,
+    val hasSearched: Boolean = false,
+    val hasMore: Boolean = false,
     val errorMessage: String? = null,
-    val tracks: List<Track> = emptyList(),
-    val artists: List<Artist> = emptyList(),
-    val albums: List<Album> = emptyList(),
-    val playlists: List<Playlist> = emptyList(),
-    val videos: List<Track> = emptyList(),
 ) {
-    val hasResults: Boolean
-        get() = tracks.isNotEmpty() ||
-            artists.isNotEmpty() ||
-            albums.isNotEmpty() ||
-            playlists.isNotEmpty() ||
-            videos.isNotEmpty()
-
-    val isIdle: Boolean
-        get() = query.isBlank() && !isLoading && errorMessage == null
-
     val isEmptyResult: Boolean
-        get() = !isLoading && errorMessage == null && !hasResults && query.isNotBlank()
+        get() = hasSearched && !isLoading && errorMessage == null &&
+            hits.isEmpty() && query.isNotBlank()
+
+    val showHistoryState: Boolean
+        get() = isFocused && query.isBlank()
+
+    val showSuggestionsState: Boolean
+        get() = !hasSearched && query.isNotBlank() && !isLoading
+
+    val showIdleState: Boolean
+        get() = !isFocused && query.isBlank() && !hasSearched
 }

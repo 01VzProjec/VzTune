@@ -87,8 +87,15 @@ object InnerTubeParser {
 
         val videoId = r.optJSONObject("playlistItemData")?.optString("videoId")
         if (!videoId.isNullOrBlank() && videoId != "null") {
-            val uploader = extractArtistFromSubtitle(subtitleCol, subtitle) ?: "Desconhecido"
             val source = detectSource(videoId, r)
+
+            // For YOUTUBE (video) hits, use the channel name only.
+            // For YOUTUBE_MUSIC (song) hits, use the artist list.
+            val uploader = when (source) {
+                Source.YOUTUBE -> extractChannelName(subtitleCol) ?: "Desconhecido"
+                else -> extractArtistFromSubtitle(subtitleCol, subtitle) ?: "Desconhecido"
+            }
+
             out += ParsedItem.Song(
                 videoId = videoId,
                 title = title,
@@ -136,11 +143,6 @@ object InnerTubeParser {
         }
     }
 
-    /**
-     * Resolve the source (YouTube vs YouTube Music) for a given video.
-     * Checks, in order: cached value, musicVideoType, thumbnail URL shape.
-     * Falls back to YOUTUBE_MUSIC if nothing else can be determined.
-     */
     private fun detectSource(videoId: String, renderer: JSONObject): Source {
         sourceCache[videoId]?.let { return it }
 
@@ -238,6 +240,46 @@ object InnerTubeParser {
             if (before.isNotBlank()) return before
         }
         return subtitleText.trim().takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * Extract a channel name for a YOUTUBE (video) hit.
+     * Prefers the run whose browseId starts with "UC" (a real channel).
+     * Falls back to the first segment before "•" that isn't metadata
+     * (episode number, air date, view count, year, etc.).
+     */
+    private fun extractChannelName(subtitleCol: JSONObject?): String? {
+        val runs = subtitleCol?.optJSONObject("text")?.optJSONArray("runs")
+            ?: subtitleCol?.optJSONArray("runs")
+
+        if (runs != null) {
+            for (i in 0 until runs.length()) {
+                val run = runs.optJSONObject(i) ?: continue
+                val text = run.optString("text").trim()
+                if (text.isBlank() || text == "•" || text == "·") continue
+                val browseId = run.optJSONObject("navigationEndpoint")
+                    ?.optJSONObject("browseEndpoint")
+                    ?.optString("browseId")
+                if (browseId?.startsWith("UC") == true) return text
+            }
+        }
+
+        val full = subtitleCol?.let { runsText(it) }.orEmpty()
+        val segments = full.split("•").map { it.trim() }.filter { it.isNotBlank() }
+
+        val metaRegex = Regex(
+            "^(" +
+                "\\d{4}" +                                     // year
+                "|\\d{1,2} de \\w+\\.? de \\d{4}" +            // date in PT
+                "|T\\d+E\\d+" +                                // season/episode
+                "|Episódio \\d+" +
+                "|Temporada \\d+" +
+                "|\\d[\\d.,]* (views|visualizaç|reproduç).*" + // view count
+                ")$",
+            RegexOption.IGNORE_CASE,
+        )
+
+        return segments.firstOrNull { !metaRegex.matches(it) && it.length < 80 }
     }
 
     private fun flexText(columns: JSONArray, index: Int): String? {

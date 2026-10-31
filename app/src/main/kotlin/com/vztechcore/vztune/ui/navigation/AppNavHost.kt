@@ -1,7 +1,9 @@
 package com.vztechcore.vztune.ui.navigation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,6 +18,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.vztechcore.vztune.ui.components.AppBottomBar
+import com.vztechcore.vztune.ui.components.LocalNowPlaying
+import com.vztechcore.vztune.ui.components.MiniPlayerBar
+import com.vztechcore.vztune.ui.screens.main.MiniPlayerViewModel
 import com.vztechcore.vztune.ui.screens.search.SearchScreen
 import com.vztechcore.vztune.ui.screens.search.SearchViewModel
 import com.vztechcore.vztune.ui.theme.VzOnSurface
@@ -31,6 +36,9 @@ fun AppNavHost(modifier: Modifier = Modifier) {
         backStackEntry?.destination?.hasRoute<Routes.Library>() == true -> AppTab.LIBRARY
         else -> AppTab.HOME
     }
+
+    val playback = LocalNowPlaying.current
+    val miniPlayerVm: MiniPlayerViewModel = hiltViewModel()
 
     Box(modifier = modifier.fillMaxSize()) {
         NavHost(
@@ -59,25 +67,42 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             }
         }
 
-        AppBottomBar(
-            selected = currentTab,
-            onSelect = { tab ->
-                val route = when (tab) {
-                    AppTab.HOME -> Routes.Home
-                    AppTab.ANALYTICS -> Routes.Analytics
-                    AppTab.LIBRARY -> Routes.Library
-                    AppTab.SEARCH -> Routes.Search
-                }
-                navController.navigate(route) {
-                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
-                }
-            },
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .fillMaxWidth()
                 .navigationBarsPadding(),
-        )
+        ) {
+            val track = playback.currentTrack
+            if (track != null) {
+                MiniPlayerBar(
+                    track = track,
+                    isPlaying = playback.isPlaying,
+                    isLoading = false,
+                    onPlayPauseClick = miniPlayerVm::togglePlayPause,
+                    onNextClick = miniPlayerVm::next,
+                    onPrevClick = miniPlayerVm::previous,
+                    onClick = { /* TODO: open Now Playing screen */ },
+                )
+            }
+
+            AppBottomBar(
+                selected = currentTab,
+                onSelect = { tab ->
+                    val route = when (tab) {
+                        AppTab.HOME -> Routes.Home
+                        AppTab.ANALYTICS -> Routes.Analytics
+                        AppTab.LIBRARY -> Routes.Library
+                        AppTab.SEARCH -> Routes.Search
+                    }
+                    navController.navigate(route) {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+            )
+        }
     }
 }
 

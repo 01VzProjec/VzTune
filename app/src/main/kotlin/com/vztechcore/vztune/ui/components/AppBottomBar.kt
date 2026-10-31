@@ -54,29 +54,13 @@ fun AppBottomBar(
     var hoveredTab by remember { mutableStateOf<AppTab?>(null) }
     var isPressed by remember { mutableStateOf(false) }
 
-    // Whole bar scales slightly when pressed
-    val barScale by animateFloatAsState(
-        targetValue = if (isPressed) 1.04f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
-        label = "barScale",
-    )
-
     Box(
         modifier = modifier
-            .padding(start = 28.dp, end = 28.dp, top = 12.dp, bottom = 24.dp)
-            .graphicsLayer {
-                scaleX = barScale
-                scaleY = barScale
-                // Allow children to draw outside the box (needed so the
-                // selected marker can visually exceed the glass background)
-                clip = false
-            }
-            .height(60.dp),
+            .padding(horizontal = 28.dp)
+            .padding(top = 4.dp, bottom = 24.dp)
+            .height(72.dp),
     ) {
-        // Glass background (static, clipped)
+        // Glass background — stays fixed, never overflows
         Box(
             modifier = Modifier
                 .matchParentSize()
@@ -85,7 +69,6 @@ fun AppBottomBar(
                 .border(BorderStroke(1.dp, BarBorder), glassShape),
         )
 
-        // Interaction + tabs (unclipped, sits on top of glass)
         Row(
             modifier = Modifier
                 .fillMaxSize()
@@ -124,14 +107,14 @@ fun AppBottomBar(
                 val isHighlighted = if (hoveredTab != null) hoveredTab == tab else tab == selected
                 val isBeingPressed = hoveredTab == tab && isPressed
 
-                // Marker grows more when it's the one being touched
-                val markerScale by animateFloatAsState(
-                    targetValue = if (isBeingPressed) 1.28f else 1f,
+                // Only the icon scales — no marker growth, no overflow
+                val iconScale by animateFloatAsState(
+                    targetValue = if (isBeingPressed) 1.22f else 1f,
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioMediumBouncy,
                         stiffness = Spring.StiffnessMediumLow,
                     ),
-                    label = "markerScale-${tab.name}",
+                    label = "iconScale-${tab.name}",
                 )
 
                 val contentColor =
@@ -140,15 +123,10 @@ fun AppBottomBar(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxHeight()
-                        .graphicsLayer {
-                            scaleX = markerScale
-                            scaleY = markerScale
-                            clip = false
-                        },
+                        .fillMaxHeight(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    // Selected marker
+                    // Static marker — never grows
                     if (isHighlighted) {
                         Box(
                             modifier = Modifier
@@ -158,13 +136,17 @@ fun AppBottomBar(
                         )
                     }
 
-                    // Icon + label
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
                             imageVector = if (isHighlighted) tab.selectedIcon else tab.unselectedIcon,
                             contentDescription = tab.label,
                             tint = contentColor,
-                            modifier = Modifier.size(22.dp),
+                            modifier = Modifier
+                                .size(24.dp)
+                                .graphicsLayer {
+                                    scaleX = iconScale
+                                    scaleY = iconScale
+                                },
                         )
                         Text(
                             text = tab.label,

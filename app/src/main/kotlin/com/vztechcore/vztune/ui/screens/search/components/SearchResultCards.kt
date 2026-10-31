@@ -8,16 +8,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,19 +24,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.search.SearchHit
-import com.vztechcore.vztune.ui.components.NowPlayingThumbnail
+import com.vztechcore.vztune.ui.components.MediaThumbnail
+import com.vztechcore.vztune.ui.components.ThumbnailShape
+import com.vztechcore.vztune.ui.components.TrackSubtitle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,9 +50,8 @@ fun SearchResultsContent(
     modifier: Modifier = Modifier,
 ) {
     val isVideoMode = hits.all { it is SearchHit.VideoHit } && hits.isNotEmpty()
+    val lazyListState = rememberLazyListState()
 
-    // Trigger load-more when near the end
-    val lazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
     LaunchedEffect(lazyListState) {
         snapshotFlow {
             val last = lazyListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
@@ -66,12 +63,12 @@ fun SearchResultsContent(
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxWidth(),
     ) {
         LazyColumn(
             state = lazyListState,
             contentPadding = PaddingValues(
-                bottom = 140.dp,
+                bottom = 160.dp,
                 top = 8.dp,
                 start = 12.dp,
                 end = 12.dp,
@@ -108,42 +105,79 @@ fun SearchResultsContent(
 fun SearchResultCard(hit: SearchHit, onClick: () -> Unit) {
     when (hit) {
         is SearchHit.SongHit -> RowCard(
-            thumbnailUrl = hit.track.thumbnailUrl,
-            label = null,
+            imageUrl = hit.track.thumbnailUrl,
+            shape = ThumbnailShape.SQUARE,
             title = hit.track.title,
-            subtitle = hit.track.artist,
+            subtitle = {
+                TrackSubtitle(
+                    track = hit.track,
+                    style = MaterialTheme.typography.bodySmall,
+                    prefixColor = Color.White.copy(alpha = 0.55f),
+                    artistColor = Color.White.copy(alpha = 0.6f),
+                )
+            },
             durationLabel = formatDuration(hit.track.durationSeconds),
             onClick = onClick,
         )
         is SearchHit.VideoHit -> RowCard(
-            thumbnailUrl = hit.track.thumbnailUrl,
-            label = null,
+            imageUrl = hit.track.thumbnailUrl,
+            shape = ThumbnailShape.SQUARE,
             title = hit.track.title,
-            subtitle = hit.track.artist,
+            subtitle = {
+                TrackSubtitle(
+                    track = hit.track,
+                    style = MaterialTheme.typography.bodySmall,
+                    prefixColor = Color.White.copy(alpha = 0.55f),
+                    artistColor = Color.White.copy(alpha = 0.6f),
+                )
+            },
             durationLabel = formatDuration(hit.track.durationSeconds),
             onClick = onClick,
         )
         is SearchHit.PlaylistHit -> RowCard(
-            thumbnailUrl = hit.playlist.thumbnailUrl,
-            label = "Playlist",
+            imageUrl = hit.playlist.thumbnailUrl,
+            shape = ThumbnailShape.SQUARE,
             title = hit.playlist.title,
-            subtitle = hit.playlist.owner ?: "",
+            subtitle = {
+                Text(
+                    text = "Playlist · ${hit.playlist.owner ?: ""}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
             durationLabel = null,
             onClick = onClick,
         )
         is SearchHit.ArtistHit -> RowCard(
-            thumbnailUrl = hit.artist.thumbnailUrl,
-            label = "Artista",
+            imageUrl = hit.artist.thumbnailUrl,
+            shape = ThumbnailShape.CIRCLE,
             title = hit.artist.name,
-            subtitle = "Artista",
+            subtitle = {
+                Text(
+                    text = "Artista",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.6f),
+                    maxLines = 1,
+                )
+            },
             durationLabel = null,
             onClick = onClick,
         )
         is SearchHit.AlbumHit -> RowCard(
-            thumbnailUrl = hit.album.thumbnailUrl,
-            label = "Álbum",
+            imageUrl = hit.album.thumbnailUrl,
+            shape = ThumbnailShape.SQUARE,
             title = hit.album.title,
-            subtitle = hit.album.artist,
+            subtitle = {
+                Text(
+                    text = "Álbum · ${hit.album.artist}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
             durationLabel = null,
             onClick = onClick,
         )
@@ -158,22 +192,11 @@ fun VideoResultCard(hit: SearchHit.VideoHit, onClick: () -> Unit) {
             .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() },
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color.White.copy(alpha = 0.05f)),
-        ) {
-            if (hit.track.thumbnailUrl != null) {
-                AsyncImage(
-                    model = hit.track.thumbnailUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
+        MediaThumbnail(
+            imageUrl = hit.track.thumbnailUrl,
+            shape = ThumbnailShape.WIDE,
+            cornerRadius = 12.dp,
+        )
         Spacer(Modifier.height(8.dp))
         Text(
             text = hit.track.title,
@@ -184,22 +207,21 @@ fun VideoResultCard(hit: SearchHit.VideoHit, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(2.dp))
-        Text(
-            text = hit.track.artist,
+        TrackSubtitle(
+            track = hit.track,
             style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = 0.6f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            prefixColor = Color.White.copy(alpha = 0.55f),
+            artistColor = Color.White.copy(alpha = 0.6f),
         )
     }
 }
 
 @Composable
 private fun RowCard(
-    thumbnailUrl: String?,
-    label: String?,
+    imageUrl: String?,
+    shape: ThumbnailShape,
     title: String,
-    subtitle: String,
+    subtitle: @Composable () -> Unit,
     durationLabel: String?,
     onClick: () -> Unit,
 ) {
@@ -211,23 +233,14 @@ private fun RowCard(
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        NowPlayingThumbnail(
-            model = thumbnailUrl,
-            isPlaying = false,
-            modifier = Modifier.size(56.dp),
+        MediaThumbnail(
+            imageUrl = imageUrl,
+            shape = shape,
+            size = 56.dp,
             cornerRadius = 8.dp,
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            if (label != null) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.5f),
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Spacer(Modifier.height(2.dp))
-            }
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
@@ -235,16 +248,8 @@ private fun RowCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (subtitle.isNotBlank()) {
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            Spacer(Modifier.height(2.dp))
+            subtitle()
         }
         if (durationLabel != null) {
             Spacer(Modifier.width(8.dp))

@@ -11,11 +11,17 @@ data class PlaybackState(
     val currentTrack: Track? = null,
     val isPlaying: Boolean = false,
     val positionMs: Long = 0L,
+    val durationMs: Long = 0L,   
     val repeatMode: RepeatMode = RepeatMode.OFF,
     val shuffleEnabled: Boolean = false,
 ) {
     fun isCurrent(trackId: String, trackSource: Source): Boolean =
         currentTrack?.id == trackId && currentTrack.source == trackSource
+
+    val progress: Float   
+        get() = if (durationMs > 0) {
+            (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+        } else 0f
 }
 
 enum class RepeatMode { OFF, ONE, ALL }

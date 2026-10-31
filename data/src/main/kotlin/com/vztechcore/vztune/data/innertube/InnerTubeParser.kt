@@ -136,17 +136,26 @@ object InnerTubeParser {
         }
     }
 
+    /**
+     * Resolve the source (YouTube vs YouTube Music) for a given video.
+     * Checks, in order: cached value, musicVideoType, thumbnail URL shape.
+     * Falls back to YOUTUBE_MUSIC if nothing else can be determined.
+     */
     private fun detectSource(videoId: String, renderer: JSONObject): Source {
         sourceCache[videoId]?.let { return it }
 
-        findFirstMusicVideoType(renderer)?.let { type ->
-            when {
-                type == "MUSIC_VIDEO_TYPE_ATV" || type == "MUSIC_VIDEO_TYPE_PODCAST_EPISODE" ->
-                    Source.YOUTUBE_MUSIC.also { sourceCache[videoId] = it }
-                type.startsWith("MUSIC_VIDEO_TYPE_") ->
-                    Source.YOUTUBE.also { sourceCache[videoId] = it }
-                else -> Unit
-            }?.let { return it }
+        val type = findFirstMusicVideoType(renderer)
+        if (type != null) {
+            val resolved: Source? = when {
+                type == "MUSIC_VIDEO_TYPE_ATV" ||
+                    type == "MUSIC_VIDEO_TYPE_PODCAST_EPISODE" -> Source.YOUTUBE_MUSIC
+                type.startsWith("MUSIC_VIDEO_TYPE_") -> Source.YOUTUBE
+                else -> null
+            }
+            if (resolved != null) {
+                sourceCache[videoId] = resolved
+                return resolved
+            }
         }
 
         detectSourceFromThumbnailUrl(thumbnailOf(renderer.optJSONObject("thumbnail")))?.let {

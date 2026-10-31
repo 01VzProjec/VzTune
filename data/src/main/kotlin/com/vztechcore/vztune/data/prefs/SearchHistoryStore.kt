@@ -11,6 +11,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.IOException
 import javax.inject.Inject
@@ -43,7 +45,8 @@ class SearchHistoryStore @Inject constructor(
 
     suspend fun remove(query: String) {
         context.historyDataStore.edit { prefs ->
-            prefs[key] = Json.encodeToString(prefs.readList().filter { it != query })
+            val filtered = prefs.readList().filter { it != query }
+            prefs[key] = Json.encodeToString(filtered)
         }
     }
 
@@ -52,6 +55,8 @@ class SearchHistoryStore @Inject constructor(
     }
 
     private fun Preferences.readList(): List<String> =
-        this[key]?.let { runCatching { Json.decodeFromString<List<String>>(it) }.getOrDefault(emptyList()) }
-            ?: emptyList()
+        this[key]?.let {
+            runCatching { Json.decodeFromString<List<String>>(it) }
+                .getOrDefault(emptyList())
+        } ?: emptyList()
 }

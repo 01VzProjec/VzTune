@@ -14,19 +14,24 @@ import javax.inject.Singleton
  *         -> SearchExtractor(service, query, filters).fetchPage()
  *         -> initialPage.items -> map to Track / Playlist -> SearchHit
  *   Needs: NewPipeDownloaderImpl (OkHttpClient-backed).
- *   For now this returns an empty Success so the app pipeline compiles;
- *   the real aggregator (MusicRepository) is still stubbed too.
+ *
+ * For now returns empty Success so the app pipeline compiles.
+ * The real aggregator (MusicRepository) is also stubbed.
  */
 @Singleton
 class YouTubeRepository @Inject constructor() {
 
     suspend fun searchVideos(query: String): SearchResult = withContext(Dispatchers.IO) {
-        if (query.isBlank()) return@withContext SearchResult.Success(emptyList())
+        if (query.isBlank()) {
+            return@withContext SearchResult.Success(emptyList())
+        }
         SearchResult.Success(emptyList())
     }
 
     suspend fun searchPlaylists(query: String): SearchResult = withContext(Dispatchers.IO) {
-        if (query.isBlank()) return@withContext SearchResult.Success(emptyList())
+        if (query.isBlank()) {
+            return@withContext SearchResult.Success(emptyList())
+        }
         SearchResult.Success(emptyList())
     }
 }

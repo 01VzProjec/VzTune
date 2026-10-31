@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -43,7 +45,7 @@ fun MediaThumbnail(
     size: Dp = 56.dp,
     cornerRadius: Dp = 8.dp,
 ) {
-    val clipShape = when (shape) {
+    val clipShape: Shape = when (shape) {
         ThumbnailShape.SQUARE -> RoundedCornerShape(cornerRadius)
         ThumbnailShape.CIRCLE -> CircleShape
         ThumbnailShape.WIDE -> RoundedCornerShape(cornerRadius + 4.dp)
@@ -86,7 +88,7 @@ fun MediaThumbnail(
 }
 
 @Composable
-fun PlayingOverlay(clipShape: androidx.compose.ui.graphics.Shape) {
+fun PlayingOverlay(clipShape: Shape) {
     Box(
         modifier = Modifier
             .fillMaxSize()

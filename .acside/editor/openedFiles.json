@@ -214,14 +214,14 @@
       "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/MediaThumbnail.kt",
       "selection": {
         "end": {
-          "column": 67,
-          "index": 3134,
-          "line": 88
+          "column": 1,
+          "index": 4911,
+          "line": 151
         },
         "start": {
-          "column": 67,
-          "index": 3134,
-          "line": 88
+          "column": 1,
+          "index": 4911,
+          "line": 151
         }
       }
     },
@@ -245,13 +245,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 4349,
-          "line": 117
+          "index": 4311,
+          "line": 116
         },
         "start": {
           "column": 1,
-          "index": 4349,
-          "line": 117
+          "index": 4311,
+          "line": 116
         }
       }
     },
@@ -316,5 +316,5 @@
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/MediaThumbnail.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/MiniPlayerBar.kt"
 }

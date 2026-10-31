@@ -3,7 +3,6 @@ package com.vztechcore.vztune.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -52,7 +51,7 @@ fun MiniPlayerBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 28.dp, top = 8.dp, bottom = 4.dp)
+            .padding(start = 28.dp, end = 28.dp, top = 8.dp, bottom = 4.dp)
             .clip(shape)
             .background(GlassFill)
             .border(1.dp, GlassBorder, shape)

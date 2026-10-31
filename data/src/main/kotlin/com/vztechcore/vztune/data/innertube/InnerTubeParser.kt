@@ -48,6 +48,11 @@ object InnerTubeParser {
         }
     }
 
+    private val METADATA_TYPES = setOf(
+        "song", "música", "video", "vídeo", "episódio",
+        "single", "album", "álbum", "playlist",
+    )
+
     private val sourceCache = ConcurrentHashMap<String, Source>()
 
     fun parseSearchResults(json: JSONObject): List<ParsedItem> {
@@ -207,11 +212,13 @@ object InnerTubeParser {
     }
 
     /**
-     * Robust artist extraction.
-     * 1. Prefer runs whose browseId is a real artist (UC / MPAD).
-     * 2. Fallback: split by "•" and pick the segment that isn't a known
-     *    type ("Song"/"Música"/"Video"/"Episódio") and isn't metadata.
-     * 3. Normalize the separator to " & " between multiple artists.
+     * Extract the artist list for a YOUTUBE_MUSIC hit.
+     * Rules:
+     *  - Skip the leading metadata type ("Song", "Música", "Video", etc.).
+     *  - Skip connectors ("e", "&").
+     *  - Skip year / view-count segments.
+     *  - Stop at the first album (MPREb_) or playlist (VL) browse ID.
+     *  - Join the rest with " & ".
      */
     private fun extractArtistFromSubtitle(
         subtitleCol: JSONObject?,
@@ -219,53 +226,53 @@ object InnerTubeParser {
     ): String? {
         val runs = subtitleCol?.optJSONObject("text")?.optJSONArray("runs")
             ?: subtitleCol?.optJSONArray("runs")
+
         if (runs != null) {
             val artists = mutableListOf<String>()
             for (i in 0 until runs.length()) {
                 val run = runs.optJSONObject(i) ?: continue
-                val text = run.optString("text").trim()
-                    .trim(' ', ',', '&', '·', '•', '-', '/', ';')
+                val raw = run.optString("text")
+                val text = raw.trim().trim(' ', ',', '&', '·', '•', '-', '/', ';')
                 if (text.isBlank() || text == "•" || text == "·") continue
+                if (text.matches(Regex("^\\d+:\\d+.*$"))) break
+
                 val nav = run.optJSONObject("navigationEndpoint")
                 val browseId = nav?.optJSONObject("browseEndpoint")?.optString("browseId")
 
-                val isArtist = browseId != null &&
-                    (browseId.startsWith("UC") || browseId.startsWith("MPAD"))
-                val isAlbum = browseId != null &&
-                    (browseId.startsWith("MPREb_") || browseId.startsWith("VL"))
+                // Stop at album / playlist markers
+                if (browseId?.startsWith("MPREb_") == true ||
+                    browseId?.startsWith("VL") == true) break
 
-                when {
-                    isAlbum -> break
-                    isArtist -> if (text !in artists) artists += text
-                }
+                // Skip metadata types
+                if (text.lowercase() in METADATA_TYPES) continue
+                // Skip connectors
+                if (text.equals("e", true) || text == "&") continue
+                // Skip year / view counts
+                if (text.matches(Regex("^\\d{4}$"))) continue
+                if (text.contains("views", true) ||
+                    text.contains("visualizaç", true) ||
+                    text.contains("reproduç", true)) continue
+                if (text.length > 80) continue
+
+                if (text !in artists) artists += text
             }
             if (artists.isNotEmpty()) return artists.joinToString(" & ")
         }
 
-        // Fallback: parse the subtitle string
-        val parts = subtitleText.split("•").map { it.trim() }.filter { it.isNotBlank() }
-        if (parts.isEmpty()) return "Desconhecido"
-
-        val first = parts[0]
-        val isType = first.equals("Song", true) ||
-            first.equals("Música", true) ||
-            first.equals("Video", true) ||
-            first.equals("Vídeo", true) ||
-            first.equals("Episódio", true)
-
-        val artistPart = if (isType && parts.size > 1) parts[1] else first
-
-        val cleaned = artistPart
-            .split(",", "&")
+        // Fallback for subtitle with no structured runs
+        val segments = subtitleText.split("•")
             .map { it.trim() }
-            .filter { it.isNotBlank() && !it.equals("e", true) }
-
-        return if (cleaned.isEmpty()) "Desconhecido" else cleaned.joinToString(" & ")
+            .filter {
+                it.isNotBlank() &&
+                    it.lowercase() !in METADATA_TYPES &&
+                    !it.equals("e", true) &&
+                    !it.matches(Regex("^\\d{4}$"))
+            }
+        return segments.joinToString(" & ").takeIf { it.isNotBlank() }
     }
 
     /**
-     * For YouTube (video) hits: only the channel name from the run whose
-     * browseId starts with "UC". Never include episode/date/view metadata.
+     * For YOUTUBE (video) hits: only the channel name.
      */
     private fun extractChannelName(subtitleCol: JSONObject?): String? {
         val runs = subtitleCol?.optJSONObject("text")?.optJSONArray("runs")
@@ -283,8 +290,6 @@ object InnerTubeParser {
         }
 
         val full = subtitleCol?.let { runsText(it) }.orEmpty()
-        val segments = full.split("•").map { it.trim() }.filter { it.isNotBlank() }
-
         val metaRegex = Regex(
             "^(" +
                 "\\d{4}" +
@@ -296,7 +301,7 @@ object InnerTubeParser {
                 ")$",
             RegexOption.IGNORE_CASE,
         )
-
+        val segments = full.split("•").map { it.trim() }.filter { it.isNotBlank() }
         return segments.firstOrNull { !metaRegex.matches(it) && it.length < 80 }
     }
 

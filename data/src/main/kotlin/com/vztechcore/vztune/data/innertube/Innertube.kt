@@ -21,8 +21,6 @@ object InnerTube {
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
 
-    // ================= CONTEXTOS =================
-
     private fun webRemixBody(): JSONObject = JSONObject().apply {
         put("context", JSONObject().apply {
             put("client", JSONObject().apply {
@@ -64,8 +62,6 @@ object InnerTube {
         })
     }
 
-    // ================= ENDPOINTS =================
-
     fun search(query: String, params: String? = null): JSONObject =
         post("search", webRemixBody().apply {
             put("query", query)
@@ -98,8 +94,6 @@ object InnerTube {
         select { deferreds.forEach { d -> d.onAwait { it } } }
     }
 
-    // ================= HTTP =================
-
     private fun post(endpoint: String, body: JSONObject): JSONObject {
         val request = Request.Builder()
             .url("$API/$endpoint?prettyPrint=false")
@@ -122,37 +116,46 @@ object InnerTube {
         }
     }
 
-    // ================= HELPERS =================
+    fun isPlayable(playerJson: JSONObject): Boolean =
+        playerJson.optJSONObject("playabilityStatus")?.optString("status") == "OK"
 
+    /**
+     * Pick the best audio URL from a player response.
+     * Prefers mp4 (AAC) with the highest bitrate — most compatible with ExoPlayer.
+     */
     fun extractBestAudioUrl(playerJson: JSONObject): String? {
         val streaming = playerJson.optJSONObject("streamingData") ?: return null
-        var bestUrl: String? = null
-        var bestBitrate = 0
+
+        val candidates = mutableListOf<Triple<String, String, Int>>() // mime, url, bitrate
 
         streaming.optJSONArray("adaptiveFormats")?.let { formats ->
             for (i in 0 until formats.length()) {
                 val fmt = formats.optJSONObject(i) ?: continue
-                if (!fmt.optString("mimeType").startsWith("audio/")) continue
+                val mime = fmt.optString("mimeType")
+                if (!mime.startsWith("audio/")) continue
                 val url = fmt.optString("url").takeIf { it.isNotBlank() && it != "null" } ?: continue
                 val br = fmt.optInt("bitrate", 0)
-                if (br > bestBitrate) { bestBitrate = br; bestUrl = url }
+                candidates += Triple(mime, url, br)
             }
         }
-        if (bestUrl != null) return bestUrl
 
-        streaming.optJSONArray("formats")?.let { formats ->
-            for (i in 0 until formats.length()) {
-                val fmt = formats.optJSONObject(i) ?: continue
-                val url = fmt.optString("url").takeIf { it.isNotBlank() && it != "null" } ?: continue
-                val br = fmt.optInt("bitrate", 0)
-                if (br > bestBitrate) { bestBitrate = br; bestUrl = url }
+        if (candidates.isEmpty()) {
+            streaming.optJSONArray("formats")?.let { formats ->
+                for (i in 0 until formats.length()) {
+                    val fmt = formats.optJSONObject(i) ?: continue
+                    val url = fmt.optString("url").takeIf { it.isNotBlank() && it != "null" } ?: continue
+                    val br = fmt.optInt("bitrate", 0)
+                    candidates += Triple("", url, br)
+                }
             }
         }
-        return bestUrl
+
+        if (candidates.isEmpty()) return null
+
+        val mp4 = candidates.filter { it.first.contains("mp4", ignoreCase = true) }
+        val best = mp4.maxByOrNull { it.third } ?: candidates.maxByOrNull { it.third }
+        return best?.second
     }
-
-    fun isPlayable(playerJson: JSONObject): Boolean =
-        playerJson.optJSONObject("playabilityStatus")?.optString("status") == "OK"
 
     fun findContinuationToken(node: Any?): String? {
         when (node) {

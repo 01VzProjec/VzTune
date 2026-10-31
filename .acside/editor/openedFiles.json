@@ -5,13 +5,58 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 6795,
-          "line": 180
+          "index": 7014,
+          "line": 183
         },
         "start": {
           "column": 1,
-          "index": 6795,
-          "line": 180
+          "index": 7014,
+          "line": 183
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/innertube/InnerTubeParser.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 15550,
+          "line": 398
+        },
+        "start": {
+          "column": 1,
+          "index": 15550,
+          "line": 398
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/player/PlayerController.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 6450,
+          "line": 176
+        },
+        "start": {
+          "column": 1,
+          "index": 6450,
+          "line": 176
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/music/MusicRepository.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 5867,
+          "line": 160
+        },
+        "start": {
+          "column": 1,
+          "index": 5867,
+          "line": 160
         }
       }
     }

@@ -141,13 +141,21 @@ class MusicRepository @Inject constructor(
                 .getOrDefault(SearchSuggestions())
         }
 
+    /**
+     * Resolve a playable audio URL.
+     * Strategy for YOUTUBE_MUSIC: NewPipe first (returns direct googlevideo URL
+     * with User-Agent, works with ExoPlayer out of the box). Fall back to
+     * InnerTube's player response only if NewPipe fails.
+     * Strategy for YOUTUBE: NewPipe direct.
+     */
     suspend fun getStreamUrl(track: Track): String? = withContext(Dispatchers.IO) {
         when (track.source) {
             Source.YOUTUBE -> youTubeRepository.getStreamUrl(
                 track.id, track.title, track.artist,
             )
-            Source.YOUTUBE_MUSIC -> ytMusicRepository.getStreamUrl(track.id)
-                ?: youTubeRepository.getStreamUrl(track.id, track.title, track.artist)
+            Source.YOUTUBE_MUSIC -> youTubeRepository.getStreamUrl(
+                track.id, track.title, track.artist,
+            ) ?: ytMusicRepository.getStreamUrl(track.id)
         }
     }
 }

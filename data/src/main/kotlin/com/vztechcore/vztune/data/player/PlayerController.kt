@@ -1,11 +1,18 @@
 package com.vztechcore.vztune.data.player
 
 import android.content.Context
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
+import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.vztechcore.vztune.core.domain.music.Track
@@ -21,62 +28,95 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @UnstableApi
 @Singleton
 class PlayerController @Inject constructor(
-    @ApplicationContext context: Context,
+    @ApplicationContext private val context: Context,
     private val musicRepository: MusicRepository,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    val player: ExoPlayer = ExoPlayer.Builder(context)
-        .setMediaSourceFactory(
-            DefaultMediaSourceFactory(context).setDataSourceFactory(
-                DefaultDataSource.Factory(
-                    context,
-                    DefaultHttpDataSource.Factory()
-                        .setUserAgent(
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-                                "AppleWebKit/537.36 (KHTML, like Gecko) " +
-                                "Chrome/120.0.0.0 Safari/537.36"
-                        )
-                        .setConnectTimeoutMs(15_000)
-                        .setReadTimeoutMs(15_000)
-                        .setAllowCrossProtocolRedirects(true),
-                ),
-            )
+    private val mediaCache: SimpleCache by lazy {
+        SimpleCache(
+            File(context.cacheDir, "vztune_media"),
+            LeastRecentlyUsedCacheEvictor(CACHE_SIZE_BYTES),
+            StandaloneDatabaseProvider(context),
         )
-        .build()
-        .apply {
-            addListener(object : Player.Listener {
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    _state.update { it.copy(isPlaying = isPlaying) }
-                }
+    }
 
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    val duration = duration.coerceAtLeast(0L)
-                    if (duration > 0) {
-                        _state.update { it.copy(durationMs = duration) }
-                    }
-                }
+    val player: ExoPlayer = run {
+        val httpFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent(USER_AGENT)
+            .setConnectTimeoutMs(30_000)
+            .setReadTimeoutMs(30_000)
+            .setAllowCrossProtocolRedirects(true)
+            .setDefaultRequestProperties(
+                mapOf("Referer" to "https://www.youtube.com/")
+            )
 
-                override fun onPositionDiscontinuity(
-                    oldPosition: Player.PositionInfo,
-                    newPosition: Player.PositionInfo,
-                    reason: Int,
-                ) {
-                    _state.update {
-                        it.copy(
-                            positionMs = newPosition.positionMs,
-                            durationMs = player.duration.coerceAtLeast(0L),
-                        )
+        val cacheFactory = CacheDataSource.Factory()
+            .setCache(mediaCache)
+            .setUpstreamDataSourceFactory(DefaultDataSource.Factory(context, httpFactory))
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(context).setDataSourceFactory(cacheFactory)
+            )
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .build(),
+                true,
+            )
+            .setHandleAudioBecomingNoisy(true)
+            .build()
+            .apply {
+                addListener(object : Player.Listener {
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        _state.update { it.copy(isPlaying = isPlaying) }
                     }
-                }
-            })
-        }
+
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        val duration = duration.coerceAtLeast(0L)
+                        if (duration > 0) {
+                            _state.update { it.copy(durationMs = duration) }
+                        }
+                        if (playbackState == Player.STATE_READY) {
+                            _state.update { it.copy(isLoading = false) }
+                        }
+                    }
+
+                    override fun onPositionDiscontinuity(
+                        oldPosition: Player.PositionInfo,
+                        newPosition: Player.PositionInfo,
+                        reason: Int,
+                    ) {
+                        _state.update {
+                            it.copy(
+                                positionMs = newPosition.positionMs,
+                                durationMs = player.duration.coerceAtLeast(0L),
+                            )
+                        }
+                    }
+
+                    override fun onPlayerError(error: PlaybackException) {
+                        _state.update {
+                            it.copy(
+                                isPlaying = false,
+                                isLoading = false,
+                                error = "${error.errorCodeName}: ${error.message}",
+                            )
+                        }
+                    }
+                })
+            }
+    }
 
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
@@ -101,13 +141,12 @@ class PlayerController @Inject constructor(
                 player.setMediaItem(MediaItem.fromUri(url))
                 player.prepare()
                 player.playWhenReady = true
-                _state.update { it.copy(isLoading = false, isPlaying = true) }
             } else {
                 _state.update {
                     it.copy(
                         isLoading = false,
                         isPlaying = false,
-                        error = "Falha ao carregar áudio",
+                        error = "Não foi possível carregar o áudio.",
                     )
                 }
             }
@@ -124,5 +163,15 @@ class PlayerController @Inject constructor(
 
     fun next() { /* TODO: queue */ }
     fun previous() { /* TODO: queue */ }
-    fun release() = player.release()
+
+    fun release() {
+        player.release()
+        mediaCache.release()
+    }
+
+    private companion object {
+        const val CACHE_SIZE_BYTES = 200L * 1024 * 1024 // 200 MB
+        const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
 }

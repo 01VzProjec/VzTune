@@ -29,8 +29,16 @@ class SearchViewModel @Inject constructor(
     private val playerController: PlayerController,
 ) : ViewModel() {
 
+    private data class CachedTab(
+        val query: String,
+        val hits: List<SearchHit>,
+        val hasMore: Boolean,
+    )
+
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
+
+    private val filterCache = mutableMapOf<SearchFilter, CachedTab>()
 
     private var suggestJob: Job? = null
     private var searchJob: Job? = null
@@ -51,6 +59,8 @@ class SearchViewModel @Inject constructor(
     fun onQueryChange(value: String) {
         suggestJob?.cancel()
         searchJob?.cancel()
+        filterCache.clear()
+
         _uiState.update {
             it.copy(
                 query = value,
@@ -82,10 +92,27 @@ class SearchViewModel @Inject constructor(
 
     fun onFilterSelect(filter: SearchFilter) {
         if (filter == _uiState.value.selectedFilter) return
-        _uiState.update { it.copy(selectedFilter = filter) }
+        val currentQuery = _uiState.value.query
+
         viewModelScope.launch { appSettingsStore.setLastSearchTab(filter.name) }
-        if (_uiState.value.query.isNotBlank() && _uiState.value.hasSearched) {
-            runSearch(_uiState.value.query, filter, isRefresh = false)
+
+        val cached = filterCache[filter]
+        if (cached != null && cached.query == currentQuery) {
+            _uiState.update {
+                it.copy(
+                    selectedFilter = filter,
+                    hits = cached.hits,
+                    hasMore = cached.hasMore,
+                    hasSearched = true,
+                )
+            }
+            return
+        }
+
+        _uiState.update { it.copy(selectedFilter = filter) }
+
+        if (currentQuery.isNotBlank()) {
+            runSearch(currentQuery, filter, isRefresh = false, loadMore = false)
         }
     }
 
@@ -94,12 +121,14 @@ class SearchViewModel @Inject constructor(
         if (q.isEmpty()) return
         _uiState.update { it.copy(isFocused = false) }
         viewModelScope.launch { historyStore.add(q) }
-        runSearch(q, _uiState.value.selectedFilter, isRefresh = false)
+        filterCache.clear()
+        runSearch(q, _uiState.value.selectedFilter, isRefresh = false, loadMore = false)
     }
 
     fun onRefresh() {
         if (_uiState.value.query.isBlank()) return
-        runSearch(_uiState.value.query, _uiState.value.selectedFilter, isRefresh = true)
+        filterCache.clear()
+        runSearch(_uiState.value.query, _uiState.value.selectedFilter, isRefresh = true, loadMore = false)
     }
 
     fun onRemoveHistory(query: String) {
@@ -111,41 +140,77 @@ class SearchViewModel @Inject constructor(
     }
 
     fun onLoadMore() {
-        if (!_uiState.value.hasMore ||
-            _uiState.value.isLoadingMore ||
-            _uiState.value.isLoading
-        ) return
-        _uiState.update { it.copy(hasMore = false) }
+        val state = _uiState.value
+        if (state.isLoadingMore || state.isLoading || !state.hasMore) return
+        if (state.query.isBlank()) return
+
+        _uiState.update { it.copy(isLoadingMore = true) }
+
+        viewModelScope.launch {
+            val filter = state.selectedFilter
+            when (val result = musicRepository.search(
+                query = state.query,
+                filter = filter,
+                loadMore = true,
+            )) {
+                is SearchResult.Success -> {
+                    val merged = _uiState.value.hits + result.hits
+                    filterCache[filter] = CachedTab(
+                        query = state.query,
+                        hits = merged,
+                        hasMore = result.hasMore,
+                    )
+                    _uiState.update {
+                        it.copy(
+                            isLoadingMore = false,
+                            hits = merged,
+                            hasMore = result.hasMore,
+                        )
+                    }
+                }
+                is SearchResult.Failure -> {
+                    _uiState.update { it.copy(isLoadingMore = false) }
+                }
+            }
+        }
     }
 
     fun onHitClick(hit: SearchHit) {
         when (hit) {
             is SearchHit.SongHit -> playerController.play(hit.track)
             is SearchHit.VideoHit -> playerController.play(hit.track)
-            else -> Unit // TODO: navigate to artist / album / playlist detail
+            else -> Unit
         }
     }
 
-    private fun runSearch(query: String, filter: SearchFilter, isRefresh: Boolean) {
+    private fun runSearch(
+        query: String,
+        filter: SearchFilter,
+        isRefresh: Boolean,
+        loadMore: Boolean,
+    ) {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(
-                    isLoading = !isRefresh,
+                    isLoading = !isRefresh && !loadMore,
                     isRefreshing = isRefresh,
                     hasSearched = true,
                     errorMessage = null,
                 )
             }
 
-            when (val result = musicRepository.search(query, filter)) {
-                is SearchResult.Success -> _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        hits = result.hits,
-                        hasMore = false,
-                    )
+            when (val result = musicRepository.search(query, filter, loadMore)) {
+                is SearchResult.Success -> {
+                    filterCache[filter] = CachedTab(query, result.hits, result.hasMore)
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isRefreshing = false,
+                            hits = result.hits,
+                            hasMore = result.hasMore,
+                        )
+                    }
                 }
                 is SearchResult.Failure -> _uiState.update {
                     it.copy(

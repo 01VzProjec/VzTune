@@ -7,8 +7,11 @@ import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchHit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.schabi.newpipe.extractor.InfoItem
+import org.schabi.newpipe.extractor.Page
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
+import org.schabi.newpipe.extractor.search.SearchExtractor
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,62 +24,83 @@ class YouTubeRepository @Inject constructor(
         NewPipeInitializer.ensureInitialized(downloader)
     }
 
-    suspend fun searchVideos(query: String): List<SearchHit.VideoHit> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                val extractor = ServiceList.YouTube.getSearchExtractor(query)
-                extractor.fetchPage()
-                extractor.initialPage.items
-                    .filterIsInstance<StreamInfoItem>()
-                    .mapNotNull { stream ->
-                        val videoId = extractVideoId(stream.url) ?: return@mapNotNull null
-                        SearchHit.VideoHit(
-                            Track(
-                                id = videoId,
-                                title = stream.name ?: "Sem título",
-                                artist = stream.uploaderName ?: "",
-                                durationSeconds = stream.duration,
-                                thumbnailUrl = stream.thumbnails.firstOrNull()?.url,
-                                source = Source.YOUTUBE,
-                            )
-                        )
-                    }
-            }.getOrDefault(emptyList())
-        }
+    private var activeVideoSearch: SearchExtractor? = null
+    private var lastVideoPage: Page? = null
 
-    suspend fun searchPlaylists(query: String): List<SearchHit.PlaylistHit> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                val extractor = ServiceList.YouTube.getSearchExtractor(
-                    query, listOf("playlists"), null
+    private var activePlaylistSearch: SearchExtractor? = null
+    private var lastPlaylistPage: Page? = null
+
+    fun resetSession() {
+        activeVideoSearch = null
+        lastVideoPage = null
+        activePlaylistSearch = null
+        lastPlaylistPage = null
+    }
+
+    data class VideoPage(
+        val items: List<SearchHit.VideoHit>,
+        val hasMore: Boolean,
+    )
+
+    suspend fun searchVideos(
+        query: String,
+        loadMore: Boolean,
+        pageSize: Int = 20,
+    ): VideoPage = withContext(Dispatchers.IO) {
+        runCatching {
+            if (!loadMore) {
+                activeVideoSearch = ServiceList.YouTube.getSearchExtractor(query)
+                activeVideoSearch!!.fetchPage()
+                lastVideoPage = activeVideoSearch!!.initialPage.nextPage
+                val items = parseVideoItems(activeVideoSearch!!.initialPage.items)
+                    .take(pageSize)
+                VideoPage(items, lastVideoPage != null)
+            } else {
+                val extractor = activeVideoSearch
+                    ?: return@runCatching VideoPage(emptyList(), false)
+                val page = lastVideoPage
+                    ?: return@runCatching VideoPage(emptyList(), false)
+                val next = extractor.getPage(page)
+                lastVideoPage = next.nextPage
+                val items = parseVideoItems(next.items).take(pageSize)
+                VideoPage(items, lastVideoPage != null)
+            }
+        }.getOrDefault(VideoPage(emptyList(), false))
+    }
+
+    suspend fun searchPlaylists(
+        query: String,
+        loadMore: Boolean,
+        pageSize: Int = 30,
+    ): List<SearchHit.PlaylistHit> = withContext(Dispatchers.IO) {
+        runCatching {
+            if (!loadMore) {
+                activePlaylistSearch = ServiceList.YouTube.getSearchExtractor(
+                    query, listOf("playlists"), null,
                 )
-                extractor.fetchPage()
-                extractor.initialPage.items
-                    .filterIsInstance<PlaylistInfoItem>()
-                    .mapNotNull { playlist ->
-                        val listId = extractListId(playlist.url) ?: return@mapNotNull null
-                        SearchHit.PlaylistHit(
-                            Playlist(
-                                id = "YT:$listId",
-                                title = playlist.name ?: "Playlist",
-                                owner = playlist.uploaderName ?: "",
-                                thumbnailUrl = playlist.thumbnails.firstOrNull()?.url,
-                                source = Source.YOUTUBE,
-                            )
-                        )
-                    }
-            }.getOrDefault(emptyList())
-        }
+                activePlaylistSearch!!.fetchPage()
+                lastPlaylistPage = activePlaylistSearch!!.initialPage.nextPage
+                parsePlaylistItems(activePlaylistSearch!!.initialPage.items)
+                    .take(pageSize)
+            } else {
+                val extractor = activePlaylistSearch
+                    ?: return@runCatching emptyList<SearchHit.PlaylistHit>()
+                val page = lastPlaylistPage
+                    ?: return@runCatching emptyList<SearchHit.PlaylistHit>()
+                val next = extractor.getPage(page)
+                lastPlaylistPage = next.nextPage
+                parsePlaylistItems(next.items).take(pageSize)
+            }
+        }.getOrDefault(emptyList())
+    }
 
     suspend fun getStreamUrl(
         videoId: String,
         titleHint: String? = null,
         artistHint: String? = null,
     ): String? = withContext(Dispatchers.IO) {
-        // Try direct extraction
         runCatching { extractStreamUrl(videoId) }.getOrNull()?.let { return@withContext it }
 
-        // Fallback: search for a playable alternative
         if (!titleHint.isNullOrBlank()) {
             val altId = runCatching { findBestMatchVideoId(titleHint, artistHint) }.getOrNull()
             if (altId != null && altId != videoId) {
@@ -87,9 +111,8 @@ class YouTubeRepository @Inject constructor(
     }
 
     private fun extractStreamUrl(videoId: String): String {
-        runCatching {
-            extractFromUrl("https://www.youtube.com/watch?v=$videoId")
-        }.getOrNull()?.let { return it }
+        runCatching { extractFromUrl("https://www.youtube.com/watch?v=$videoId") }
+            .getOrNull()?.let { return it }
         return extractFromUrl("https://music.youtube.com/watch?v=$videoId")
     }
 
@@ -147,6 +170,37 @@ class YouTubeRepository @Inject constructor(
             .filter { it.second >= 20 }
             .maxByOrNull { it.second }
             ?.first
+    }
+
+    private fun parseVideoItems(items: List<InfoItem>): List<SearchHit.VideoHit> {
+        return items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
+            val videoId = extractVideoId(stream.url) ?: return@mapNotNull null
+            SearchHit.VideoHit(
+                Track(
+                    id = videoId,
+                    title = stream.name ?: "Sem título",
+                    artist = stream.uploaderName ?: "",
+                    durationSeconds = stream.duration,
+                    thumbnailUrl = stream.thumbnails.firstOrNull()?.url,
+                    source = Source.YOUTUBE,
+                )
+            )
+        }
+    }
+
+    private fun parsePlaylistItems(items: List<InfoItem>): List<SearchHit.PlaylistHit> {
+        return items.filterIsInstance<PlaylistInfoItem>().mapNotNull { playlist ->
+            val listId = extractListId(playlist.url) ?: return@mapNotNull null
+            SearchHit.PlaylistHit(
+                Playlist(
+                    id = "YT:$listId",
+                    title = playlist.name ?: "Playlist",
+                    owner = playlist.uploaderName ?: "",
+                    thumbnailUrl = playlist.thumbnails.firstOrNull()?.url,
+                    source = Source.YOUTUBE,
+                )
+            )
+        }
     }
 
     private fun extractVideoId(url: String): String? = try {

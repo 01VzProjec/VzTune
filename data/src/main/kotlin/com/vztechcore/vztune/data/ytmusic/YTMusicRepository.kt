@@ -18,14 +18,27 @@ import javax.inject.Singleton
 @Singleton
 class YTMusicRepository @Inject constructor() {
 
-    suspend fun search(query: String, filter: SearchFilter): List<SearchHit> =
-        withContext(Dispatchers.IO) {
-            val json = runCatching { InnerTube.search(query) }.getOrNull()
-                ?: return@withContext emptyList()
-            val parsed = InnerTubeParser.parseSearchResults(json)
+    data class SearchPage(
+        val items: List<SearchHit>,
+        val continuation: String?,
+    )
 
-            parsed.mapNotNull { item -> item.toHit(filter) }.take(40)
-        }
+    suspend fun search(
+        query: String,
+        filter: SearchFilter,
+        continuation: String?,
+    ): SearchPage = withContext(Dispatchers.IO) {
+        val json = runCatching {
+            if (continuation == null) InnerTube.search(query)
+            else InnerTube.searchContinuation(continuation)
+        }.getOrNull() ?: return@withContext SearchPage(emptyList(), null)
+
+        val parsed = InnerTubeParser.parseSearchResults(json)
+        val next = InnerTube.findContinuationToken(json)
+
+        val hits = parsed.mapNotNull { item -> item.toHit(filter) }
+        SearchPage(hits, next)
+    }
 
     suspend fun suggestions(query: String): SearchSuggestions =
         withContext(Dispatchers.IO) {
@@ -47,23 +60,20 @@ class YTMusicRepository @Inject constructor() {
     private fun InnerTubeParser.ParsedItem.toHit(filter: SearchFilter): SearchHit? {
         return when (this) {
             is InnerTubeParser.ParsedItem.Song -> {
-                val track = Track(
-                    id = videoId,
-                    title = title,
-                    artist = artist,
-                    durationSeconds = durationSeconds,
-                    thumbnailUrl = thumbnailUrl,
-                    source = source,
+                // Skip YOUTUBE music-source items; those are handled by NewPipe.
+                if (source == Source.YOUTUBE) return null
+                if (filter != SearchFilter.ALL && filter != SearchFilter.SONGS) return null
+                SearchHit.SongHit(
+                    Track(
+                        id = videoId,
+                        title = title,
+                        artist = artist,
+                        durationSeconds = durationSeconds,
+                        thumbnailUrl = thumbnailUrl,
+                        source = source,
+                    )
                 )
-                when {
-                    source == Source.YOUTUBE && (filter == SearchFilter.ALL || filter == SearchFilter.VIDEOS) ->
-                        SearchHit.VideoHit(track)
-                    source == Source.YOUTUBE_MUSIC && (filter == SearchFilter.ALL || filter == SearchFilter.SONGS) ->
-                        SearchHit.SongHit(track)
-                    else -> null
-                }
             }
-
             is InnerTubeParser.ParsedItem.Album -> {
                 if (filter != SearchFilter.ALL && filter != SearchFilter.ALBUMS) return null
                 SearchHit.AlbumHit(
@@ -76,7 +86,6 @@ class YTMusicRepository @Inject constructor() {
                     )
                 )
             }
-
             is InnerTubeParser.ParsedItem.Artist -> {
                 if (filter != SearchFilter.ALL && filter != SearchFilter.ARTISTS) return null
                 SearchHit.ArtistHit(
@@ -88,7 +97,6 @@ class YTMusicRepository @Inject constructor() {
                     )
                 )
             }
-
             is InnerTubeParser.ParsedItem.Playlist -> {
                 if (filter != SearchFilter.ALL && filter != SearchFilter.PLAYLISTS) return null
                 SearchHit.PlaylistHit(

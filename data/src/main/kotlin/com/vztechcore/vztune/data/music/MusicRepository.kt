@@ -9,8 +9,6 @@ import com.vztechcore.vztune.core.domain.search.SearchSuggestions
 import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,60 +19,135 @@ class MusicRepository @Inject constructor(
     private val ytMusicRepository: YTMusicRepository,
 ) {
 
-    suspend fun search(query: String, filter: SearchFilter): SearchResult =
-        withContext(Dispatchers.IO) {
-            if (query.isBlank()) return@withContext SearchResult.Success(emptyList())
+    private data class SearchState(
+        val seenKeys: MutableSet<String> = mutableSetOf(),
+        var ytHasMore: Boolean = true,
+        var ytmContinuation: String? = null,
+        var ytmHasMore: Boolean = true,
+    )
 
-            val hits = when (filter) {
-                SearchFilter.ALL -> coroutineScope {
-                    val yt = async {
-                        runCatching { youTubeRepository.searchVideos(query) }.getOrDefault(emptyList())
-                    }
-                    val ytm = async {
-                        runCatching { ytMusicRepository.search(query, SearchFilter.ALL) }.getOrDefault(emptyList())
-                    }
-                    interleave(yt.await(), ytm.await())
-                }
-                SearchFilter.VIDEOS ->
-                    runCatching { youTubeRepository.searchVideos(query) }.getOrDefault(emptyList())
+    private val searchStates = mutableMapOf<String, SearchState>()
 
-                SearchFilter.PLAYLISTS -> coroutineScope {
-                    val yt = async {
-                        runCatching { youTubeRepository.searchPlaylists(query) }.getOrDefault(emptyList())
-                    }
-                    val ytm = async {
-                        runCatching { ytMusicRepository.search(query, SearchFilter.PLAYLISTS) }.getOrDefault(emptyList())
-                    }
-                    yt.await() + ytm.await()
-                }
+    suspend fun search(
+        query: String,
+        filter: SearchFilter,
+        loadMore: Boolean,
+    ): SearchResult = withContext(Dispatchers.IO) {
+        if (query.isBlank()) return@withContext SearchResult.Success(emptyList(), false)
 
-                else ->
-                    runCatching { ytMusicRepository.search(query, filter) }.getOrDefault(emptyList())
+        val stateKey = "$query|${filter.name}"
+        val state = searchStates.getOrPut(stateKey) { SearchState() }
+
+        if (!loadMore) {
+            state.seenKeys.clear()
+            state.ytHasMore = true
+            state.ytmContinuation = null
+            state.ytmHasMore = true
+            youTubeRepository.resetSession()
+        }
+
+        val hits = mutableListOf<SearchHit>()
+        var hasMore: Boolean
+
+        when (filter) {
+            SearchFilter.ALL -> {
+                val ytPageSize = if (loadMore) 15 else 20
+                val ytmPageSize = if (loadMore) 15 else 20
+
+                val ytPage = youTubeRepository.searchVideos(
+                    query = query,
+                    loadMore = loadMore,
+                    pageSize = ytPageSize,
+                )
+                val ytmPage = ytMusicRepository.search(
+                    query = query,
+                    filter = filter,
+                    continuation = state.ytmContinuation,
+                )
+
+                hits += ytPage.items
+                hits += ytmPage.items.take(ytmPageSize)
+
+                state.ytHasMore = ytPage.hasMore
+                state.ytmContinuation = ytmPage.continuation
+                state.ytmHasMore = ytmPage.continuation != null
+
+                hasMore = state.ytHasMore || state.ytmHasMore
             }
 
-            SearchResult.Success(hits.distinctBy { it.stableKey })
+            SearchFilter.VIDEOS -> {
+                val pageSize = 30
+                val ytPage = youTubeRepository.searchVideos(
+                    query = query,
+                    loadMore = loadMore,
+                    pageSize = pageSize,
+                )
+                hits += ytPage.items
+                state.ytHasMore = ytPage.hasMore
+                hasMore = state.ytHasMore
+            }
+
+            SearchFilter.SONGS -> {
+                val pageSize = 30
+                val ytmPage = ytMusicRepository.search(
+                    query = query,
+                    filter = filter,
+                    continuation = state.ytmContinuation,
+                )
+                hits += ytmPage.items.take(pageSize)
+                state.ytmContinuation = ytmPage.continuation
+                state.ytmHasMore = ytmPage.continuation != null
+                hasMore = state.ytmHasMore
+            }
+
+            SearchFilter.PLAYLISTS -> {
+                if (!loadMore) {
+                    hits += youTubeRepository.searchPlaylists(
+                        query = query,
+                        loadMore = false,
+                    )
+                }
+                val ytmPage = ytMusicRepository.search(
+                    query = query,
+                    filter = filter,
+                    continuation = state.ytmContinuation,
+                )
+                hits += ytmPage.items
+                state.ytmContinuation = ytmPage.continuation
+                state.ytmHasMore = ytmPage.continuation != null
+                hasMore = state.ytmHasMore
+            }
+
+            else -> {
+                val ytmPage = ytMusicRepository.search(
+                    query = query,
+                    filter = filter,
+                    continuation = state.ytmContinuation,
+                )
+                hits += ytmPage.items
+                state.ytmContinuation = ytmPage.continuation
+                state.ytmHasMore = ytmPage.continuation != null
+                hasMore = state.ytmHasMore
+            }
         }
+
+        val newHits = hits.filter { state.seenKeys.add(it.stableKey) }
+        SearchResult.Success(newHits, hasMore)
+    }
 
     suspend fun suggestions(query: String): SearchSuggestions =
         withContext(Dispatchers.IO) {
-            runCatching { ytMusicRepository.suggestions(query) }.getOrDefault(SearchSuggestions())
+            runCatching { ytMusicRepository.suggestions(query) }
+                .getOrDefault(SearchSuggestions())
         }
 
     suspend fun getStreamUrl(track: Track): String? = withContext(Dispatchers.IO) {
         when (track.source) {
-            Source.YOUTUBE -> youTubeRepository.getStreamUrl(track.id, track.title, track.artist)
+            Source.YOUTUBE -> youTubeRepository.getStreamUrl(
+                track.id, track.title, track.artist,
+            )
             Source.YOUTUBE_MUSIC -> ytMusicRepository.getStreamUrl(track.id)
                 ?: youTubeRepository.getStreamUrl(track.id, track.title, track.artist)
         }
-    }
-
-    private fun <T> interleave(a: List<T>, b: List<T>): List<T> {
-        val out = mutableListOf<T>()
-        val max = maxOf(a.size, b.size)
-        for (i in 0 until max) {
-            a.getOrNull(i)?.let { out += it }
-            b.getOrNull(i)?.let { out += it }
-        }
-        return out
     }
 }

@@ -1,6 +1,7 @@
 package com.vztechcore.vztune.ui.components
 
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,12 +36,6 @@ fun MarqueeText(
     )
 }
 
-/**
- * Subtitle line for a Track.
- *   Song  -> "Song - artist1, artist2 & lastArtist"
- *   Video -> "Video - channelName"
- * The "Song -" / "Video -" prefix is stable; the artist text marquees if too long.
- */
 @Composable
 fun TrackSubtitle(
     track: Track,
@@ -50,14 +45,15 @@ fun TrackSubtitle(
     artistColor: Color = Color.Unspecified,
 ) {
     val isVideo = track.source == Source.YOUTUBE
-    val prefix = if (isVideo) "Video - " else "Song - "
+    val prefix = if (isVideo) "Vídeo - " else "Música - "
     val artists = if (isVideo) {
-        track.artist.substringBefore("•").substringBefore(",").trim()
+        // Channel name is already sanitized by NewPipe.
+        track.artist
     } else {
         formatArtists(track.artist)
     }
 
-    androidx.compose.foundation.layout.Row(modifier = modifier) {
+    Row(modifier = modifier) {
         Text(text = prefix, style = style, color = prefixColor, maxLines = 1)
         MarqueeText(
             text = artists,
@@ -69,7 +65,9 @@ fun TrackSubtitle(
 }
 
 private fun formatArtists(raw: String): String {
-    val artists = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+    val artists = raw.split(",", "&")
+        .map { it.trim() }
+        .filter { it.isNotBlank() && !it.equals("e", true) }
     return when {
         artists.isEmpty() -> "Desconhecido"
         artists.size == 1 -> artists[0]

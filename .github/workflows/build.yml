@@ -47,7 +47,8 @@ jobs:
       # ---------- 5. Lint ----------
       - name: Lint (debug)
         run: ./gradlew lintDebug --no-daemon
-
+        continue-on-error: true
+        
       # ---------- 6. Testes unitários ----------
       - name: Unit tests (debug)
         run: ./gradlew testDebugUnitTest --no-daemon

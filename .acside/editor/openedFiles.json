@@ -14,7 +14,52 @@
           "line": 152
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/build.gradle.kts",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 3812,
+          "line": 127
+        },
+        "start": {
+          "column": 1,
+          "index": 3812,
+          "line": 127
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/gradle/wrapper/gradle-wrapper.properties",
+      "selection": {
+        "end": {
+          "column": 26,
+          "index": 252,
+          "line": 6
+        },
+        "start": {
+          "column": 26,
+          "index": 252,
+          "line": 6
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/.github/workflows/build.yml",
+      "selection": {
+        "end": {
+          "column": 31,
+          "index": 1292,
+          "line": 49
+        },
+        "start": {
+          "column": 31,
+          "index": 1292,
+          "line": 49
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/gradle/libs.versions.toml"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/.github/workflows/build.yml"
 }

@@ -62,6 +62,17 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    lint {
+        // Do not fail the build on warnings during active development.
+        // Flip to true once the project stabilizes and lint rules are tuned.
+        warningsAsErrors = false
+        abortOnError = true
+        checkDependencies = true
+        // Skip lint on androidTest during early development (it needs BOM everywhere
+        // and adds noise while the test source set is still empty).
+        checkTestSources = false
+    }
 }
 
 kotlin {
@@ -74,15 +85,20 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":data"))
 
-    // Compose
-    implementation(platform(libs.androidx.compose.bom))
+    // ---- Compose (BOM in EVERY configuration that uses Compose artifacts) ----
+    val composeBom = platform(libs.androidx.compose.bom)
+    implementation(composeBom)
+    androidTestImplementation(composeBom)   // <-- THE FIX
+
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 
     // Activity + Navigation + Lifecycle

@@ -44,7 +44,82 @@
           "line": 78
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/player/PlaybackService.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 1055,
+          "line": 37
+        },
+        "start": {
+          "column": 1,
+          "index": 1055,
+          "line": 37
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/music/MusicRepository.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 4384,
+          "line": 116
+        },
+        "start": {
+          "column": 1,
+          "index": 4384,
+          "line": 116
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchViewModel.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 6067,
+          "line": 176
+        },
+        "start": {
+          "column": 1,
+          "index": 6067,
+          "line": 176
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/AppBottomBar.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 7200,
+          "line": 179
+        },
+        "start": {
+          "column": 1,
+          "index": 7200,
+          "line": 179
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        },
+        "start": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeRepository.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt"
 }

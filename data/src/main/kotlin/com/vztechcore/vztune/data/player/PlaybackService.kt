@@ -1,11 +1,13 @@
 package com.vztechcore.vztune.data.player
 
 import android.content.Intent
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
+@UnstableApi
 @AndroidEntryPoint
 class PlaybackService : MediaSessionService() {
 
@@ -22,7 +24,6 @@ class PlaybackService : MediaSessionService() {
     ): MediaSession? = mediaSession
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Keep the service alive while playing; stop it when idle.
         if (playerController.player.isPlaying) return
         pauseAllPlayersAndStopSelf()
     }

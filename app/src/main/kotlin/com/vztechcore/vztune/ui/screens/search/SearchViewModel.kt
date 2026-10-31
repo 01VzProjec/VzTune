@@ -33,16 +33,15 @@ class SearchViewModel @Inject constructor(
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
     private var suggestJob: Job? = null
+    private var autoSearchJob: Job? = null
     private var searchJob: Job? = null
 
     init {
-        // Restore last selected filter from settings
         viewModelScope.launch {
             val saved = appSettingsStore.settings.first().lastSearchTab
             val filter = runCatching { SearchFilter.valueOf(saved) }.getOrDefault(SearchFilter.ALL)
             _uiState.update { it.copy(selectedFilter = filter) }
         }
-        // Observe persisted search history
         viewModelScope.launch {
             historyStore.history.collect { list ->
                 _uiState.update { it.copy(history = list) }
@@ -51,7 +50,10 @@ class SearchViewModel @Inject constructor(
     }
 
     fun onQueryChange(value: String) {
+        suggestJob?.cancel()
+        autoSearchJob?.cancel()
         searchJob?.cancel()
+
         _uiState.update {
             it.copy(
                 query = value,
@@ -65,16 +67,24 @@ class SearchViewModel @Inject constructor(
             )
         }
 
-        suggestJob?.cancel()
         if (value.isBlank()) {
             _uiState.update { it.copy(suggestions = SearchSuggestions()) }
             return
         }
 
+        // Suggestions (200ms debounce)
         suggestJob = viewModelScope.launch {
             delay(200)
             val s = musicRepository.suggestions(value)
             _uiState.update { it.copy(suggestions = s) }
+        }
+
+        // Auto-search (500ms debounce)
+        autoSearchJob = viewModelScope.launch {
+            delay(500)
+            if (_uiState.value.query == value && !_uiState.value.hasSearched) {
+                runSearch(value, _uiState.value.selectedFilter, isRefresh = false)
+            }
         }
     }
 
@@ -84,10 +94,12 @@ class SearchViewModel @Inject constructor(
 
     fun onFilterSelect(filter: SearchFilter) {
         if (filter == _uiState.value.selectedFilter) return
+        autoSearchJob?.cancel()
         _uiState.update { it.copy(selectedFilter = filter) }
         viewModelScope.launch { appSettingsStore.setLastSearchTab(filter.name) }
 
-        if (_uiState.value.query.isNotBlank() && _uiState.value.hasSearched) {
+        // Always re-search when there's a query (even if not submitted yet)
+        if (_uiState.value.query.isNotBlank()) {
             runSearch(_uiState.value.query, filter, isRefresh = false)
         }
     }
@@ -95,6 +107,7 @@ class SearchViewModel @Inject constructor(
     fun onSubmit() {
         val q = _uiState.value.query.trim()
         if (q.isEmpty()) return
+        autoSearchJob?.cancel()
         _uiState.update { it.copy(isFocused = false) }
         viewModelScope.launch { historyStore.add(q) }
         runSearch(q, _uiState.value.selectedFilter, isRefresh = false)
@@ -118,7 +131,6 @@ class SearchViewModel @Inject constructor(
             _uiState.value.isLoadingMore ||
             _uiState.value.isLoading
         ) return
-        // Stub: pagination not implemented yet.
         _uiState.update { it.copy(hasMore = false) }
     }
 
@@ -126,20 +138,13 @@ class SearchViewModel @Inject constructor(
         when (hit) {
             is SearchHit.SongHit -> playerController.play(hit.track)
             is SearchHit.VideoHit -> playerController.play(hit.track)
-            is SearchHit.ArtistHit -> {
-                // TODO: navigate to artist detail
-            }
-            is SearchHit.AlbumHit -> {
-                // TODO: navigate to album detail
-            }
-            is SearchHit.PlaylistHit -> {
-                // TODO: navigate to playlist detail
-            }
+            else -> Unit // TODO: navigate to artist / album / playlist detail
         }
     }
 
     private fun runSearch(query: String, filter: SearchFilter, isRefresh: Boolean) {
         searchJob?.cancel()
+        autoSearchJob?.cancel()
         searchJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(

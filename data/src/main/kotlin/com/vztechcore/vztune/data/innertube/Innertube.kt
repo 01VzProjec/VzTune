@@ -120,7 +120,7 @@ object InnerTube {
         playerJson.optJSONObject("playabilityStatus")?.optString("status") == "OK"
 
     /**
-     * Pick the best audio URL from a player response.
+     * Pick the best audio URL from a player
      * Prefers mp4 (AAC) with the highest bitrate — most compatible with ExoPlayer.
      */
     fun extractBestAudioUrl(playerJson: JSONObject): String? {

@@ -25,13 +25,22 @@ val LightOnBackground = Color(0xFF0A0E1A)
 val LightOnSurface = Color(0xFF1F2937)
 val LightOnSurfaceVariant = Color(0xFF64748B)
 val LightError = Color(0xFFDC2626)
-val VzOnMedia = Color(0xFFFFFFFF) // fixed white for icons on top of album art
 
-// ===== FIXED (does not change between themes) =====
-val VzPrimaryDark = Color(0xFF0F1E4A) // used in gradients
+// ===== FIXED (do not change between themes) =====
+val VzPrimaryDark = Color(0xFF0F1E4A)
 
-// Extra tone for the non-AMOLED dark theme so cards stay visible.
+// ===== Brand aliases (from legacy VzMusic theme) =====
+val NavyPrimary = DarkPrimary          // #1E40AF
+val NavyAccent = DarkSecondary         // #38BDF8
+val NavyLight = Color(0xFF3B82F6)      // lighter mid-blue for gradients
+val VzGold = Color(0xFFFBBF24)         // gold accent (used on search empty state)
 val DarkSurfaceVariantHigh = Color(0xFF1E2640)
+
+// ===== Accent colors for library cards (from legacy) =====
+val CardFavorites = Color(0xFFEC407A)
+val CardTopPlayed = Color(0xFF7C4DFF)
+val CardArtists = Color(0xFF29B6F6)
+val CardDownloads = Color(0xFF26A69A)
 
 // ===== COMPOSABLE GETTERS — read from current theme =====
 val VzBackground: Color
@@ -60,3 +69,6 @@ val VzOnSurfaceVariant: Color
 
 val VzError: Color
     @Composable get() = MaterialTheme.colorScheme.error
+
+// Fixed white (used on top of album art, never themed)
+val VzOnMedia = Color(0xFFFFFFFF)

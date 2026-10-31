@@ -1,117 +1,80 @@
 package com.vztechcore.vztune.data.music
 
-import com.vztechcore.vztune.core.domain.music.Album
-import com.vztechcore.vztune.core.domain.music.Artist
-import com.vztechcore.vztune.core.domain.music.Playlist
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchFilter
 import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.core.domain.search.SearchResult
 import com.vztechcore.vztune.core.domain.search.SearchSuggestions
+import com.vztechcore.vztune.data.youtube.YouTubeRepository
+import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Facade over YouTube + YT Music repositories.
- *
- * TODO: when the real repositories are wired, fan out to both
- *       and interleave results.
- * Currently returns stub data for ALL filters so the UI pipeline
- * can be exercised end-to-end.
- */
 @Singleton
-class MusicRepository @Inject constructor() {
+class MusicRepository @Inject constructor(
+    private val youTubeRepository: YouTubeRepository,
+    private val ytMusicRepository: YTMusicRepository,
+) {
 
     suspend fun search(query: String, filter: SearchFilter): SearchResult =
         withContext(Dispatchers.IO) {
             if (query.isBlank()) return@withContext SearchResult.Success(emptyList())
 
-            val hits = mutableListOf<SearchHit>()
+            val hits = when (filter) {
+                SearchFilter.ALL -> coroutineScope {
+                    val yt = async {
+                        runCatching { youTubeRepository.searchVideos(query) }.getOrDefault(emptyList())
+                    }
+                    val ytm = async {
+                        runCatching { ytMusicRepository.search(query, SearchFilter.ALL) }.getOrDefault(emptyList())
+                    }
+                    interleave(yt.await(), ytm.await())
+                }
+                SearchFilter.VIDEOS ->
+                    runCatching { youTubeRepository.searchVideos(query) }.getOrDefault(emptyList())
 
-            when (filter) {
-                SearchFilter.ALL -> {
-                    hits += SearchHit.SongHit(stubSong(query, "1"))
-                    hits += SearchHit.VideoHit(stubVideo(query, "1"))
-                    hits += SearchHit.ArtistHit(stubArtist(query))
-                    hits += SearchHit.AlbumHit(stubAlbum(query))
-                    hits += SearchHit.PlaylistHit(stubPlaylist(query))
+                SearchFilter.PLAYLISTS -> coroutineScope {
+                    val yt = async {
+                        runCatching { youTubeRepository.searchPlaylists(query) }.getOrDefault(emptyList())
+                    }
+                    val ytm = async {
+                        runCatching { ytMusicRepository.search(query, SearchFilter.PLAYLISTS) }.getOrDefault(emptyList())
+                    }
+                    yt.await() + ytm.await()
                 }
-                SearchFilter.SONGS -> {
-                    hits += SearchHit.SongHit(stubSong(query, "1"))
-                    hits += SearchHit.SongHit(stubSong(query, "2"))
-                    hits += SearchHit.SongHit(stubSong(query, "3"))
-                }
-                SearchFilter.VIDEOS -> {
-                    hits += SearchHit.VideoHit(stubVideo(query, "1"))
-                    hits += SearchHit.VideoHit(stubVideo(query, "2"))
-                }
-                SearchFilter.ARTISTS -> {
-                    hits += SearchHit.ArtistHit(stubArtist(query))
-                    hits += SearchHit.ArtistHit(stubArtist("$query 2"))
-                }
-                SearchFilter.ALBUMS -> {
-                    hits += SearchHit.AlbumHit(stubAlbum(query))
-                    hits += SearchHit.AlbumHit(stubAlbum("$query 2"))
-                }
-                SearchFilter.PLAYLISTS -> {
-                    hits += SearchHit.PlaylistHit(stubPlaylist(query))
-                    hits += SearchHit.PlaylistHit(stubPlaylist("$query 2"))
-                }
+
+                else ->
+                    runCatching { ytMusicRepository.search(query, filter) }.getOrDefault(emptyList())
             }
 
-            SearchResult.Success(hits)
+            SearchResult.Success(hits.distinctBy { it.stableKey })
         }
 
     suspend fun suggestions(query: String): SearchSuggestions =
         withContext(Dispatchers.IO) {
-            if (query.isBlank()) return@withContext SearchSuggestions()
-            SearchSuggestions(
-                songs = listOf(stubSong(query, "sug")),
-                queries = listOf("$query mix", "$query ao vivo", "$query remix"),
-            )
+            runCatching { ytMusicRepository.suggestions(query) }.getOrDefault(SearchSuggestions())
         }
 
-    // ---- Stub helpers ----
+    suspend fun getStreamUrl(track: Track): String? = withContext(Dispatchers.IO) {
+        when (track.source) {
+            Source.YOUTUBE -> youTubeRepository.getStreamUrl(track.id, track.title, track.artist)
+            Source.YOUTUBE_MUSIC -> ytMusicRepository.getStreamUrl(track.id)
+                ?: youTubeRepository.getStreamUrl(track.id, track.title, track.artist)
+        }
+    }
 
-    private fun stubSong(q: String, id: String) = Track(
-        id = "stub-song-$id",
-        title = "[STUB] $q — faixa $id",
-        artist = "VzTune Stub",
-        album = "Stub Album",
-        durationSeconds = 200L + id.hashCode().mod(100),
-        source = Source.YOUTUBE_MUSIC,
-    )
-
-    private fun stubVideo(q: String, id: String) = Track(
-        id = "stub-video-$id",
-        title = "[STUB] $q (video $id)",
-        artist = "VzTune Stub",
-        durationSeconds = 240L + id.hashCode().mod(100),
-        source = Source.YOUTUBE,
-    )
-
-    private fun stubArtist(q: String) = Artist(
-        id = "stub-artist-${q.hashCode()}",
-        name = "[STUB] $q",
-        source = Source.YOUTUBE_MUSIC,
-    )
-
-    private fun stubAlbum(q: String) = Album(
-        id = "stub-album-${q.hashCode()}",
-        title = "[STUB] $q (álbum)",
-        artist = "VzTune Stub",
-        year = 2024,
-        source = Source.YOUTUBE_MUSIC,
-    )
-
-    private fun stubPlaylist(q: String) = Playlist(
-        id = "stub-playlist-${q.hashCode()}",
-        title = "[STUB] $q (playlist)",
-        owner = "VzTune Stub",
-        trackCount = 25,
-        source = Source.YOUTUBE,
-    )
+    private fun <T> interleave(a: List<T>, b: List<T>): List<T> {
+        val out = mutableListOf<T>()
+        val max = maxOf(a.size, b.size)
+        for (i in 0 until max) {
+            a.getOrNull(i)?.let { out += it }
+            b.getOrNull(i)?.let { out += it }
+        }
+        return out
+    }
 }

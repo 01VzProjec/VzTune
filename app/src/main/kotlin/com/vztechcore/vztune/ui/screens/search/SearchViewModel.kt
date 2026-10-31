@@ -33,7 +33,6 @@ class SearchViewModel @Inject constructor(
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
     private var suggestJob: Job? = null
-    private var autoSearchJob: Job? = null
     private var searchJob: Job? = null
 
     init {
@@ -51,9 +50,7 @@ class SearchViewModel @Inject constructor(
 
     fun onQueryChange(value: String) {
         suggestJob?.cancel()
-        autoSearchJob?.cancel()
         searchJob?.cancel()
-
         _uiState.update {
             it.copy(
                 query = value,
@@ -72,19 +69,10 @@ class SearchViewModel @Inject constructor(
             return
         }
 
-        // Suggestions (200ms debounce)
         suggestJob = viewModelScope.launch {
-            delay(200)
+            delay(250)
             val s = musicRepository.suggestions(value)
             _uiState.update { it.copy(suggestions = s) }
-        }
-
-        // Auto-search (500ms debounce)
-        autoSearchJob = viewModelScope.launch {
-            delay(500)
-            if (_uiState.value.query == value && !_uiState.value.hasSearched) {
-                runSearch(value, _uiState.value.selectedFilter, isRefresh = false)
-            }
         }
     }
 
@@ -94,12 +82,9 @@ class SearchViewModel @Inject constructor(
 
     fun onFilterSelect(filter: SearchFilter) {
         if (filter == _uiState.value.selectedFilter) return
-        autoSearchJob?.cancel()
         _uiState.update { it.copy(selectedFilter = filter) }
         viewModelScope.launch { appSettingsStore.setLastSearchTab(filter.name) }
-
-        // Always re-search when there's a query (even if not submitted yet)
-        if (_uiState.value.query.isNotBlank()) {
+        if (_uiState.value.query.isNotBlank() && _uiState.value.hasSearched) {
             runSearch(_uiState.value.query, filter, isRefresh = false)
         }
     }
@@ -107,7 +92,6 @@ class SearchViewModel @Inject constructor(
     fun onSubmit() {
         val q = _uiState.value.query.trim()
         if (q.isEmpty()) return
-        autoSearchJob?.cancel()
         _uiState.update { it.copy(isFocused = false) }
         viewModelScope.launch { historyStore.add(q) }
         runSearch(q, _uiState.value.selectedFilter, isRefresh = false)
@@ -144,7 +128,6 @@ class SearchViewModel @Inject constructor(
 
     private fun runSearch(query: String, filter: SearchFilter, isRefresh: Boolean) {
         searchJob?.cancel()
-        autoSearchJob?.cancel()
         searchJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(

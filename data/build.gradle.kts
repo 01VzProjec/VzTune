@@ -45,6 +45,9 @@ dependencies {
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
 
+    // Serialization — needed by SearchHistoryStore and any DTO parsing
+    implementation(libs.kotlinx.serialization.json)
+
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
@@ -68,7 +71,7 @@ dependencies {
 
     // Extractors
     implementation(libs.newpipe.extractor)
-    // implementation(libs.innertube) // DISABLED: InnerTube not on JitPack as standalone
+    // implementation(libs.innertube) // DISABLED: not published on JitPack
     implementation(libs.okhttp)
 
     // Core library desugaring (required by NewPipeExtractor)

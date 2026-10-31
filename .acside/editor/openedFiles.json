@@ -20,13 +20,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 3812,
-          "line": 127
+          "index": 3823,
+          "line": 130
         },
         "start": {
           "column": 1,
-          "index": 3812,
-          "line": 127
+          "index": 3823,
+          "line": 130
         }
       }
     },
@@ -59,7 +59,37 @@
           "line": 49
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/core/src/main/kotlin/com/vztechcore/vztune/core/domain/music/Source.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 257,
+          "line": 10
+        },
+        "start": {
+          "column": 1,
+          "index": 257,
+          "line": 10
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/core/src/main/kotlin/com/vztechcore/vztune/core/domain/music/Track.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 393,
+          "line": 14
+        },
+        "start": {
+          "column": 1,
+          "index": 393,
+          "line": 14
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/.github/workflows/build.yml"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/build.gradle.kts"
 }

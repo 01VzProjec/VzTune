@@ -48,6 +48,10 @@ android {
     }
 
     compileOptions {
+        // Required because :app depends on :data, and :data uses desugaring
+        // (NewPipeExtractor). AGP requires every consumer of a desugared
+        // library to also enable desugaring.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -64,13 +68,9 @@ android {
     }
 
     lint {
-        // Do not fail the build on warnings during active development.
-        // Flip to true once the project stabilizes and lint rules are tuned.
         warningsAsErrors = false
         abortOnError = true
         checkDependencies = true
-        // Skip lint on androidTest during early development (it needs BOM everywhere
-        // and adds noise while the test source set is still empty).
         checkTestSources = false
     }
 }
@@ -88,7 +88,7 @@ dependencies {
     // ---- Compose (BOM in EVERY configuration that uses Compose artifacts) ----
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)
-    androidTestImplementation(composeBom)   // <-- THE FIX
+    androidTestImplementation(composeBom)
 
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
@@ -107,7 +107,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
-    // Serialization (needed for type-safe Navigation routes)
+    // Serialization
     implementation(libs.kotlinx.serialization.json)
 
     // Hilt
@@ -120,6 +120,9 @@ dependencies {
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
+
+    // Core library desugaring — MUST be declared in :app too (depends on :data)
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 
     // Tests
     testImplementation(libs.junit)

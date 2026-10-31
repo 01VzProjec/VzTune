@@ -1,11 +1,15 @@
 package com.vztechcore.vztune.core.domain.music
 
 /**
- * Where a piece of music content comes from.
- * YOUTUBE = regular YouTube (via NewPipeExtractor)
- * YOUTUBE_MUSIC = YouTube Music (via InnerTube)
+ * A playable audio item. Can originate from YouTube (video) or YouTube Music (song).
  */
-enum class Source {
-    YOUTUBE,
-    YOUTUBE_MUSIC,
-}
+data class Track(
+    val id: String,
+    val title: String,
+    val artist: String,
+    val album: String? = null,
+    val durationSeconds: Long = 0L,
+    val thumbnailUrl: String? = null,
+    val source: Source,
+    val streamUrl: String? = null,
+)

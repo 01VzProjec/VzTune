@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -54,7 +55,8 @@ fun AppBottomBar(
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val tabWidth = size.width.toFloat() / tabs.size
-                    fun tabAt(x: Float) = tabs[(x / tabWidth).toInt().coerceIn(0, tabs.size - 1)]
+                    fun tabAt(x: Float) =
+                        tabs[(x / tabWidth).toInt().coerceIn(0, tabs.size - 1)]
 
                     var finalTab = tabAt(down.position.x)
                     hoveredTab = finalTab

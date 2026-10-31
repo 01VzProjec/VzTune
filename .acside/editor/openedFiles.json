@@ -185,13 +185,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 4439,
-          "line": 109
+          "index": 4530,
+          "line": 111
         },
         "start": {
           "column": 1,
-          "index": 4439,
-          "line": 109
+          "index": 4530,
+          "line": 111
         }
       }
     },
@@ -410,13 +410,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 7986,
-          "line": 235
+          "index": 8021,
+          "line": 236
         },
         "start": {
           "column": 1,
-          "index": 7986,
-          "line": 235
+          "index": 8021,
+          "line": 236
         }
       }
     },
@@ -496,5 +496,5 @@
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeRepository.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/components/SearchAutocomplete.kt"
 }

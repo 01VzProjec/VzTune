@@ -8,7 +8,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
-import org.schabi.newpipe.extractor.search.SearchExtractor
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
@@ -33,12 +32,12 @@ class YouTubeRepository @Inject constructor(
         }
     }
 
-    /** Search for videos. Returns a list of SearchHit.VideoHit. */
     suspend fun searchVideos(query: String): SearchResult = withContext(Dispatchers.IO) {
         ensureInit()
         try {
             val service = ServiceList.YouTube
-            val extractor = SearchExtractor(service, query)
+            // CORRECT: use the service factory to obtain the extractor.
+            val extractor = service.getSearchExtractor(query)
             extractor.fetchPage()
             val items = extractor.initialPage.items
                 .filterIsInstance<StreamInfoItem>()
@@ -60,13 +59,11 @@ class YouTubeRepository @Inject constructor(
         }
     }
 
-    /** Resolve a playable stream URL for a given video ID. */
     suspend fun getStreamUrl(videoId: String): String? = withContext(Dispatchers.IO) {
         ensureInit()
         try {
             val url = "https://www.youtube.com/watch?v=$videoId"
             val info = StreamInfo.getInfo(ServiceList.YouTube, url)
-            // Prefer audio-only streams (music). Fall back to progressive video+audio.
             val audio: AudioStream? = info.audioStreams
                 .sortedByDescending { it.averageBitrate }
                 .firstOrNull()

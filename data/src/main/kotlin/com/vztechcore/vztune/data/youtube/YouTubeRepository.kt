@@ -18,20 +18,6 @@ import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * YouTube search + stream resolution via NewPipeExtractor.
- *
- * Ported from the working VzMusic YouTubeRepository, adapted to:
- *   - Hilt (@Singleton, constructor injection)
- *   - Domain types (Track / Playlist / SearchHit)
- *   - Paged search (searchVideos / searchPlaylists with loadMore)
- *   - Detailed logs under tag VzTuneYT
- *
- * Playback resolution strategy (do NOT change):
- *   1. www.youtube.com first (most reliable with NewPipe)
- *   2. music.youtube.com fallback
- *   3. Title-based fallback search (only if a hint is provided)
- */
 @Singleton
 class YouTubeRepository @Inject constructor(
     private val downloader: NewPipeDownloader,
@@ -42,7 +28,6 @@ class YouTubeRepository @Inject constructor(
 
     private var activeVideoSearch: SearchExtractor? = null
     private var lastVideoPage: Page? = null
-
     private var activePlaylistSearch: SearchExtractor? = null
     private var lastPlaylistPage: Page? = null
 
@@ -74,8 +59,7 @@ class YouTubeRepository @Inject constructor(
                 activeVideoSearch = ServiceList.YouTube.getSearchExtractor(query)
                 activeVideoSearch!!.fetchPage()
                 lastVideoPage = activeVideoSearch!!.initialPage.nextPage
-                val items = parseVideoItems(activeVideoSearch!!.initialPage.items)
-                    .take(pageSize)
+                val items = parseVideoItems(activeVideoSearch!!.initialPage.items).take(pageSize)
                 VideoPage(items, lastVideoPage != null)
             } else {
                 val extractor = activeVideoSearch
@@ -84,8 +68,7 @@ class YouTubeRepository @Inject constructor(
                     ?: return@runCatching VideoPage(emptyList(), false)
                 val next = extractor.getPage(page)
                 lastVideoPage = next.nextPage
-                val items = parseVideoItems(next.items).take(pageSize)
-                VideoPage(items, lastVideoPage != null)
+                VideoPage(parseVideoItems(next.items).take(pageSize), lastVideoPage != null)
             }
         }.getOrElse { e ->
             Log.e(TAG, "searchVideos failed for query=$query", e)
@@ -109,8 +92,7 @@ class YouTubeRepository @Inject constructor(
                 )
                 activePlaylistSearch!!.fetchPage()
                 lastPlaylistPage = activePlaylistSearch!!.initialPage.nextPage
-                parsePlaylistItems(activePlaylistSearch!!.initialPage.items)
-                    .take(pageSize)
+                parsePlaylistItems(activePlaylistSearch!!.initialPage.items).take(pageSize)
             } else {
                 val extractor = activePlaylistSearch
                     ?: return@runCatching emptyList<SearchHit.PlaylistHit>()
@@ -128,10 +110,6 @@ class YouTubeRepository @Inject constructor(
 
     // ================= STREAM RESOLUTION =================
 
-    /**
-     * Resolve a YouTube video ID to a direct audio URL.
-     * Mirrors VzMusic's YouTubeRepository.getAudioStreamUrl.
-     */
     suspend fun getStreamUrl(
         videoId: String,
         titleHint: String? = null,
@@ -144,7 +122,6 @@ class YouTubeRepository @Inject constructor(
 
         Log.d(TAG, "getStreamUrl: videoId=$videoId")
 
-        // Attempt 1: www.youtube.com
         val fromWww = runCatching {
             extractFromUrl("https://www.youtube.com/watch?v=$videoId")
         }.getOrElse { e ->
@@ -156,7 +133,6 @@ class YouTubeRepository @Inject constructor(
             return@withContext fromWww
         }
 
-        // Attempt 2: music.youtube.com
         val fromMusic = runCatching {
             extractFromUrl("https://music.youtube.com/watch?v=$videoId")
         }.getOrElse { e ->
@@ -168,7 +144,6 @@ class YouTubeRepository @Inject constructor(
             return@withContext fromMusic
         }
 
-        // Attempt 3: title-based fallback search
         if (!titleHint.isNullOrBlank()) {
             val altId = runCatching { findBestMatchVideoId(titleHint, artistHint) }.getOrNull()
             if (altId != null && altId != videoId) {
@@ -186,39 +161,25 @@ class YouTubeRepository @Inject constructor(
         null
     }
 
-    /**
-     * Same extraction strategy as VzMusic's extractFrom():
-     *   1. Best pure-audio stream (highest bitrate)
-     *   2. HLS
-     *   3. Lowest progressive (audio + video)
-     */
     private fun extractFromUrl(url: String): String {
         val extractor = ServiceList.YouTube.getStreamExtractor(url)
         extractor.fetchPage()
 
-        // 1) Best pure-audio stream.
         val audioStreams = extractor.audioStreams
         val bestAudio: AudioStream? = audioStreams
             .filter { it.averageBitrate > 0 }
             .maxByOrNull { it.averageBitrate }
             ?: audioStreams.firstOrNull()
+        if (bestAudio?.content?.isNotBlank() == true) return bestAudio.content
 
-        if (bestAudio?.content?.isNotBlank() == true) {
-            return bestAudio.content
-        }
-
-        // 2) HLS.
         extractor.hlsUrl?.takeIf { it.isNotBlank() }?.let { return it }
 
-        // 3) Progressive (audio + video), lowest resolution.
         val progressive = extractor.videoStreams
             .filter { !it.isVideoOnly }
             .minByOrNull {
                 it.resolution.removeSuffix("p").toIntOrNull() ?: Int.MAX_VALUE
             }
-        if (progressive?.content?.isNotBlank() == true) {
-            return progressive.content
-        }
+        if (progressive?.content?.isNotBlank() == true) return progressive.content
 
         throw Exception("No streams available for $url")
     }
@@ -257,6 +218,59 @@ class YouTubeRepository @Inject constructor(
             ?.first
     }
 
+    // ================= FALLBACK THUMBNAIL =================
+
+    /**
+     * Used by YTMusicRepository when an album track has no cover.
+     * Mirrors VzMusic's findVideoThumbnail: searches YouTube by
+     * title + artist, picks the highest-scoring match.
+     */
+    suspend fun findVideoThumbnail(
+        videoId: String,
+        title: String,
+        artist: String?,
+    ): String? = withContext(Dispatchers.IO) {
+        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
+
+        val query = buildString {
+            append(title)
+            if (!artist.isNullOrBlank()) {
+                append(" ")
+                append(artist)
+            }
+        }
+
+        runCatching {
+            val extractor = ServiceList.YouTube.getSearchExtractor(query)
+            extractor.fetchPage()
+
+            val titleWords = title.lowercase()
+                .split(Regex("\\s+"))
+                .map { it.trim { c -> !c.isLetterOrDigit() } }
+                .filter { it.length > 2 }
+                .toSet()
+            val artistLower = artist?.lowercase()?.trim().orEmpty()
+
+            extractor.initialPage.items
+                .asSequence()
+                .filterIsInstance<StreamInfoItem>()
+                .mapNotNull { stream ->
+                    val name = stream.name?.lowercase() ?: return@mapNotNull null
+                    val uploader = stream.uploaderName?.lowercase().orEmpty()
+                    val thumb = stream.thumbnails.lastOrNull()?.url ?: return@mapNotNull null
+                    var score = titleWords.count { name.contains(it) } * 10
+                    if (artistLower.isNotBlank() && uploader.contains(artistLower)) score += 40
+                    thumb to score
+                }
+                .filter { it.second >= 20 }
+                .maxByOrNull { it.second }
+                ?.first
+        }.getOrElse { e ->
+            Log.w(TAG, "findVideoThumbnail failed for $videoId: ${e.message}")
+            null
+        }
+    }
+
     // ================= PARSERS =================
 
     private fun parseVideoItems(items: List<InfoItem>): List<SearchHit.VideoHit> {
@@ -289,8 +303,6 @@ class YouTubeRepository @Inject constructor(
             )
         }
     }
-
-    // ================= HELPERS =================
 
     private fun extractVideoId(url: String): String? = try {
         val uri = Uri.parse(url)

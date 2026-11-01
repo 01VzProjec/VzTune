@@ -21,6 +21,8 @@ object InnerTube {
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
 
+    // ================= BODY BUILDERS =================
+
     private fun webRemixBody(): JSONObject = JSONObject().apply {
         put("context", JSONObject().apply {
             put("client", JSONObject().apply {
@@ -62,6 +64,8 @@ object InnerTube {
         })
     }
 
+    // ================= ENDPOINTS =================
+
     fun search(query: String, params: String? = null): JSONObject =
         post("search", webRemixBody().apply {
             put("query", query)
@@ -69,14 +73,13 @@ object InnerTube {
         })
 
     fun searchContinuation(token: String): JSONObject =
-        post("search", webRemixBody().apply {
-            put("continuation", token)
-        })
+        post("search", webRemixBody().apply { put("continuation", token) })
+
+    fun browse(browseId: String): JSONObject =
+        post("browse", webRemixBody().apply { put("browseId", browseId) })
 
     fun searchSuggestions(input: String): JSONObject =
-        post("music/get_search_suggestions", webRemixBody().apply {
-            put("input", input)
-        })
+        post("music/get_search_suggestions", webRemixBody().apply { put("input", input) })
 
     suspend fun player(videoId: String): JSONObject = coroutineScope {
         val clients = listOf(::androidMusicBody, ::androidVrBody)
@@ -111,50 +114,41 @@ object InnerTube {
 
         http.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw Exception("InnerTube HTTP ${response.code}")
-            val text = response.body?.string() ?: throw Exception("InnerTube vazio")
+            val text = response.body?.string() ?: throw Exception("InnerTube empty")
             return JSONObject(text)
         }
     }
 
+    // ================= HELPERS =================
+
     fun isPlayable(playerJson: JSONObject): Boolean =
         playerJson.optJSONObject("playabilityStatus")?.optString("status") == "OK"
 
-    /**
-     * Pick the best audio URL from a player
-     * Prefers mp4 (AAC) with the highest bitrate — most compatible with ExoPlayer.
-     */
     fun extractBestAudioUrl(playerJson: JSONObject): String? {
         val streaming = playerJson.optJSONObject("streamingData") ?: return null
-
-        val candidates = mutableListOf<Triple<String, String, Int>>() // mime, url, bitrate
+        var bestUrl: String? = null
+        var bestBitrate = 0
 
         streaming.optJSONArray("adaptiveFormats")?.let { formats ->
             for (i in 0 until formats.length()) {
                 val fmt = formats.optJSONObject(i) ?: continue
-                val mime = fmt.optString("mimeType")
-                if (!mime.startsWith("audio/")) continue
+                if (!fmt.optString("mimeType").startsWith("audio/")) continue
                 val url = fmt.optString("url").takeIf { it.isNotBlank() && it != "null" } ?: continue
                 val br = fmt.optInt("bitrate", 0)
-                candidates += Triple(mime, url, br)
+                if (br > bestBitrate) { bestBitrate = br; bestUrl = url }
             }
         }
+        if (bestUrl != null) return bestUrl
 
-        if (candidates.isEmpty()) {
-            streaming.optJSONArray("formats")?.let { formats ->
-                for (i in 0 until formats.length()) {
-                    val fmt = formats.optJSONObject(i) ?: continue
-                    val url = fmt.optString("url").takeIf { it.isNotBlank() && it != "null" } ?: continue
-                    val br = fmt.optInt("bitrate", 0)
-                    candidates += Triple("", url, br)
-                }
+        streaming.optJSONArray("formats")?.let { formats ->
+            for (i in 0 until formats.length()) {
+                val fmt = formats.optJSONObject(i) ?: continue
+                val url = fmt.optString("url").takeIf { it.isNotBlank() && it != "null" } ?: continue
+                val br = fmt.optInt("bitrate", 0)
+                if (br > bestBitrate) { bestBitrate = br; bestUrl = url }
             }
         }
-
-        if (candidates.isEmpty()) return null
-
-        val mp4 = candidates.filter { it.first.contains("mp4", ignoreCase = true) }
-        val best = mp4.maxByOrNull { it.third } ?: candidates.maxByOrNull { it.third }
-        return best?.second
+        return bestUrl
     }
 
     fun findContinuationToken(node: Any?): String? {
@@ -173,10 +167,8 @@ object InnerTube {
                     findContinuationToken(node.opt(keys.next()))?.let { return it }
                 }
             }
-            is JSONArray -> {
-                for (i in 0 until node.length()) {
-                    findContinuationToken(node.opt(i))?.let { return it }
-                }
+            is JSONArray -> for (i in 0 until node.length()) {
+                findContinuationToken(node.opt(i))?.let { return it }
             }
         }
         return null

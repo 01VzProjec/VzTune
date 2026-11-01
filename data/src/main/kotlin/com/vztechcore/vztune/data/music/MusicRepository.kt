@@ -1,10 +1,12 @@
 package com.vztechcore.vztune.data.music
 
+import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchFilter
 import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.core.domain.search.SearchResult
 import com.vztechcore.vztune.core.domain.search.SearchSuggestions
+import com.vztechcore.vztune.data.youtube.YouTubeMusicNewPipeRepository
 import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import kotlinx.coroutines.Dispatchers
@@ -16,8 +18,8 @@ import javax.inject.Singleton
 class MusicRepository @Inject constructor(
     private val youTubeRepository: YouTubeRepository,
     private val ytMusicRepository: YTMusicRepository,
+    private val youTubeMusicNewPipeRepository: YouTubeMusicNewPipeRepository,
 ) {
-
     private data class SearchState(
         val seenKeys: MutableSet<String> = mutableSetOf(),
         var ytHasMore: Boolean = true,
@@ -53,16 +55,8 @@ class MusicRepository @Inject constructor(
                 val ytPageSize = if (loadMore) 15 else 20
                 val ytmPageSize = if (loadMore) 15 else 20
 
-                val ytPage = youTubeRepository.searchVideos(
-                    query = query,
-                    loadMore = loadMore,
-                    pageSize = ytPageSize,
-                )
-                val ytmPage = ytMusicRepository.search(
-                    query = query,
-                    filter = filter,
-                    continuation = state.ytmContinuation,
-                )
+                val ytPage = youTubeRepository.searchVideos(query, loadMore, ytPageSize)
+                val ytmPage = ytMusicRepository.search(query, filter, state.ytmContinuation)
 
                 hits += ytPage.items
                 hits += ytmPage.items.take(ytmPageSize)
@@ -70,59 +64,33 @@ class MusicRepository @Inject constructor(
                 state.ytHasMore = ytPage.hasMore
                 state.ytmContinuation = ytmPage.continuation
                 state.ytmHasMore = ytmPage.continuation != null
-
                 hasMore = state.ytHasMore || state.ytmHasMore
             }
-
             SearchFilter.VIDEOS -> {
-                val pageSize = 30
-                val ytPage = youTubeRepository.searchVideos(
-                    query = query,
-                    loadMore = loadMore,
-                    pageSize = pageSize,
-                )
+                val ytPage = youTubeRepository.searchVideos(query, loadMore, 30)
                 hits += ytPage.items
                 state.ytHasMore = ytPage.hasMore
                 hasMore = state.ytHasMore
             }
-
             SearchFilter.SONGS -> {
-                val pageSize = 30
-                val ytmPage = ytMusicRepository.search(
-                    query = query,
-                    filter = filter,
-                    continuation = state.ytmContinuation,
-                )
-                hits += ytmPage.items.take(pageSize)
+                val ytmPage = ytMusicRepository.search(query, filter, state.ytmContinuation)
+                hits += ytmPage.items.take(30)
                 state.ytmContinuation = ytmPage.continuation
                 state.ytmHasMore = ytmPage.continuation != null
                 hasMore = state.ytmHasMore
             }
-
             SearchFilter.PLAYLISTS -> {
                 if (!loadMore) {
-                    hits += youTubeRepository.searchPlaylists(
-                        query = query,
-                        loadMore = false,
-                    )
+                    hits += youTubeRepository.searchPlaylists(query, false)
                 }
-                val ytmPage = ytMusicRepository.search(
-                    query = query,
-                    filter = filter,
-                    continuation = state.ytmContinuation,
-                )
+                val ytmPage = ytMusicRepository.search(query, filter, state.ytmContinuation)
                 hits += ytmPage.items
                 state.ytmContinuation = ytmPage.continuation
                 state.ytmHasMore = ytmPage.continuation != null
                 hasMore = state.ytmHasMore
             }
-
             else -> {
-                val ytmPage = ytMusicRepository.search(
-                    query = query,
-                    filter = filter,
-                    continuation = state.ytmContinuation,
-                )
+                val ytmPage = ytMusicRepository.search(query, filter, state.ytmContinuation)
                 hits += ytmPage.items
                 state.ytmContinuation = ytmPage.continuation
                 state.ytmHasMore = ytmPage.continuation != null
@@ -141,23 +109,18 @@ class MusicRepository @Inject constructor(
         }
 
     /**
-     * Resolve a playable audio URL.
-     *
-     * Playback ALWAYS goes through NewPipe (it decodes the `n` cipher that
-     * InnerTube doesn't). But we pass `track.source` so YouTubeRepository
-     * can pick the URL that matches the content the user is looking at:
-     *   - YOUTUBE       -> youtube.com (OMV / UGC video)
-     *   - YOUTUBE_MUSIC -> music.youtube.com (ATV audio-only)
-     *
-     * This prevents the "song shows as audio but plays the music video"
-     * conflict that happened in the previous project.
+     * EXACTLY like VzMusic: source-aware playback.
+     * YOUTUBE_MUSIC -> YouTubeMusicNewPipeRepository
+     * YOUTUBE       -> YouTubeRepository.getStreamUrl
      */
     suspend fun getStreamUrl(track: Track): String? = withContext(Dispatchers.IO) {
-        youTubeRepository.getStreamUrl(
-            videoId = track.id,
-            titleHint = track.title,
-            artistHint = track.artist,
-            source = track.source,
-        )
+        when (track.source) {
+            Source.YOUTUBE_MUSIC -> runCatching {
+                youTubeMusicNewPipeRepository.getAudioStreamUrl(track.id)
+            }.getOrNull()
+            Source.YOUTUBE -> youTubeRepository.getStreamUrl(
+                track.id, track.title, track.artist,
+            )
+        }
     }
 }

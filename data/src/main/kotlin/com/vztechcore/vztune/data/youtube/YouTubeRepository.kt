@@ -14,7 +14,6 @@ import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.search.SearchExtractor
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
-import org.schabi.newpipe.extractor.stream.VideoStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,11 +25,8 @@ class YouTubeRepository @Inject constructor(
         NewPipeInitializer.ensureInitialized(downloader)
     }
 
-    // ================= SEARCH SESSION STATE =================
-
     private var activeVideoSearch: SearchExtractor? = null
     private var lastVideoPage: Page? = null
-
     private var activePlaylistSearch: SearchExtractor? = null
     private var lastPlaylistPage: Page? = null
 
@@ -46,8 +42,6 @@ class YouTubeRepository @Inject constructor(
         val hasMore: Boolean,
     )
 
-    // ================= SEARCH =================
-
     suspend fun searchVideos(
         query: String,
         loadMore: Boolean,
@@ -58,18 +52,13 @@ class YouTubeRepository @Inject constructor(
                 activeVideoSearch = ServiceList.YouTube.getSearchExtractor(query)
                 activeVideoSearch!!.fetchPage()
                 lastVideoPage = activeVideoSearch!!.initialPage.nextPage
-                val items = parseVideoItems(activeVideoSearch!!.initialPage.items)
-                    .take(pageSize)
-                VideoPage(items, lastVideoPage != null)
+                VideoPage(parseVideoItems(activeVideoSearch!!.initialPage.items).take(pageSize), lastVideoPage != null)
             } else {
-                val extractor = activeVideoSearch
-                    ?: return@runCatching VideoPage(emptyList(), false)
-                val page = lastVideoPage
-                    ?: return@runCatching VideoPage(emptyList(), false)
+                val extractor = activeVideoSearch ?: return@runCatching VideoPage(emptyList(), false)
+                val page = lastVideoPage ?: return@runCatching VideoPage(emptyList(), false)
                 val next = extractor.getPage(page)
                 lastVideoPage = next.nextPage
-                val items = parseVideoItems(next.items).take(pageSize)
-                VideoPage(items, lastVideoPage != null)
+                VideoPage(parseVideoItems(next.items).take(pageSize), lastVideoPage != null)
             }
         }.getOrDefault(VideoPage(emptyList(), false))
     }
@@ -86,13 +75,10 @@ class YouTubeRepository @Inject constructor(
                 )
                 activePlaylistSearch!!.fetchPage()
                 lastPlaylistPage = activePlaylistSearch!!.initialPage.nextPage
-                parsePlaylistItems(activePlaylistSearch!!.initialPage.items)
-                    .take(pageSize)
+                parsePlaylistItems(activePlaylistSearch!!.initialPage.items).take(pageSize)
             } else {
-                val extractor = activePlaylistSearch
-                    ?: return@runCatching emptyList<SearchHit.PlaylistHit>()
-                val page = lastPlaylistPage
-                    ?: return@runCatching emptyList<SearchHit.PlaylistHit>()
+                val extractor = activePlaylistSearch ?: return@runCatching emptyList<SearchHit.PlaylistHit>()
+                val page = lastPlaylistPage ?: return@runCatching emptyList<SearchHit.PlaylistHit>()
                 val next = extractor.getPage(page)
                 lastPlaylistPage = next.nextPage
                 parsePlaylistItems(next.items).take(pageSize)
@@ -100,92 +86,58 @@ class YouTubeRepository @Inject constructor(
         }.getOrDefault(emptyList())
     }
 
-    // ================= STREAM URL RESOLUTION =================
-
     /**
-     * Resolve a playable audio URL.
-     * Mirrors the old YouTubeMusicNewPipeRepository that worked in VzMusic:
-     *
-     *   1. Try www.youtube.com first (most reliable with NewPipe).
-     *   2. Fallback to music.youtube.com.
-     *   3. Last resort: search for a different playable video with the same title.
-     *
-     * Uses getStreamExtractor + fetchPage — NOT StreamInfo.getInfo — because
-     * that's the exact path that worked in the old project for both regular
-     * YouTube videos and YouTube Music song IDs.
-     *
-     * The `source` parameter is kept for future source-aware tweaks; today
-     * both endpoints return the same audio-only streams (ATV) when the
-     * videoId refers to a song.
+     * Resolve a YouTube video ID (non-music) to an audio URL.
+     * Same strategy as VzMusic's YouTubeRepository.getAudioStreamUrl.
      */
     suspend fun getStreamUrl(
         videoId: String,
         titleHint: String? = null,
         artistHint: String? = null,
-        source: Source,
     ): String? = withContext(Dispatchers.IO) {
         // 1) www.youtube.com first.
-        val fromWww = runCatching {
+        runCatching {
             extractFromUrl("https://www.youtube.com/watch?v=$videoId")
-        }.getOrNull()
-        if (!fromWww.isNullOrBlank()) return@withContext fromWww
+        }.getOrNull()?.let { return@withContext it }
 
         // 2) music.youtube.com fallback.
-        val fromMusic = runCatching {
+        runCatching {
             extractFromUrl("https://music.youtube.com/watch?v=$videoId")
-        }.getOrNull()
-        if (!fromMusic.isNullOrBlank()) return@withContext fromMusic
+        }.getOrNull()?.let { return@withContext it }
 
-        // 3) Search for an alternative playable video with the same title.
+        // 3) Search for a different playable video with the same title.
         if (!titleHint.isNullOrBlank()) {
             val altId = runCatching { findBestMatchVideoId(titleHint, artistHint) }.getOrNull()
             if (altId != null && altId != videoId) {
-                val fromAlt = runCatching {
+                runCatching {
                     extractFromUrl("https://www.youtube.com/watch?v=$altId")
-                }.getOrNull()
-                if (!fromAlt.isNullOrBlank()) return@withContext fromAlt
+                }.getOrNull()?.let { return@withContext it }
             }
         }
 
         null
     }
 
-    /**
-     * Exact strategy from the old YouTubeMusicNewPipeRepository.extractFrom():
-     *   1. best pure-audio stream (highest bitrate)
-     *   2. HLS manifest
-     *   3. lowest-resolution progressive (audio+video) as last resort
-     */
     private fun extractFromUrl(url: String): String {
         val extractor = ServiceList.YouTube.getStreamExtractor(url)
         extractor.fetchPage()
 
-        // 1) Best pure-audio stream.
-        val audioStreams = extractor.audioStreams
-        val bestAudio: AudioStream? = audioStreams
+        val audio: AudioStream? = extractor.audioStreams
             .filter { it.averageBitrate > 0 }
             .maxByOrNull { it.averageBitrate }
-            ?: audioStreams.firstOrNull()
+            ?: extractor.audioStreams.firstOrNull()
+        if (audio?.content?.isNotBlank() == true) return audio.content
 
-        if (bestAudio?.content?.isNotBlank() == true) {
-            return bestAudio.content
-        }
-
-        // 2) HLS.
         extractor.hlsUrl?.takeIf { it.isNotBlank() }?.let { return it }
 
-        // 3) Progressive video (audio + video), lowest resolution.
-        val progressive: VideoStream? = extractor.videoStreams
+        val progressive = extractor.videoStreams
             .filter { !it.isVideoOnly }
             .minByOrNull {
                 it.resolution.removeSuffix("p").toIntOrNull() ?: Int.MAX_VALUE
             }
+        if (progressive?.content?.isNotBlank() == true) return progressive.content
 
-        if (progressive?.content?.isNotBlank() == true) {
-            return progressive.content
-        }
-
-        throw Exception("Nenhum stream disponível para $url")
+        throw Exception("Sem streams para $url")
     }
 
     private fun findBestMatchVideoId(title: String, artist: String?): String? {
@@ -222,8 +174,6 @@ class YouTubeRepository @Inject constructor(
             ?.first
     }
 
-    // ================= PARSERS =================
-
     private fun parseVideoItems(items: List<InfoItem>): List<SearchHit.VideoHit> {
         return items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
             val videoId = extractVideoId(stream.url) ?: return@mapNotNull null
@@ -254,8 +204,6 @@ class YouTubeRepository @Inject constructor(
             )
         }
     }
-
-    // ================= HELPERS =================
 
     private fun extractVideoId(url: String): String? = try {
         val uri = Uri.parse(url)

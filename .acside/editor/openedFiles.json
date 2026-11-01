@@ -35,13 +35,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 6318,
-          "line": 171
+          "index": 6150,
+          "line": 169
         },
         "start": {
           "column": 1,
-          "index": 6318,
-          "line": 171
+          "index": 6150,
+          "line": 169
         }
       }
     },
@@ -50,13 +50,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 5886,
-          "line": 162
+          "index": 5015,
+          "line": 125
         },
         "start": {
           "column": 1,
-          "index": 5886,
-          "line": 162
+          "index": 5015,
+          "line": 125
         }
       }
     },
@@ -80,13 +80,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 10373,
-          "line": 272
+          "index": 8585,
+          "line": 220
         },
         "start": {
           "column": 1,
-          "index": 10373,
-          "line": 272
+          "index": 8585,
+          "line": 220
         }
       }
     },
@@ -104,7 +104,82 @@
           "line": 108
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/core/src/main/kotlin/com/vztechcore/vztune/core/domain/player/PlaybackState.kt",
+      "selection": {
+        "end": {
+          "column": 39,
+          "index": 809,
+          "line": 24
+        },
+        "start": {
+          "column": 39,
+          "index": 809,
+          "line": 24
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeMusicNewPipeRepository.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 2428,
+          "line": 63
+        },
+        "start": {
+          "column": 1,
+          "index": 2428,
+          "line": 63
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/main/MainViewModel.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 1089,
+          "line": 27
+        },
+        "start": {
+          "column": 1,
+          "index": 1089,
+          "line": 27
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/MainActivity.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 1303,
+          "line": 33
+        },
+        "start": {
+          "column": 1,
+          "index": 1303,
+          "line": 33
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchViewModel.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 8066,
+          "line": 248
+        },
+        "start": {
+          "column": 1,
+          "index": 8066,
+          "line": 248
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeRepository.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchViewModel.kt"
 }

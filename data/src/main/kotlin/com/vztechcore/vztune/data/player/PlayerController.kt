@@ -48,8 +48,14 @@ class PlayerController @Inject constructor(
         )
     }
 
+    /**
+     * Exactly like VzMusic's AudioPlayerManager:
+     *   - CacheDataSource with FLAG_IGNORE_CACHE_ON_ERROR
+     *   - DefaultDataSource.Factory (NO custom User-Agent, NO Referer)
+     *   - AudioAttributes USAGE_MEDIA / AUDIO_CONTENT_TYPE_MUSIC
+     *   - Handle audio becoming noisy
+     */
     val player: ExoPlayer = run {
-        // EXACTLY like the old AudioPlayerManager that worked in VzMusic.
         val dataSourceFactory = CacheDataSource.Factory()
             .setCache(mediaCache)
             .setUpstreamDataSourceFactory(DefaultDataSource.Factory(context))
@@ -76,31 +82,17 @@ class PlayerController @Inject constructor(
                     }
 
                     override fun onPlaybackStateChanged(playbackState: Int) {
-                        val duration = duration.coerceAtLeast(0L)
-                        if (duration > 0) {
-                            _state.update { it.copy(durationMs = duration) }
-                        }
+                        Log.d("VzTunePlayer", "state=$playbackState")
                         if (playbackState == Player.STATE_READY) {
-                            _state.update { it.copy(isLoading = false) }
-                        }
-                        Log.d("VzTunePlayer", "state=$playbackState duration=$duration")
-                    }
-
-                    override fun onPositionDiscontinuity(
-                        oldPosition: Player.PositionInfo,
-                        newPosition: Player.PositionInfo,
-                        reason: Int,
-                    ) {
-                        _state.update {
-                            it.copy(
-                                positionMs = newPosition.positionMs,
-                                durationMs = player.duration.coerceAtLeast(0L),
-                            )
+                            val d = duration.coerceAtLeast(0L)
+                            _state.update {
+                                it.copy(isLoading = false, durationMs = d)
+                            }
                         }
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
-                        Log.e("VzTunePlayer", "error=${error.errorCodeName}", error)
+                        Log.e("VzTunePlayer", "error=${error.errorCodeName}: ${error.message}", error)
                         _state.update {
                             it.copy(
                                 isPlaying = false,
@@ -130,21 +122,27 @@ class PlayerController @Inject constructor(
                 durationMs = 0L,
             )
         }
+
         loadJob?.cancel()
         loadJob = scope.launch {
             val url = musicRepository.getStreamUrl(track)
             Log.d("VzTunePlayer", "resolved url=$url")
-            if (url != null) {
+            if (url.isNullOrBlank()) {
+                _state.update {
+                    it.copy(isLoading = false, error = "URL de áudio vazia")
+                }
+                return@launch
+            }
+            try {
+                player.stop()
+                player.clearMediaItems()
                 player.setMediaItem(MediaItem.fromUri(url))
                 player.prepare()
                 player.playWhenReady = true
-            } else {
+            } catch (e: Exception) {
+                Log.e("VzTunePlayer", "prepare error", e)
                 _state.update {
-                    it.copy(
-                        isLoading = false,
-                        isPlaying = false,
-                        error = "Não foi possível extrair a URL de áudio.",
-                    )
+                    it.copy(isLoading = false, error = e.message)
                 }
             }
         }
@@ -158,8 +156,8 @@ class PlayerController @Inject constructor(
 
     fun seekTo(positionMs: Long) = player.seekTo(positionMs)
 
-    fun next() { /* TODO: queue */ }
-    fun previous() { /* TODO: queue */ }
+    fun next() { /* queue não implementada ainda */ }
+    fun previous() { /* queue não implementada ainda */ }
 
     fun release() {
         player.release()
@@ -167,6 +165,6 @@ class PlayerController @Inject constructor(
     }
 
     private companion object {
-        const val CACHE_SIZE_BYTES = 200L * 1024 * 1024 // 200 MB
+        const val CACHE_SIZE_BYTES = 200L * 1024 * 1024
     }
 }

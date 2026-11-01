@@ -44,11 +44,15 @@ class SearchViewModel @Inject constructor(
     private var searchJob: Job? = null
 
     init {
+        // Restore the last selected filter from persisted settings.
         viewModelScope.launch {
             val saved = appSettingsStore.settings.first().lastSearchTab
-            val filter = runCatching { SearchFilter.valueOf(saved) }.getOrDefault(SearchFilter.ALL)
+            val filter = runCatching { SearchFilter.valueOf(saved) }
+                .getOrDefault(SearchFilter.ALL)
             _uiState.update { it.copy(selectedFilter = filter) }
         }
+
+        // Observe the persisted search history.
         viewModelScope.launch {
             historyStore.history.collect { list ->
                 _uiState.update { it.copy(history = list) }
@@ -81,8 +85,8 @@ class SearchViewModel @Inject constructor(
 
         suggestJob = viewModelScope.launch {
             delay(250)
-            val s = musicRepository.suggestions(value)
-            _uiState.update { it.copy(suggestions = s) }
+            val suggestions = musicRepository.suggestions(value)
+            _uiState.update { it.copy(suggestions = suggestions) }
         }
     }
 
@@ -92,6 +96,7 @@ class SearchViewModel @Inject constructor(
 
     fun onFilterSelect(filter: SearchFilter) {
         if (filter == _uiState.value.selectedFilter) return
+
         val currentQuery = _uiState.value.query
 
         viewModelScope.launch { appSettingsStore.setLastSearchTab(filter.name) }
@@ -117,18 +122,30 @@ class SearchViewModel @Inject constructor(
     }
 
     fun onSubmit() {
-        val q = _uiState.value.query.trim()
-        if (q.isEmpty()) return
+        val query = _uiState.value.query.trim()
+        if (query.isEmpty()) return
+
         _uiState.update { it.copy(isFocused = false) }
-        viewModelScope.launch { historyStore.add(q) }
+        viewModelScope.launch { historyStore.add(query) }
+
         filterCache.clear()
-        runSearch(q, _uiState.value.selectedFilter, isRefresh = false, loadMore = false)
+        runSearch(
+            query = query,
+            filter = _uiState.value.selectedFilter,
+            isRefresh = false,
+            loadMore = false,
+        )
     }
 
     fun onRefresh() {
         if (_uiState.value.query.isBlank()) return
         filterCache.clear()
-        runSearch(_uiState.value.query, _uiState.value.selectedFilter, isRefresh = true, loadMore = false)
+        runSearch(
+            query = _uiState.value.query,
+            filter = _uiState.value.selectedFilter,
+            isRefresh = true,
+            loadMore = false,
+        )
     }
 
     fun onRemoveHistory(query: String) {
@@ -179,6 +196,7 @@ class SearchViewModel @Inject constructor(
         when (hit) {
             is SearchHit.SongHit -> playerController.play(hit.track)
             is SearchHit.VideoHit -> playerController.play(hit.track)
+            // TODO: navigate to artist / album / playlist detail screens.
             else -> Unit
         }
     }
@@ -202,7 +220,11 @@ class SearchViewModel @Inject constructor(
 
             when (val result = musicRepository.search(query, filter, loadMore)) {
                 is SearchResult.Success -> {
-                    filterCache[filter] = CachedTab(query, result.hits, result.hasMore)
+                    filterCache[filter] = CachedTab(
+                        query = query,
+                        hits = result.hits,
+                        hasMore = result.hasMore,
+                    )
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -212,12 +234,14 @@ class SearchViewModel @Inject constructor(
                         )
                     }
                 }
-                is SearchResult.Failure -> _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        errorMessage = result.message,
-                    )
+                is SearchResult.Failure -> {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isRefreshing = false,
+                            errorMessage = result.message,
+                        )
+                    }
                 }
             }
         }

@@ -15,7 +15,7 @@ import javax.inject.Inject
 @HiltViewModel
 class MainViewModel @Inject constructor(
     appSettingsStore: AppSettingsStore,
-    playerController: PlayerController,
+    private val playerController: PlayerController,
 ) : ViewModel() {
 
     val settings: StateFlow<AppSettings> = appSettingsStore.settings
@@ -23,4 +23,6 @@ class MainViewModel @Inject constructor(
 
     val playbackState: StateFlow<PlaybackState> = playerController.state
         .stateIn(viewModelScope, SharingStarted.Eagerly, PlaybackState())
+
+    fun togglePlayPause() = playerController.togglePlayPause()
 }

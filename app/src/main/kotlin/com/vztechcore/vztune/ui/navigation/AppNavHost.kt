@@ -7,7 +7,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -17,6 +21,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.ui.components.AppBottomBar
 import com.vztechcore.vztune.ui.components.EclipseBackground
 import com.vztechcore.vztune.ui.components.LocalNowPlaying
@@ -42,15 +47,15 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val playback = LocalNowPlaying.current
     val miniPlayerVm: MiniPlayerViewModel = hiltViewModel()
 
-    // Color source: prefer the playing track; Search screen overrides via callback.
-    var searchFirstHitThumb by androidx.compose.runtime.remember {
-        androidx.compose.runtime.mutableStateOf<String?>(null)
-    }
+    // Thumbnail of the first visible hit in the current Search tab.
+    // Used as a fallback color source when no track is playing.
+    var searchFirstHitThumb by remember { mutableStateOf<String?>(null) }
+
     val colorSourceUrl = playback.currentTrack?.thumbnailUrl ?: searchFirstHitThumb
     val dominantColor = rememberDominantColor(colorSourceUrl)
 
     EclipseBackground(baseColor = dominantColor) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = modifier.fillMaxSize()) {
             NavHost(
                 navController = navController,
                 startDestination = Routes.Home,
@@ -63,22 +68,13 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     val vm: SearchViewModel = hiltViewModel()
                     val state by vm.uiState.collectAsStateWithLifecycle()
 
-                    // Tell AppNavHost which thumbnail to extract the color from.
-                    androidx.compose.runtime.LaunchedEffect(
-                        state.hits.firstOrNull(),
-                        state.selectedFilter,
-                    ) {
+                    LaunchedEffect(state.hits.firstOrNull(), state.selectedFilter) {
                         searchFirstHitThumb = when (val first = state.hits.firstOrNull()) {
-                            is com.vztechcore.vztune.core.domain.search.SearchHit.SongHit ->
-                                first.track.thumbnailUrl
-                            is com.vztechcore.vztune.core.domain.search.SearchHit.VideoHit ->
-                                first.track.thumbnailUrl
-                            is com.vztechcore.vztune.core.domain.search.SearchHit.AlbumHit ->
-                                first.album.thumbnailUrl
-                            is com.vztechcore.vztune.core.domain.search.SearchHit.ArtistHit ->
-                                first.artist.thumbnailUrl
-                            is com.vztechcore.vztune.core.domain.search.SearchHit.PlaylistHit ->
-                                first.playlist.thumbnailUrl
+                            is SearchHit.SongHit -> first.track.thumbnailUrl
+                            is SearchHit.VideoHit -> first.track.thumbnailUrl
+                            is SearchHit.AlbumHit -> first.album.thumbnailUrl
+                            is SearchHit.ArtistHit -> first.artist.thumbnailUrl
+                            is SearchHit.PlaylistHit -> first.playlist.thumbnailUrl
                             else -> null
                         }
                     }

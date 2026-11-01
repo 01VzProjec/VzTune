@@ -48,12 +48,21 @@ object InnerTubeParser {
         }
     }
 
-    private val METADATA_TYPES = setOf(
-        "song", "música", "video", "vídeo", "episódio",
-        "single", "album", "álbum", "playlist",
+    private val sourceCache = ConcurrentHashMap<String, Source>()
+
+    // Words that indicate the segment is a metadata type, not an artist.
+    private val TYPE_KEYWORDS = setOf(
+        "song", "songs",
+        "música", "músicas", "musica", "musicas",
+        "video", "vídeo", "videos", "vídeos",
+        "episódio", "episodio", "episode", "episodes",
+        "single", "singles",
+        "album", "álbum", "albums", "álbuns",
+        "playlist", "playlists",
     )
 
-    private val sourceCache = ConcurrentHashMap<String, Source>()
+    private val DURATION_REGEX = Regex("^\\d+:\\d+.*$")
+    private val YEAR_REGEX = Regex("^\\d{4}$")
 
     fun parseSearchResults(json: JSONObject): List<ParsedItem> {
         val out = mutableListOf<ParsedItem>()
@@ -82,6 +91,8 @@ object InnerTubeParser {
         return out
     }
 
+    // ================= RESPONSIVE ITEM =================
+
     private fun parseResponsiveListItem(r: JSONObject, out: MutableList<ParsedItem>) {
         val columns = r.optJSONArray("flexColumns") ?: return
         val title = flexText(columns, 0) ?: return
@@ -94,8 +105,8 @@ object InnerTubeParser {
         if (!videoId.isNullOrBlank() && videoId != "null") {
             val source = detectSource(videoId, r)
             val uploader = when (source) {
-                Source.YOUTUBE -> extractChannelName(subtitleCol) ?: "Desconhecido"
-                else -> extractArtistFromSubtitle(subtitleCol, subtitle) ?: "Desconhecido"
+                Source.YOUTUBE -> extractChannelName(subtitleCol) ?: "Unknown"
+                else -> extractArtistFromSubtitle(subtitleCol, subtitle) ?: "Unknown"
             }
 
             out += ParsedItem.Song(
@@ -145,6 +156,8 @@ object InnerTubeParser {
         }
     }
 
+    // ================= SOURCE DETECTION =================
+
     private fun detectSource(videoId: String, renderer: JSONObject): Source {
         sourceCache[videoId]?.let { return it }
 
@@ -167,9 +180,9 @@ object InnerTubeParser {
             return it
         }
 
-        val result = Source.YOUTUBE_MUSIC
-        sourceCache[videoId] = result
-        return result
+        val fallback = Source.YOUTUBE_MUSIC
+        sourceCache[videoId] = fallback
+        return fallback
     }
 
     private fun detectSourceFromThumbnailUrl(url: String?): Source? {
@@ -211,14 +224,13 @@ object InnerTubeParser {
         return null
     }
 
+    // ================= ARTIST / CHANNEL EXTRACTION =================
+
     /**
      * Extract the artist list for a YOUTUBE_MUSIC hit.
-     * Rules:
-     *  - Skip the leading metadata type ("Song", "Música", "Video", etc.).
-     *  - Skip connectors ("e", "&").
-     *  - Skip year / view-count segments.
-     *  - Stop at the first album (MPREb_) or playlist (VL) browse ID.
-     *  - Join the rest with " & ".
+     * Skips type words (Song / Música / Video / Episódio / etc.),
+     * connectors, years, view counts, durations, and overly long text.
+     * Returns null if no valid artist segment was found.
      */
     private fun extractArtistFromSubtitle(
         subtitleCol: JSONObject?,
@@ -232,23 +244,20 @@ object InnerTubeParser {
             for (i in 0 until runs.length()) {
                 val run = runs.optJSONObject(i) ?: continue
                 val raw = run.optString("text")
-                val text = raw.trim().trim(' ', ',', '&', '·', '•', '-', '/', ';')
-                if (text.isBlank() || text == "•" || text == "·") continue
-                if (text.matches(Regex("^\\d+:\\d+.*$"))) break
+                val text = raw.trim().trim(' ', ',', '&', '·', '•', '-', '/', ';', '\n', '\t')
+                if (text.isBlank()) continue
+                if (text == "•" || text == "·") continue
+                if (DURATION_REGEX.matches(text)) break
 
                 val nav = run.optJSONObject("navigationEndpoint")
                 val browseId = nav?.optJSONObject("browseEndpoint")?.optString("browseId")
+                when {
+                    browseId?.startsWith("MPREb_") == true -> break
+                    browseId?.startsWith("VL") == true -> break
+                }
 
-                // Stop at album / playlist markers
-                if (browseId?.startsWith("MPREb_") == true ||
-                    browseId?.startsWith("VL") == true) break
-
-                // Skip metadata types
-                if (text.lowercase() in METADATA_TYPES) continue
-                // Skip connectors
-                if (text.equals("e", true) || text == "&") continue
-                // Skip year / view counts
-                if (text.matches(Regex("^\\d{4}$"))) continue
+                if (text.lowercase() in TYPE_KEYWORDS) continue
+                if (YEAR_REGEX.matches(text)) continue
                 if (text.contains("views", true) ||
                     text.contains("visualizaç", true) ||
                     text.contains("reproduç", true)) continue
@@ -256,23 +265,32 @@ object InnerTubeParser {
 
                 if (text !in artists) artists += text
             }
-            if (artists.isNotEmpty()) return artists.joinToString(" & ")
+            if (artists.isNotEmpty()) {
+                return artists.joinToString(" & ")
+                    .replace(Regex(",\\s*,"), ",")
+                    .replace(Regex("\\s+"), " ")
+                    .trim()
+            }
         }
 
-        // Fallback for subtitle with no structured runs
-        val segments = subtitleText.split("•")
-            .map { it.trim() }
-            .filter {
-                it.isNotBlank() &&
-                    it.lowercase() !in METADATA_TYPES &&
-                    !it.equals("e", true) &&
-                    !it.matches(Regex("^\\d{4}$"))
-            }
-        return segments.joinToString(" & ").takeIf { it.isNotBlank() }
+        // Fallback: parse the plain subtitle string
+        val segments = subtitleText
+            .split("•")
+            .map { it.trim().trim(',', '&', '·', '•', '-', '/', ';', ' ') }
+            .filter { it.isNotBlank() }
+            .filter { it.lowercase() !in TYPE_KEYWORDS }
+            .filter { !DURATION_REGEX.matches(it) }
+            .filter { !YEAR_REGEX.matches(it) }
+            .filter { !it.contains("views", true) }
+            .filter { !it.contains("visualizaç", true) }
+
+        if (segments.isEmpty()) return null
+        return segments.joinToString(" & ")
     }
 
     /**
      * For YOUTUBE (video) hits: only the channel name.
+     * Prefers the run whose browseId starts with "UC" (a real channel).
      */
     private fun extractChannelName(subtitleCol: JSONObject?): String? {
         val runs = subtitleCol?.optJSONObject("text")?.optJSONArray("runs")
@@ -305,6 +323,8 @@ object InnerTubeParser {
         return segments.firstOrNull { !metaRegex.matches(it) && it.length < 80 }
     }
 
+    // ================= COLUMN / TEXT HELPERS =================
+
     private fun flexText(columns: JSONArray, index: Int): String? {
         val col = columns.optJSONObject(index)
             ?.optJSONObject("musicResponsiveListItemFlexColumnRenderer") ?: return null
@@ -319,7 +339,7 @@ object InnerTubeParser {
                 col.optJSONObject("musicResponsiveListItemFixedColumnRenderer")
                     ?: col.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
             )
-            if (text.matches(Regex("^\\d+:\\d+.*$"))) return text
+            if (DURATION_REGEX.matches(text)) return text
         }
         return null
     }
@@ -333,6 +353,8 @@ object InnerTubeParser {
         }
         return sb.toString()
     }
+
+    // ================= THUMBNAILS =================
 
     private fun thumbnailOf(root: JSONObject?): String? {
         if (root == null) return null
@@ -356,7 +378,10 @@ object InnerTubeParser {
                 val t = thumbs.optJSONObject(i) ?: continue
                 val url = t.optString("url").takeIf { it.isNotBlank() } ?: continue
                 val w = t.optInt("width", 0)
-                if (w > bestW) { bestW = w; best = url }
+                if (w > bestW) {
+                    bestW = w
+                    best = url
+                }
             }
         }
         return best
@@ -370,10 +395,15 @@ object InnerTubeParser {
             val t = thumbs.optJSONObject(i) ?: continue
             val url = t.optString("url").takeIf { it.isNotBlank() } ?: continue
             val w = t.optInt("width", 0)
-            if (w >= bestW) { bestW = w; best = url }
+            if (w >= bestW) {
+                bestW = w
+                best = url
+            }
         }
         return best ?: thumbs.optJSONObject(thumbs.length() - 1)?.optString("url")
     }
+
+    // ================= MISC =================
 
     private fun parseDuration(text: String?): Long {
         if (text.isNullOrBlank()) return 0L
@@ -381,9 +411,15 @@ object InnerTubeParser {
             text.split(":").map { it.trim().toLong() }
                 .reversed()
                 .foldIndexed(0L) { idx, acc, v ->
-                    acc + v * when (idx) { 0 -> 1L; 1 -> 60L; else -> 3600L }
+                    acc + v * when (idx) {
+                        0 -> 1L
+                        1 -> 60L
+                        else -> 3600L
+                    }
                 }
-        } catch (e: Exception) { 0L }
+        } catch (e: Exception) {
+            0L
+        }
     }
 
     private fun walkSearch(node: Any?, block: (JSONObject) -> Unit) {

@@ -16,14 +16,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Fixes fake/missing artist names by calling the player endpoint and
- * reading videoDetails.author (same strategy as VzMusic).
+ * Fixes fake/missing artist names.
  *
- * Two entry points:
- *   - enrichHits(List<SearchHit>)    -> used after every search
- *   - enrichTracks(List<Track>, ..)  -> used when opening albums / playlists
+ * Three-step cascade (all cached per videoId):
+ *   1. InnerTube.player    -> videoDetails.author (fast, YT Music native)
+ *   2. YouTube NewPipe     -> findVideoMetadata (smart match by id/title/duration/thumb)
+ *   3. If both fail, leave the track as-is.
  *
- * Semaphore(10) keeps it fast without hammering the endpoint.
+ * Semaphore(10) keeps it fast without hammering the endpoints.
  */
 @Singleton
 class YTMusicEnricher @Inject constructor(
@@ -53,16 +53,48 @@ class YTMusicEnricher @Inject constructor(
             } else hit
         }
 
+        // Fast path: the parser already got a plausible artist.
         if (!isLikelyMetadata(track.artist)) {
             YTMusicCaches.authorCache[track.id] = track.artist
             return hit
         }
 
-        val real = runCatching { fetchAuthor(track.id) }.getOrNull()
+        // Cascade: player -> YouTube NewPipe.
+        val real = resolveAuthor(track)
         if (real.isNullOrBlank()) return hit
 
         YTMusicCaches.authorCache[track.id] = real
         return SearchHit.SongHit(track.copy(artist = real))
+    }
+
+    /**
+     * 1) InnerTube.player -> videoDetails.author
+     * 2) YouTube NewPipe findVideoMetadata -> channelName
+     * Returns null if neither yields a clean name.
+     */
+    private suspend fun resolveAuthor(track: Track): String? {
+        // Step 1: InnerTube player.
+        runCatching {
+            val playerJson = InnerTube.player(track.id)
+            val fromPlayer = extractArtistFromPlayer(playerJson)
+            if (fromPlayer.isNotBlank()) return fromPlayer
+        }.onFailure { e ->
+            Log.d(TAG, "InnerTube player failed for ${track.id}: ${e.message}")
+        }
+
+        // Step 2: YouTube NewPipe.
+        return runCatching {
+            youTubeRepository.findVideoMetadata(
+                videoId = track.id,
+                title = track.title,
+                artistHint = track.artist.takeIf { !isLikelyMetadata(it) },
+                durationHintSeconds = track.durationSeconds.takeIf { it > 0 },
+                thumbnailHint = track.thumbnailUrl,
+            )?.channelName?.takeIf { it.isNotBlank() }
+        }.getOrElse { e ->
+            Log.w(TAG, "YouTube fallback failed for ${track.id}: ${e.message}")
+            null
+        }
     }
 
     // ================= TRACKS (album / playlist / queue) =================
@@ -125,6 +157,31 @@ class YTMusicEnricher @Inject constructor(
                 YTMusicCaches.authorCache[item.id] = extracted
             }
         }
+
+        // Fallback to YouTube NewPipe for artist / thumbnail.
+        if (isLikelyMetadata(working.artist) || needsThumb) {
+            val fromYt = runCatching {
+                youTubeRepository.findVideoMetadata(
+                    videoId = working.id,
+                    title = working.title,
+                    artistHint = null,
+                    durationHintSeconds = working.durationSeconds.takeIf { it > 0 },
+                    thumbnailHint = working.thumbnailUrl,
+                )
+            }.getOrNull()
+
+            if (fromYt != null) {
+                if (isLikelyMetadata(working.artist) && fromYt.channelName.isNotBlank()) {
+                    working = working.copy(artist = fromYt.channelName)
+                    YTMusicCaches.authorCache[working.id] = fromYt.channelName
+                }
+                if (needsThumb && !fromYt.thumbnailUrl.isNullOrBlank()) {
+                    working = working.copy(thumbnailUrl = fromYt.thumbnailUrl)
+                    YTMusicCaches.thumbnailCache[working.id] = fromYt.thumbnailUrl
+                }
+            }
+        }
+
         working = working.copy(source = resolvedSource)
 
         when (resolvedSource) {
@@ -160,10 +217,6 @@ class YTMusicEnricher @Inject constructor(
 
     // ================= PUBLIC UTILITIES =================
 
-    /**
-     * Heuristic: does this string look like metadata (episode / date /
-     * "Song", "Música", "Video", "Unknown") rather than an artist?
-     */
     fun isLikelyMetadata(s: String): Boolean {
         if (s.isBlank()) return true
         if (YTMusicTextUtils.isTypeWord(s)) return true
@@ -178,16 +231,6 @@ class YTMusicEnricher @Inject constructor(
     }
 
     // ================= INTERNAL =================
-
-    private suspend fun fetchAuthor(videoId: String): String? {
-        return try {
-            val playerJson = InnerTube.player(videoId)
-            extractArtistFromPlayer(playerJson).takeIf { it.isNotBlank() }
-        } catch (e: Exception) {
-            Log.w(TAG, "enrich failed for $videoId: ${e.message}")
-            null
-        }
-    }
 
     private fun extractArtistFromPlayer(playerJson: JSONObject): String {
         val videoDetails = playerJson.optJSONObject("videoDetails")

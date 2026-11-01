@@ -10,13 +10,7 @@ import com.vztechcore.vztune.core.domain.search.SearchHit
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Parses the JSON returned by InnerTube's `search` endpoint into ParsedItems,
- * then maps them to SearchHit for the rest of the app.
- */
 internal object YTMusicSearchParser {
-
-    // ================= PARSED ITEMS =================
 
     sealed interface ParsedItem {
         val stableKey: String
@@ -85,10 +79,6 @@ internal object YTMusicSearchParser {
         return out
     }
 
-    /**
-     * Maps a ParsedItem to a SearchHit based on the active filter.
-     * Block body (not expression body) because branches use `return null`.
-     */
     fun toHit(item: ParsedItem, filter: SearchFilter): SearchHit? {
         return when (item) {
             is ParsedItem.Song -> {
@@ -143,7 +133,7 @@ internal object YTMusicSearchParser {
         }
     }
 
-    // ================= SOURCE DETECTION (shared) =================
+    // ================= SOURCE DETECTION =================
 
     fun detectSource(videoId: String, renderer: JSONObject): Source {
         YTMusicCaches.sourceCache[videoId]?.let { return it }
@@ -281,6 +271,18 @@ internal object YTMusicSearchParser {
 
     // ================= ARTIST / CHANNEL =================
 
+    /**
+     * Extracts the artist list.
+     *
+     * First pass: iterate runs, break on duration/album/playlist, skip
+     * type words, dates, years, view counts.
+     *
+     * Fallback (no runs): split the raw subtitle by "•" and apply the SAME
+     * filters to each segment. This is what fixes the
+     *   "Música • 3:45"
+     * case that used to leak through as an artist name — now all segments
+     * get filtered and null is returned, so the enricher kicks in.
+     */
     private fun extractArtistFromSubtitle(
         subtitleCol: JSONObject?,
         subtitleText: String,
@@ -316,16 +318,23 @@ internal object YTMusicSearchParser {
             if (artists.isNotEmpty()) return artists.joinToString(", ")
         }
 
-        if (subtitleText.contains("•")) {
-            val before = subtitleText.substringBefore("•").trim()
-                .trim(',', '&', '·', '•', '-', '/', ';', ' ')
-            if (before.isNotBlank() && !YTMusicTextUtils.isTypeWord(before)) return before
+        // Fallback: split by "•" and filter each segment.
+        val segments = subtitleText
+            .split("•")
+            .map { it.trim().trim(',', '&', '·', '•', '-', '/', ';', ' ') }
+            .filter { it.isNotBlank() }
+
+        val valid = segments.filter { seg ->
+            !YTMusicTextUtils.isTypeWord(seg) &&
+                !YTMusicTextUtils.isDuration(seg) &&
+                !YTMusicTextUtils.isYear(seg) &&
+                !YTMusicTextUtils.isDate(seg) &&
+                !YTMusicTextUtils.isEpisode(seg) &&
+                !YTMusicTextUtils.isViewCount(seg) &&
+                seg.length <= 80
         }
 
-        val fallback = subtitleText.trim().trim(',', '&', '·', '•', '-', '/', ';', ' ')
-        return fallback.takeIf {
-            it.isNotBlank() && !YTMusicTextUtils.isTypeWord(it)
-        }
+        return valid.takeIf { it.isNotEmpty() }?.joinToString(", ")
     }
 
     private fun extractChannelName(subtitleCol: JSONObject?): String? {

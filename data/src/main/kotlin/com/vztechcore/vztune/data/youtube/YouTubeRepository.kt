@@ -18,6 +18,18 @@ import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * The metadata a YouTube search match returns.
+ * Used by YTMusicEnricher as a last-resort artist / duration / thumb resolver.
+ */
+data class VideoMetadata(
+    val videoId: String,
+    val channelName: String,
+    val title: String,
+    val durationSeconds: Long,
+    val thumbnailUrl: String?,
+)
+
 @Singleton
 class YouTubeRepository @Inject constructor(
     private val downloader: NewPipeDownloader,
@@ -106,6 +118,131 @@ class YouTubeRepository @Inject constructor(
             Log.e(TAG, "searchPlaylists failed for query=$query", e)
             emptyList()
         }
+    }
+
+    // ================= SMART VIDEO MATCH (for artist fallback) =================
+
+    /**
+     * Finds the best YouTube video match for the given title/artist hints
+     * and returns the full metadata (channel, duration, thumbnail).
+     *
+     * Scoring:
+     *   +1000 if the videoId matches exactly (strongest signal)
+     *   +200  if the thumbnail URL matches exactly
+     *   +100  if the title matches case-insensitively
+     *   +50   if the uploader contains the artist hint
+     *   +30   if the duration is within 5s of durationHint
+     *   +10   if the duration is within 15s of durationHint
+     *
+     * Returns null if no candidate reaches MIN_SCORE (60).
+     */
+    suspend fun findVideoMetadata(
+        videoId: String?,
+        title: String,
+        artistHint: String?,
+        durationHintSeconds: Long? = null,
+        thumbnailHint: String? = null,
+    ): VideoMetadata? = withContext(Dispatchers.IO) {
+        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
+        if (title.isBlank()) return@withContext null
+
+        // 1) Try exact videoId lookup first — most accurate.
+        if (!videoId.isNullOrBlank()) {
+            runCatching {
+                extractMetadataForId(videoId)
+            }.getOrNull()?.let { return@withContext it }
+        }
+
+        // 2) Search + score.
+        val query = buildString {
+            append(title)
+            if (!artistHint.isNullOrBlank()) {
+                append(" ")
+                append(artistHint)
+            }
+        }
+
+        runCatching {
+            val extractor = ServiceList.YouTube.getSearchExtractor(query)
+            extractor.fetchPage()
+
+            val titleLower = title.lowercase().trim()
+            val artistLower = artistHint?.lowercase()?.trim().orEmpty()
+
+            extractor.initialPage.items
+                .asSequence()
+                .filterIsInstance<StreamInfoItem>()
+                .mapNotNull { stream ->
+                    val candidateId = extractVideoId(stream.url) ?: return@mapNotNull null
+                    val candidateTitle = stream.name ?: return@mapNotNull null
+                    val candidateTitleLower = candidateTitle.lowercase().trim()
+                    val candidateUploader = stream.uploaderName?.trim().orEmpty()
+                    val candidateUploaderLower = candidateUploader.lowercase()
+                    val candidateDuration = stream.duration
+                    val candidateThumb = stream.thumbnails.lastOrNull()?.url
+
+                    var score = 0
+
+                    if (candidateId == videoId) score += 1000
+                    if (!thumbnailHint.isNullOrBlank() && candidateThumb == thumbnailHint) score += 200
+                    if (candidateTitleLower == titleLower) score += 100
+                    if (artistLower.isNotBlank() && candidateUploaderLower.contains(artistLower)) score += 50
+
+                    if (durationHintSeconds != null && durationHintSeconds > 0 && candidateDuration > 0) {
+                        val diff = kotlin.math.abs(candidateDuration - durationHintSeconds)
+                        when {
+                            diff <= 5 -> score += 30
+                            diff <= 15 -> score += 10
+                        }
+                    }
+
+                    if (score < MIN_SCORE) return@mapNotNull null
+
+                    score to VideoMetadata(
+                        videoId = candidateId,
+                        channelName = cleanChannelName(candidateUploader),
+                        title = candidateTitle,
+                        durationSeconds = candidateDuration,
+                        thumbnailUrl = candidateThumb,
+                    )
+                }
+                .maxByOrNull { it.first }
+                ?.second
+        }.getOrElse { e ->
+            Log.w(TAG, "findVideoMetadata failed for '$title': ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Direct lookup by videoId via getStreamExtractor — no scoring needed.
+     * Falls back to null on any error (removed video, private, etc).
+     */
+    private fun extractMetadataForId(videoId: String): VideoMetadata? {
+        return runCatching {
+            val extractor = ServiceList.YouTube.getStreamExtractor(
+                "https://www.youtube.com/watch?v=$videoId"
+            )
+            extractor.fetchPage()
+            val uploader = extractor.uploaderName?.trim().orEmpty()
+            if (uploader.isBlank()) return@runCatching null
+
+            VideoMetadata(
+                videoId = videoId,
+                channelName = cleanChannelName(uploader),
+                title = extractor.name ?: "",
+                durationSeconds = extractor.length,
+                thumbnailUrl = extractor.thumbnails?.lastOrNull()?.url,
+            )
+        }.getOrNull()
+    }
+
+    private fun cleanChannelName(raw: String): String {
+        var s = raw.trim()
+        s = s.removeSuffix(" - Topic").removeSuffix(" - topic").trim()
+        if (s.startsWith("Provided to YouTube", true)) return ""
+        if (s.startsWith("Auto-generated by YouTube", true)) return ""
+        return s
     }
 
     // ================= STREAM RESOLUTION =================
@@ -220,11 +357,6 @@ class YouTubeRepository @Inject constructor(
 
     // ================= FALLBACK THUMBNAIL =================
 
-    /**
-     * Used by YTMusicRepository when an album track has no cover.
-     * Mirrors VzMusic's findVideoThumbnail: searches YouTube by
-     * title + artist, picks the highest-scoring match.
-     */
     suspend fun findVideoThumbnail(
         videoId: String,
         title: String,
@@ -320,5 +452,6 @@ class YouTubeRepository @Inject constructor(
 
     private companion object {
         const val TAG = "VzTuneYT"
+        const val MIN_SCORE = 60
     }
 }

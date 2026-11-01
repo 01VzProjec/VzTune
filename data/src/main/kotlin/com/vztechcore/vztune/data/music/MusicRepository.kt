@@ -11,24 +11,13 @@ import com.vztechcore.vztune.data.youtube.YouTubeMusicNewPipeRepository
 import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Facade over YouTube + YT Music.
- *
- *   - SEARCH:    delegates to both repositories, interleaves results,
- *                filters duplicates across pagination pages.
- *   - PLAYBACK:  always uses NewPipe (decodes the `n` cipher that InnerTube
- *                does not), but picks the right endpoint based on `source`:
- *                  YOUTUBE_MUSIC -> YouTubeMusicNewPipeRepository
- *                  YOUTUBE       -> YouTubeRepository.getStreamUrl
- *
- * `YTMusicRepository.search()` already enriches hits with real artist names
- * (via the player endpoint + caches), so this class does NOT do any extra
- * enrichment — it only merges and filters.
- */
 @Singleton
 class MusicRepository @Inject constructor(
     private val youTubeRepository: YouTubeRepository,
@@ -36,13 +25,12 @@ class MusicRepository @Inject constructor(
     private val youTubeMusicNewPipeRepository: YouTubeMusicNewPipeRepository,
 ) {
 
-    // ================= PAGINATION STATE =================
-
     private data class SearchState(
         val seenKeys: MutableSet<String> = mutableSetOf(),
         var ytHasMore: Boolean = true,
         var ytmContinuation: String? = null,
         var ytmHasMore: Boolean = true,
+        var topArtistsLoaded: Boolean = false,
     )
 
     private val searchStates = mutableMapOf<String, SearchState>()
@@ -66,90 +54,167 @@ class MusicRepository @Inject constructor(
             state.ytHasMore = true
             state.ytmContinuation = null
             state.ytmHasMore = true
+            state.topArtistsLoaded = false
             youTubeRepository.resetSession()
         }
 
-        val hits = mutableListOf<SearchHit>()
-        var hasMore: Boolean
-
         when (filter) {
-            SearchFilter.ALL -> {
-                val ytPageSize = if (loadMore) 15 else 20
-                val ytmPageSize = if (loadMore) 15 else 20
+            SearchFilter.ALL -> searchAll(query, loadMore, state)
+            SearchFilter.VIDEOS -> searchVideos(query, loadMore, state)
+            SearchFilter.SONGS -> searchSongs(query, loadMore, state)
+            SearchFilter.PLAYLISTS -> searchPlaylists(query, loadMore, state)
+            else -> searchOther(query, filter, loadMore, state)
+        }
+    }
 
-                val ytPage = youTubeRepository.searchVideos(
-                    query = query,
-                    loadMore = loadMore,
-                    pageSize = ytPageSize,
-                )
-                val ytmPage = ytMusicRepository.search(
-                    query = query,
-                    filter = filter,
-                    continuation = state.ytmContinuation,
-                )
+    // ================= ALL (3 artists top + interleaved) =================
 
-                hits += interleave(ytPage.items, ytmPage.items.take(ytmPageSize))
+    private suspend fun searchAll(
+        query: String,
+        loadMore: Boolean,
+        state: SearchState,
+    ): SearchResult = coroutineScope {
+        val pageSize = if (loadMore) 10 else 20
 
-                state.ytHasMore = ytPage.hasMore
-                state.ytmContinuation = ytmPage.continuation
-                state.ytmHasMore = ytmPage.continuation != null
-                hasMore = state.ytHasMore || state.ytmHasMore
+        // 1) First page: fetch top artists in parallel with videos/songs.
+        val topArtistsDeferred = if (!state.topArtistsLoaded && !loadMore) {
+            async {
+                runCatching { ytMusicRepository.searchArtists(query) }
+                    .getOrDefault(emptyList())
+                    .take(3)
             }
+        } else null
 
-            SearchFilter.VIDEOS -> {
-                val ytPage = youTubeRepository.searchVideos(
-                    query = query,
-                    loadMore = loadMore,
-                    pageSize = 30,
-                )
-                hits += ytPage.items
-                state.ytHasMore = ytPage.hasMore
-                hasMore = state.ytHasMore
-            }
-
-            SearchFilter.SONGS -> {
-                val ytmPage = ytMusicRepository.search(
-                    query = query,
-                    filter = filter,
-                    continuation = state.ytmContinuation,
-                )
-                hits += ytmPage.items.take(30)
-                state.ytmContinuation = ytmPage.continuation
-                state.ytmHasMore = ytmPage.continuation != null
-                hasMore = state.ytmHasMore
-            }
-
-            SearchFilter.PLAYLISTS -> {
-                if (!loadMore) {
-                    hits += youTubeRepository.searchPlaylists(query, loadMore = false)
-                }
-                val ytmPage = ytMusicRepository.search(
-                    query = query,
-                    filter = filter,
-                    continuation = state.ytmContinuation,
-                )
-                hits += ytmPage.items
-                state.ytmContinuation = ytmPage.continuation
-                state.ytmHasMore = ytmPage.continuation != null
-                hasMore = state.ytmHasMore
-            }
-
-            else -> {
-                val ytmPage = ytMusicRepository.search(
-                    query = query,
-                    filter = filter,
-                    continuation = state.ytmContinuation,
-                )
-                hits += ytmPage.items
-                state.ytmContinuation = ytmPage.continuation
-                state.ytmHasMore = ytmPage.continuation != null
-                hasMore = state.ytmHasMore
-            }
+        // 2) Fetch videos + songs in parallel.
+        val ytDeferred = async {
+            youTubeRepository.searchVideos(
+                query = query,
+                loadMore = loadMore,
+                pageSize = pageSize,
+            )
+        }
+        val ytmDeferred = async {
+            ytMusicRepository.search(
+                query = query,
+                filter = SearchFilter.ALL,
+                continuation = state.ytmContinuation,
+            )
         }
 
-        val newHits = hits.filter { state.seenKeys.add(it.stableKey) }
+        val ytPage = ytDeferred.await()
+        val ytmPage = ytmDeferred.await()
+        val topArtists = topArtistsDeferred?.await().orEmpty()
+
+        state.ytHasMore = ytPage.hasMore
+        state.ytmContinuation = ytmPage.continuation
+        state.ytmHasMore = ytmPage.continuation != null
+
+        // Build merged list.
+        val merged = mutableListOf<SearchHit>()
+
+        // 3 artists at the very top (only on first page).
+        if (topArtists.isNotEmpty()) {
+            topArtists.forEach { artist ->
+                merged += SearchHit.ArtistHit(artist)
+            }
+            state.topArtistsLoaded = true
+        }
+
+        // Interleave YT videos and YTM songs.
+        val interleaved = interleave(
+            ytPage.items,
+            ytmPage.items.take(pageSize),
+        )
+        merged += interleaved
+
+        val newHits = merged.filter { state.seenKeys.add(it.stableKey) }
+        val hasMore = state.ytHasMore || state.ytmHasMore
         SearchResult.Success(newHits, hasMore)
     }
+
+    // ================= VIDEOS =================
+
+    private suspend fun searchVideos(
+        query: String,
+        loadMore: Boolean,
+        state: SearchState,
+    ): SearchResult {
+        val ytPage = youTubeRepository.searchVideos(
+            query = query,
+            loadMore = loadMore,
+            pageSize = 30,
+        )
+        state.ytHasMore = ytPage.hasMore
+        val newHits = ytPage.items.filter { state.seenKeys.add(it.stableKey) }
+        return SearchResult.Success(newHits, state.ytHasMore)
+    }
+
+    // ================= SONGS =================
+
+    private suspend fun searchSongs(
+        query: String,
+        loadMore: Boolean,
+        state: SearchState,
+    ): SearchResult {
+        val ytmPage = ytMusicRepository.search(
+            query = query,
+            filter = SearchFilter.SONGS,
+            continuation = state.ytmContinuation,
+        )
+        state.ytmContinuation = ytmPage.continuation
+        state.ytmHasMore = ytmPage.continuation != null
+        val newHits = ytmPage.items.take(30).filter { state.seenKeys.add(it.stableKey) }
+        return SearchResult.Success(newHits, state.ytmHasMore)
+    }
+
+    // ================= PLAYLISTS =================
+
+    private suspend fun searchPlaylists(
+        query: String,
+        loadMore: Boolean,
+        state: SearchState,
+    ): SearchResult = coroutineScope {
+        val ytDeferred = async {
+            if (!loadMore) youTubeRepository.searchPlaylists(query, loadMore = false)
+            else emptyList()
+        }
+        val ytmDeferred = async {
+            ytMusicRepository.search(
+                query = query,
+                filter = SearchFilter.PLAYLISTS,
+                continuation = state.ytmContinuation,
+            )
+        }
+        val ytHits = ytDeferred.await()
+        val ytmPage = ytmDeferred.await()
+        state.ytmContinuation = ytmPage.continuation
+        state.ytmHasMore = ytmPage.continuation != null
+
+        val merged = ytHits + ytmPage.items
+        val newHits = merged.filter { state.seenKeys.add(it.stableKey) }
+        SearchResult.Success(newHits, state.ytmHasMore)
+    }
+
+    // ================= OTHERS (artists / albums) =================
+
+    private suspend fun searchOther(
+        query: String,
+        filter: SearchFilter,
+        loadMore: Boolean,
+        state: SearchState,
+    ): SearchResult {
+        val ytmPage = ytMusicRepository.search(
+            query = query,
+            filter = filter,
+            continuation = state.ytmContinuation,
+        )
+        state.ytmContinuation = ytmPage.continuation
+        state.ytmHasMore = ytmPage.continuation != null
+        val newHits = ytmPage.items.filter { state.seenKeys.add(it.stableKey) }
+        return SearchResult.Success(newHits, state.ytmHasMore)
+    }
+
+    // ================= SUGGESTIONS =================
 
     suspend fun suggestions(query: String): SearchSuggestions =
         withContext(Dispatchers.IO) {
@@ -159,14 +224,6 @@ class MusicRepository @Inject constructor(
 
     // ================= PLAYBACK =================
 
-    /**
-     * Resolve a playable audio URL.
-     *
-     * Always NewPipe (it decodes the `n` cipher that InnerTube does NOT),
-     * but the endpoint matches the source:
-     *   - YOUTUBE_MUSIC -> YouTubeMusicNewPipeRepository (tries music.youtube.com)
-     *   - YOUTUBE       -> YouTubeRepository.getStreamUrl  (tries youtube.com)
-     */
     suspend fun getStreamUrl(track: Track): String? = withContext(Dispatchers.IO) {
         when (track.source) {
             Source.YOUTUBE_MUSIC -> runCatching {
@@ -175,7 +232,6 @@ class MusicRepository @Inject constructor(
                 Log.w(TAG, "YTM stream failed for ${track.id}: ${e.message}")
                 null
             }
-
             Source.YOUTUBE -> youTubeRepository.getStreamUrl(
                 videoId = track.id,
                 titleHint = track.title,
@@ -186,10 +242,6 @@ class MusicRepository @Inject constructor(
 
     // ================= HELPERS =================
 
-    /**
-     * Interleaves two lists, preserving the order of each.
-     * Example: [a,b,c] + [x,y] -> [a,x,b,y,c]
-     */
     private fun <T> interleave(a: List<T>, b: List<T>): List<T> {
         val out = mutableListOf<T>()
         val max = maxOf(a.size, b.size)

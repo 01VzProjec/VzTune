@@ -7,25 +7,26 @@ import com.vztechcore.vztune.core.domain.music.Track
 import org.json.JSONObject
 
 /**
- * Parses the JSON returned by InnerTube's `browse` endpoint for an artist
- * page into a structured ArtistResult.
+ * Public data class for an artist page result.
+ * Moved OUT of the internal parser object so that YTMusicRepository.browseArtist
+ * can expose it without leaking an internal type.
  */
-internal object YTMusicArtistParser {
+data class ArtistResult(
+    val browseId: String,
+    val name: String,
+    val thumbnailUrl: String?,
+    val subscribers: String?,
+    val description: String?,
+    val topSongs: List<Track>,
+    val allSongs: List<Track>,
+    val allVideos: List<Track>,
+    val allAlbums: List<Playlist>,
+    val allSingles: List<Playlist>,
+    val featured: List<Track>,
+    val relatedArtists: List<Artist>,
+)
 
-    data class ArtistResult(
-        val browseId: String,
-        val name: String,
-        val thumbnailUrl: String?,
-        val subscribers: String?,
-        val description: String?,
-        val topSongs: List<Track>,
-        val allSongs: List<Track>,
-        val allVideos: List<Track>,
-        val allAlbums: List<Playlist>,
-        val allSingles: List<Playlist>,
-        val featured: List<Track>,
-        val relatedArtists: List<Artist>,
-    )
+internal object YTMusicArtistParser {
 
     fun parseArtistPage(browseId: String, json: JSONObject): ArtistResult {
         val immersive = YTMusicTextUtils.findFirst(json, "musicImmersiveHeaderRenderer")
@@ -97,12 +98,12 @@ internal object YTMusicArtistParser {
                                 id = bId, name = itemTitle,
                                 thumbnailUrl = thumb, source = Source.YOUTUBE_MUSIC,
                             )
-                            bId?.startsWith("MPREb_") == true || bId?.startsWith("VL") == true ->
-                                albums += Playlist(
-                                    id = bId, title = itemTitle,
-                                    owner = sub.substringBefore("•").trim(),
-                                    thumbnailUrl = thumb, source = Source.YOUTUBE_MUSIC,
-                                )
+                            bId?.startsWith("MPREb_") == true ||
+                                bId?.startsWith("VL") == true -> albums += Playlist(
+                                id = bId, title = itemTitle,
+                                owner = sub.substringBefore("•").trim(),
+                                thumbnailUrl = thumb, source = Source.YOUTUBE_MUSIC,
+                            )
                         }
                     }
                 }
@@ -188,8 +189,6 @@ internal object YTMusicArtistParser {
             }
         }
     }
-
-    // ================= HEADER HELPERS =================
 
     fun extractHeaderTitle(header: JSONObject): String? {
         val runs = header.optJSONObject("title")?.optJSONArray("runs") ?: return null

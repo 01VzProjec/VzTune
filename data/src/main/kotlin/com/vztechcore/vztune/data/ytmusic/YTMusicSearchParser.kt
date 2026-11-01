@@ -13,11 +13,10 @@ import org.json.JSONObject
 /**
  * Parses the JSON returned by InnerTube's `search` endpoint into ParsedItems,
  * then maps them to SearchHit for the rest of the app.
- *
- * Also owns `detectSource`, which is used by YTMusicEnricher when handling
- * a `player` response.
  */
 internal object YTMusicSearchParser {
+
+    // ================= PARSED ITEMS =================
 
     sealed interface ParsedItem {
         val stableKey: String
@@ -86,44 +85,61 @@ internal object YTMusicSearchParser {
         return out
     }
 
-    fun ParsedItem.toHit(filter: SearchFilter): SearchHit? = when (this) {
-        is ParsedItem.Song -> {
-            if (source == Source.YOUTUBE) return null
-            if (filter != SearchFilter.ALL && filter != SearchFilter.SONGS) return null
-            SearchHit.SongHit(
-                Track(
-                    id = videoId, title = title, artist = artist,
-                    durationSeconds = durationSeconds,
-                    thumbnailUrl = thumbnailUrl, source = source,
+    /**
+     * Maps a ParsedItem to a SearchHit based on the active filter.
+     * Block body (not expression body) because branches use `return null`.
+     */
+    fun toHit(item: ParsedItem, filter: SearchFilter): SearchHit? {
+        return when (item) {
+            is ParsedItem.Song -> {
+                if (item.source == Source.YOUTUBE) return null
+                if (filter != SearchFilter.ALL && filter != SearchFilter.SONGS) return null
+                SearchHit.SongHit(
+                    Track(
+                        id = item.videoId,
+                        title = item.title,
+                        artist = item.artist,
+                        durationSeconds = item.durationSeconds,
+                        thumbnailUrl = item.thumbnailUrl,
+                        source = item.source,
+                    )
                 )
-            )
-        }
-        is ParsedItem.Album -> {
-            if (filter != SearchFilter.ALL && filter != SearchFilter.ALBUMS) return null
-            SearchHit.AlbumHit(
-                Album(
-                    id = browseId, title = title, artist = artist,
-                    thumbnailUrl = thumbnailUrl, source = Source.YOUTUBE_MUSIC,
+            }
+            is ParsedItem.Album -> {
+                if (filter != SearchFilter.ALL && filter != SearchFilter.ALBUMS) return null
+                SearchHit.AlbumHit(
+                    Album(
+                        id = item.browseId,
+                        title = item.title,
+                        artist = item.artist,
+                        thumbnailUrl = item.thumbnailUrl,
+                        source = Source.YOUTUBE_MUSIC,
+                    )
                 )
-            )
-        }
-        is ParsedItem.Artist -> {
-            if (filter != SearchFilter.ALL && filter != SearchFilter.ARTISTS) return null
-            SearchHit.ArtistHit(
-                Artist(
-                    id = browseId, name = name, thumbnailUrl = thumbnailUrl,
-                    source = Source.YOUTUBE_MUSIC,
+            }
+            is ParsedItem.Artist -> {
+                if (filter != SearchFilter.ALL && filter != SearchFilter.ARTISTS) return null
+                SearchHit.ArtistHit(
+                    Artist(
+                        id = item.browseId,
+                        name = item.name,
+                        thumbnailUrl = item.thumbnailUrl,
+                        source = Source.YOUTUBE_MUSIC,
+                    )
                 )
-            )
-        }
-        is ParsedItem.Playlist -> {
-            if (filter != SearchFilter.ALL && filter != SearchFilter.PLAYLISTS) return null
-            SearchHit.PlaylistHit(
-                Playlist(
-                    id = browseId, title = title, owner = owner,
-                    thumbnailUrl = thumbnailUrl, source = Source.YOUTUBE_MUSIC,
+            }
+            is ParsedItem.Playlist -> {
+                if (filter != SearchFilter.ALL && filter != SearchFilter.PLAYLISTS) return null
+                SearchHit.PlaylistHit(
+                    Playlist(
+                        id = item.browseId,
+                        title = item.title,
+                        owner = item.owner,
+                        thumbnailUrl = item.thumbnailUrl,
+                        source = Source.YOUTUBE_MUSIC,
+                    )
                 )
-            )
+            }
         }
     }
 

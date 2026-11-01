@@ -1,6 +1,5 @@
 package com.vztechcore.vztune.data.ytmusic
 
-import android.util.Log
 import com.vztechcore.vztune.core.domain.music.Artist
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
@@ -16,14 +15,7 @@ import javax.inject.Singleton
 
 /**
  * YT Music facade. Only exposes public operations; every parsing / caching /
- * enrichment detail lives in the sibling files:
- *
- *   YTMusicCaches        - shared caches
- *   YTMusicTextUtils     - text & JSON primitives
- *   YTMusicThumbnailUtils- thumbnail extraction
- *   YTMusicSearchParser  - search result parsing + source detection
- *   YTMusicArtistParser  - artist page parsing
- *   YTMusicEnricher      - real artist/thumbnail via player endpoint
+ * enrichment detail lives in the sibling files.
  */
 @Singleton
 class YTMusicRepository @Inject constructor(
@@ -58,7 +50,11 @@ class YTMusicRepository @Inject constructor(
 
         val parsed = YTMusicSearchParser.parseSearchResults(json)
         val next = InnerTube.findContinuationToken(json)
-        val hits = parsed.mapNotNull { it.toHit(filter) }
+
+        val hits = parsed.mapNotNull { item ->
+            YTMusicSearchParser.toHit(item, filter)
+        }
+
         val enriched = enricher.enrichHits(hits)
         SearchPage(enriched, next)
     }
@@ -175,10 +171,10 @@ class YTMusicRepository @Inject constructor(
             .take(30)
     }
 
-    suspend fun browseArtist(browseId: String): YTMusicArtistParser.ArtistResult =
+    suspend fun browseArtist(browseId: String): ArtistResult =
         withContext(Dispatchers.IO) {
             val json = runCatching { InnerTube.browse(browseId) }.getOrNull()
-                ?: return@withContext YTMusicArtistParser.ArtistResult(
+                ?: return@withContext ArtistResult(
                     browseId = browseId,
                     name = "Artista",
                     thumbnailUrl = null,
@@ -348,9 +344,5 @@ class YTMusicRepository @Inject constructor(
             if (cleaned.isNotBlank()) return cleaned
         }
         return ""
-    }
-
-    private companion object {
-        const val TAG = "VzTuneYTM"
     }
 }

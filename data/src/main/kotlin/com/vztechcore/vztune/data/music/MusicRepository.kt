@@ -99,7 +99,8 @@ class MusicRepository @Inject constructor(
         }
 
         val newHits = hits.filter { state.seenKeys.add(it.stableKey) }
-        val enriched = ytMusicRepository.enrichArtists(newHits)   
+        // Enrich with real artist names via InnerTube.player (cached).
+        val enriched = ytMusicRepository.enrichHits(newHits)
         SearchResult.Success(enriched, hasMore)                    
         SearchResult.Success(newHits, hasMore)
     }

@@ -12,6 +12,11 @@ import com.vztechcore.vztune.core.domain.search.SearchSuggestions
 import com.vztechcore.vztune.data.innertube.InnerTube
 import com.vztechcore.vztune.data.innertube.InnerTubeParser
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import javax.inject.Inject
@@ -51,6 +56,126 @@ class YTMusicRepository @Inject constructor() {
                 .getOrDefault(emptyList())
             SearchSuggestions(queries = queries)
         }
+
+    /**
+     * Enrich SearchHit list with:
+     *   - Real artist name (via InnerTube.player -> videoDetails.author)
+     *   - Real source (YOUTUBE vs YOUTUBE_MUSIC)
+     *   - Real thumbnail (when missing)
+     *
+     * Only runs for SongHit items whose artist still looks like metadata.
+     * Caches results in InnerTubeParser.authorCache so the same video
+     * is only resolved once, even across searches.
+     *
+     * Ported from VzMusic's enrichTracksWithPlayer — same Semaphore(10)
+     * to keep things fast without hammering the endpoint.
+     */
+    suspend fun enrichHits(hits: List<SearchHit>): List<SearchHit> =
+        withContext(Dispatchers.IO) {
+            if (hits.isEmpty()) return@withContext hits
+
+            coroutineScope {
+                val semaphore = Semaphore(10)
+                val deferreds = hits.map { hit ->
+                    async {
+                        semaphore.withPermit { enrichSingle(hit) }
+                    }
+                }
+                deferreds.awaitAll()
+            }
+        }
+
+    private fun enrichSingle(hit: SearchHit): SearchHit {
+        if (hit !is SearchHit.SongHit) return hit
+
+        val track = hit.track
+        val cachedAuthor = InnerTubeParser.authorCache[track.id]
+
+        // Already cached and artist looks valid — nothing to do.
+        if (!cachedAuthor.isNullOrBlank()) {
+            return if (cachedAuthor != track.artist) {
+                SearchHit.SongHit(track.copy(artist = cachedAuthor))
+            } else {
+                hit
+            }
+        }
+
+        // Artist already looks real (not metadata). Trust the parser.
+        if (!isLikelyMetadata(track.artist)) {
+            InnerTubeParser.authorCache[track.id] = track.artist
+            return hit
+        }
+
+        // Otherwise ask the player endpoint.
+        val real = runCatching { fetchAuthorFromPlayer(track.id) }.getOrNull()
+        if (real.isNullOrBlank()) return hit
+
+        InnerTubeParser.authorCache[track.id] = real
+        return SearchHit.SongHit(track.copy(artist = real))
+    }
+
+    /**
+     * Checks if the parsed "artist" string is really metadata
+     * (episode markers, dates, "Provided to YouTube", etc.) rather
+     * than an artist name. If it is, we MUST call the player to fix.
+     */
+    private fun isLikelyMetadata(s: String): Boolean {
+        if (s.isBlank()) return true
+        val lower = s.lowercase()
+        if (lower == "unknown" || lower == "desconhecido") return true
+        if (lower.startsWith("episódio") || lower.startsWith("episodio")) return true
+        if (lower.startsWith("temporada")) return true
+        if (Regex("^\\d{1,2} de \\w+\\.? de \\d{4}").containsMatchIn(lower)) return true
+        if (Regex("^[a-z]{3} \\d{1,2}, \\d{4}$").containsMatchIn(lower)) return true
+        return false
+    }
+
+    private suspend fun fetchAuthorFromPlayer(videoId: String): String? {
+        return try {
+            val playerJson = InnerTube.player(videoId)
+            extractArtistFromPlayer(playerJson)
+        } catch (e: Exception) {
+            Log.w(TAG, "player enrich failed for $videoId: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Same extraction as VzMusic's extractArtistFromPlayer:
+     *   videoDetails.author -> microformat.ownerChannelName -> microformat.author
+     * Then cleaned via cleanArtistName.
+     */
+    private fun extractArtistFromPlayer(playerJson: JSONObject): String? {
+        val videoDetails = playerJson.optJSONObject("videoDetails")
+        val microformat = playerJson.optJSONObject("microformat")
+            ?.optJSONObject("playerMicroformatRenderer")
+
+        val candidates = listOfNotNull(
+            videoDetails?.optString("author")?.takeIf { it.isNotBlank() },
+            microformat?.optString("ownerChannelName")?.takeIf { it.isNotBlank() },
+            microformat?.optString("author")?.takeIf { it.isNotBlank() },
+        )
+
+        for (raw in candidates) {
+            val cleaned = cleanArtistName(raw)
+            if (cleaned.isNotBlank()) return cleaned
+        }
+        return null
+    }
+
+    private fun cleanArtistName(raw: String): String {
+        if (raw.isBlank()) return ""
+        var s = raw.trim()
+        s = s.removeSuffix(" - Topic").removeSuffix(" - topic").trim()
+        if (s.startsWith("Provided to YouTube", true)) return ""
+        if (s.startsWith("Auto-generated by YouTube", true)) return ""
+        if (s.equals("Various Artists", true)) return "Various Artists"
+        if (s.startsWith("UC") && s.length > 20) return ""
+        if (s.equals("Album", true) || s.equals("Álbum", true)) return ""
+        return s
+    }
+
+    // ================= ParsedItem -> SearchHit mapping =================
 
     private fun InnerTubeParser.ParsedItem.toHit(filter: SearchFilter): SearchHit? {
         return when (this) {
@@ -106,48 +231,7 @@ class YTMusicRepository @Inject constructor() {
         }
     }
 
-    /**
-     * Enrich a song whose artist is still "Unknown" by calling the player
-     * endpoint and reading `videoDetails.author`.
-     * This is what VzMusic does in enrichTracksWithPlayer — ported here
-     * for the search result list.
-     */
-    suspend fun enrichArtists(hits: List<SearchHit>): List<SearchHit> =
-        withContext(Dispatchers.IO) {
-            hits.map { hit ->
-                if (hit is SearchHit.SongHit && hit.track.artist.isBlankOrUnknown()) {
-                    val real = resolveArtistFromPlayer(hit.track.id)
-                    if (real != null) {
-                        SearchHit.SongHit(hit.track.copy(artist = real))
-                    } else hit
-                } else hit
-            }
-        }
-
-    private fun String.isBlankOrUnknown(): Boolean =
-        isBlank() || equals("unknown", true) || equals("desconhecido", true)
-
-    private suspend fun resolveArtistFromPlayer(videoId: String): String? {
-        return runCatching {
-            val playerJson = InnerTube.player(videoId)
-            val author = playerJson
-                .optJSONObject("videoDetails")
-                ?.optString("author")
-                ?.trim()
-                .orEmpty()
-            if (author.isNotBlank()) cleanAuthor(author) else null
-        }.getOrElse { e ->
-            Log.w("VzTuneYTM", "enrich artist failed for $videoId: ${e.message}")
-            null
-        }
-    }
-
-    private fun cleanAuthor(raw: String): String {
-        var s = raw.trim()
-        s = s.removeSuffix(" - Topic").removeSuffix(" - topic").trim()
-        if (s.startsWith("Provided to YouTube", true)) return ""
-        if (s.startsWith("Auto-generated by YouTube", true)) return ""
-        if (s.equals("Various Artists", true)) return "Various Artists"
-        return s
+    private companion object {
+        const val TAG = "VzTuneYTM"
     }
 }

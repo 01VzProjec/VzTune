@@ -48,28 +48,13 @@ object InnerTubeParser {
         }
     }
 
-    private val sourceCache = ConcurrentHashMap<String, Source>()
-
-    private val TYPE_KEYWORDS = setOf(
-        "song", "songs",
-        "música", "músicas", "musica", "musicas",
-        "video", "vídeo", "videos", "vídeos",
-        "episódio", "episodio", "episode", "episodes",
-        "single", "singles",
-        "album", "álbum", "albums", "álbuns",
-        "playlist", "playlists",
-    )
-
-    private val DURATION_REGEX = Regex("^\\d+:\\d+.*$")
-    private val YEAR_REGEX = Regex("^\\d{4}$")
-    private val DATE_REGEX = Regex(
-        "^\\d{1,2} de \\w+\\.? de \\d{4}$|^[A-Z][a-z]{2} \\d{1,2}, \\d{4}$",
-        RegexOption.IGNORE_CASE,
-    )
-    private val EPISODE_REGEX = Regex(
-        "^episódio \\d+|^temporada \\d+|^t\\d+e\\d+$",
-        RegexOption.IGNORE_CASE,
-    )
+    /**
+     * Shared caches — mirrors VzMusic's YouTubeMusicRepository.
+     * Kept here so both the parser AND YTMusicRepository's player
+     * enrichment can consult/populate them.
+     */
+    val sourceCache = ConcurrentHashMap<String, Source>()
+    val authorCache = ConcurrentHashMap<String, String>()
 
     fun parseSearchResults(json: JSONObject): List<ParsedItem> {
         val out = mutableListOf<ParsedItem>()
@@ -164,18 +149,31 @@ object InnerTubeParser {
     private fun detectSource(videoId: String, renderer: JSONObject): Source {
         sourceCache[videoId]?.let { return it }
 
+        val columns = renderer.optJSONArray("flexColumns")
+        val subtitleCol = columns?.optJSONObject(1)
+            ?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
+        val subtitleText = runsText(subtitleCol).lowercase()
+
         val type = findFirstMusicVideoType(renderer)
         if (type != null) {
-            val resolved: Source? = when {
+            val fromType: Source? = when {
                 type == "MUSIC_VIDEO_TYPE_ATV" ||
                     type == "MUSIC_VIDEO_TYPE_PODCAST_EPISODE" -> Source.YOUTUBE_MUSIC
                 type.startsWith("MUSIC_VIDEO_TYPE_") -> Source.YOUTUBE
                 else -> null
             }
-            if (resolved != null) {
-                sourceCache[videoId] = resolved
-                return resolved
+            if (fromType != null) {
+                sourceCache[videoId] = fromType
+                return fromType
             }
+        }
+
+        if (subtitleText.contains("views") ||
+            subtitleText.contains("view ") ||
+            subtitleText.contains("visualizaç") ||
+            subtitleText.contains("reproduç")) {
+            sourceCache[videoId] = Source.YOUTUBE
+            return Source.YOUTUBE
         }
 
         detectSourceFromThumbnailUrl(thumbnailOf(renderer.optJSONObject("thumbnail")))?.let {
@@ -228,13 +226,18 @@ object InnerTubeParser {
     }
 
     /**
-     * Artist extraction for YOUTUBE_MUSIC hits.
-     * VzMusic strategy:
-     *   - Iterate all runs.
-     *   - Skip type words, years, dates, episodes, view counts.
-     *   - Stop at first album (MPREb_) or playlist (VL) marker.
-     *   - Stop at first duration.
-     *   - If nothing valid, return null (caller will enrich via player).
+     * Artist extraction — IDENTICAL to VzMusic's extractArtistFromSubtitle.
+     *
+     * It does NOT filter "Episódio" / dates / etc. because the YT Music
+     * result structure puts artists BEFORE the metadata, and we `break`
+     * when we hit a duration. The only filters are:
+     *   - skip year (4 digits)
+     *   - skip view counts
+     *   - skip overlong strings
+     *   - break on duration, album (MPREb_), playlist (VL)
+     *
+     * Anything else that leaks through is cleaned later by the player
+     * enrichment step (InnerTube.player -> videoDetails.author).
      */
     private fun extractArtistFromSubtitle(
         subtitleCol: JSONObject?,
@@ -250,8 +253,7 @@ object InnerTubeParser {
                 val raw = run.optString("text")
                 val text = raw.trim().trim(' ', ',', '&', '·', '•', '-', '/', ';', '\n', '\t')
                 if (text.isBlank()) continue
-                if (text == "•" || text == "·") continue
-                if (DURATION_REGEX.matches(text)) break
+                if (text.matches(Regex("^\\d+:\\d+.*$"))) break
 
                 val nav = run.optJSONObject("navigationEndpoint")
                 val browseId = nav?.optJSONObject("browseEndpoint")?.optString("browseId")
@@ -260,17 +262,17 @@ object InnerTubeParser {
                     browseId?.startsWith("VL") == true -> break
                 }
 
-                if (text.lowercase() in TYPE_KEYWORDS) continue
-                if (YEAR_REGEX.matches(text)) continue
-                if (DATE_REGEX.matches(text)) continue
-                if (EPISODE_REGEX.matches(text)) continue
-                if (text.contains("views", true) ||
+                val looksLikeYear = text.matches(Regex("^\\d{4}$"))
+                val looksLikeViews = text.contains("views", true) ||
                     text.contains("visualizaç", true) ||
-                    text.contains("reproduç", true)) continue
+                    text.contains("reproduç", true)
+
+                if (looksLikeYear || looksLikeViews) continue
                 if (text.length > 80) continue
 
                 if (text !in artists) artists += text
             }
+
             if (artists.isNotEmpty()) {
                 return artists.joinToString(", ")
                     .replace(Regex(",\\s*,"), ",")
@@ -279,21 +281,15 @@ object InnerTubeParser {
             }
         }
 
-        // Fallback: parse the plain subtitle string (skip metadata segments).
-        val segments = subtitleText
-            .split("•")
-            .map { it.trim().trim(',', '&', '·', '•', '-', '/', ';', ' ') }
-            .filter { it.isNotBlank() }
-            .filter { it.lowercase() !in TYPE_KEYWORDS }
-            .filter { !DURATION_REGEX.matches(it) }
-            .filter { !YEAR_REGEX.matches(it) }
-            .filter { !DATE_REGEX.matches(it) }
-            .filter { !EPISODE_REGEX.matches(it) }
-            .filter { !it.contains("views", true) }
-            .filter { !it.contains("visualizaç", true) }
+        if (subtitleText.contains("•")) {
+            val before = subtitleText.substringBefore("•").trim()
+                .trim(',', '&', '·', '•', '-', '/', ';', ' ')
+            if (before.isNotBlank()) return before
+        }
 
-        if (segments.isEmpty()) return null
-        return segments.joinToString(", ")
+        val fallback = subtitleText.trim()
+            .trim(',', '&', '·', '•', '-', '/', ';', ' ')
+        return fallback.takeIf { it.isNotBlank() }
     }
 
     private fun extractChannelName(subtitleCol: JSONObject?): String? {
@@ -313,13 +309,7 @@ object InnerTubeParser {
 
         val full = subtitleCol?.let { runsText(it) }.orEmpty()
         val segments = full.split("•").map { it.trim() }.filter { it.isNotBlank() }
-        return segments.firstOrNull {
-            !YEAR_REGEX.matches(it) &&
-                !DATE_REGEX.matches(it) &&
-                !EPISODE_REGEX.matches(it) &&
-                !it.contains("views", true) &&
-                it.length < 80
-        }
+        return segments.firstOrNull { it.length < 80 }
     }
 
     private fun flexText(columns: JSONArray, index: Int): String? {
@@ -336,7 +326,7 @@ object InnerTubeParser {
                 col.optJSONObject("musicResponsiveListItemFixedColumnRenderer")
                     ?: col.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
             )
-            if (DURATION_REGEX.matches(text)) return text
+            if (text.matches(Regex("^\\d+:\\d+.*$"))) return text
         }
         return null
     }

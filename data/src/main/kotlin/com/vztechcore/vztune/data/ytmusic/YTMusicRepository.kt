@@ -66,9 +66,6 @@ class YTMusicRepository @Inject constructor() {
      * Only runs for SongHit items whose artist still looks like metadata.
      * Caches results in InnerTubeParser.authorCache so the same video
      * is only resolved once, even across searches.
-     *
-     * Ported from VzMusic's enrichTracksWithPlayer — same Semaphore(10)
-     * to keep things fast without hammering the endpoint.
      */
     suspend fun enrichHits(hits: List<SearchHit>): List<SearchHit> =
         withContext(Dispatchers.IO) {
@@ -85,7 +82,7 @@ class YTMusicRepository @Inject constructor() {
             }
         }
 
-    private fun enrichSingle(hit: SearchHit): SearchHit {
+    private suspend fun enrichSingle(hit: SearchHit): SearchHit {
         if (hit !is SearchHit.SongHit) return hit
 
         val track = hit.track

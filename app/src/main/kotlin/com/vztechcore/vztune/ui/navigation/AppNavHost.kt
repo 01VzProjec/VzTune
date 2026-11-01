@@ -18,8 +18,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.vztechcore.vztune.ui.components.AppBottomBar
+import com.vztechcore.vztune.ui.components.EclipseBackground
 import com.vztechcore.vztune.ui.components.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.MiniPlayerBar
+import com.vztechcore.vztune.ui.components.rememberDominantColor
 import com.vztechcore.vztune.ui.screens.main.MiniPlayerViewModel
 import com.vztechcore.vztune.ui.screens.search.SearchScreen
 import com.vztechcore.vztune.ui.screens.search.SearchViewModel
@@ -40,68 +42,98 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val playback = LocalNowPlaying.current
     val miniPlayerVm: MiniPlayerViewModel = hiltViewModel()
 
-    Box(modifier = modifier.fillMaxSize()) {
-        NavHost(
-            navController = navController,
-            startDestination = Routes.Home,
-        ) {
-            composable<Routes.Home> { Placeholder("Home — coming soon") }
-            composable<Routes.Analytics> { Placeholder("Analytics — coming soon") }
-            composable<Routes.Library> { Placeholder("Library — coming soon") }
+    // Color source: prefer the playing track; Search screen overrides via callback.
+    var searchFirstHitThumb by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<String?>(null)
+    }
+    val colorSourceUrl = playback.currentTrack?.thumbnailUrl ?: searchFirstHitThumb
+    val dominantColor = rememberDominantColor(colorSourceUrl)
 
-            composable<Routes.Search> {
-                val vm: SearchViewModel = hiltViewModel()
-                val state by vm.uiState.collectAsStateWithLifecycle()
-                SearchScreen(
-                    state = state,
-                    onQueryChange = vm::onQueryChange,
-                    onFocusChanged = vm::onFocusChanged,
-                    onFilterSelect = vm::onFilterSelect,
-                    onSubmit = vm::onSubmit,
-                    onRefresh = vm::onRefresh,
-                    onRemoveHistory = vm::onRemoveHistory,
-                    onClearHistory = vm::onClearHistory,
-                    onLoadMore = vm::onLoadMore,
-                    onHitClick = vm::onHitClick,
+    EclipseBackground(baseColor = dominantColor) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            NavHost(
+                navController = navController,
+                startDestination = Routes.Home,
+            ) {
+                composable<Routes.Home> { Placeholder("Home — coming soon") }
+                composable<Routes.Analytics> { Placeholder("Analytics — coming soon") }
+                composable<Routes.Library> { Placeholder("Library — coming soon") }
+
+                composable<Routes.Search> {
+                    val vm: SearchViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+
+                    // Tell AppNavHost which thumbnail to extract the color from.
+                    androidx.compose.runtime.LaunchedEffect(
+                        state.hits.firstOrNull(),
+                        state.selectedFilter,
+                    ) {
+                        searchFirstHitThumb = when (val first = state.hits.firstOrNull()) {
+                            is com.vztechcore.vztune.core.domain.search.SearchHit.SongHit ->
+                                first.track.thumbnailUrl
+                            is com.vztechcore.vztune.core.domain.search.SearchHit.VideoHit ->
+                                first.track.thumbnailUrl
+                            is com.vztechcore.vztune.core.domain.search.SearchHit.AlbumHit ->
+                                first.album.thumbnailUrl
+                            is com.vztechcore.vztune.core.domain.search.SearchHit.ArtistHit ->
+                                first.artist.thumbnailUrl
+                            is com.vztechcore.vztune.core.domain.search.SearchHit.PlaylistHit ->
+                                first.playlist.thumbnailUrl
+                            else -> null
+                        }
+                    }
+
+                    SearchScreen(
+                        state = state,
+                        onQueryChange = vm::onQueryChange,
+                        onFocusChanged = vm::onFocusChanged,
+                        onFilterSelect = vm::onFilterSelect,
+                        onSubmit = vm::onSubmit,
+                        onRefresh = vm::onRefresh,
+                        onRemoveHistory = vm::onRemoveHistory,
+                        onClearHistory = vm::onClearHistory,
+                        onLoadMore = vm::onLoadMore,
+                        onHitClick = vm::onHitClick,
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .navigationBarsPadding(),
+            ) {
+                val track = playback.currentTrack
+                if (track != null) {
+                    MiniPlayerBar(
+                        track = track,
+                        isPlaying = playback.isPlaying,
+                        isLoading = playback.isLoading,
+                        onPlayPauseClick = miniPlayerVm::togglePlayPause,
+                        onNextClick = miniPlayerVm::next,
+                        onPrevClick = miniPlayerVm::previous,
+                        onClick = { /* TODO: open Now Playing */ },
+                    )
+                }
+
+                AppBottomBar(
+                    selected = currentTab,
+                    onSelect = { tab ->
+                        val route = when (tab) {
+                            AppTab.HOME -> Routes.Home
+                            AppTab.ANALYTICS -> Routes.Analytics
+                            AppTab.LIBRARY -> Routes.Library
+                            AppTab.SEARCH -> Routes.Search
+                        }
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
                 )
             }
-        }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .navigationBarsPadding(),
-        ) {
-            val track = playback.currentTrack
-            if (track != null) {
-                MiniPlayerBar(
-                    track = track,
-                    isPlaying = playback.isPlaying,
-                    isLoading = false,
-                    onPlayPauseClick = miniPlayerVm::togglePlayPause,
-                    onNextClick = miniPlayerVm::next,
-                    onPrevClick = miniPlayerVm::previous,
-                    onClick = { /* TODO: open Now Playing screen */ },
-                )
-            }
-
-            AppBottomBar(
-                selected = currentTab,
-                onSelect = { tab ->
-                    val route = when (tab) {
-                        AppTab.HOME -> Routes.Home
-                        AppTab.ANALYTICS -> Routes.Analytics
-                        AppTab.LIBRARY -> Routes.Library
-                        AppTab.SEARCH -> Routes.Search
-                    }
-                    navController.navigate(route) {
-                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
-            )
         }
     }
 }

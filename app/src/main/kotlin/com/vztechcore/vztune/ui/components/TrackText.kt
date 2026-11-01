@@ -36,6 +36,13 @@ fun MarqueeText(
     )
 }
 
+/**
+ * Subtitle line for a Track.
+ *   Video -> "Video — <channelName>"
+ *   Song  -> "Song — <artist1, artist2, ...>"
+ * The prefix uses an em dash (—) and is stable; the artist text
+ * marquees if it does not fit.
+ */
 @Composable
 fun TrackSubtitle(
     track: Track,
@@ -45,13 +52,8 @@ fun TrackSubtitle(
     artistColor: Color = Color.Unspecified,
 ) {
     val isVideo = track.source == Source.YOUTUBE
-    val prefix = if (isVideo) "Vídeo - " else "Música - "
-    val artists = if (isVideo) {
-        // Channel name is already sanitized by NewPipe.
-        track.artist
-    } else {
-        formatArtists(track.artist)
-    }
+    val prefix = if (isVideo) "Video — " else "Song — "
+    val artists = track.artist.ifBlank { "Unknown" }
 
     Row(modifier = modifier) {
         Text(text = prefix, style = style, color = prefixColor, maxLines = 1)
@@ -61,20 +63,5 @@ fun TrackSubtitle(
             style = style,
             color = artistColor,
         )
-    }
-}
-
-private fun formatArtists(raw: String): String {
-    val artists = raw.split(",", "&")
-        .map { it.trim() }
-        .filter { it.isNotBlank() && !it.equals("e", true) }
-    return when {
-        artists.isEmpty() -> "Desconhecido"
-        artists.size == 1 -> artists[0]
-        artists.size == 2 -> "${artists[0]} & ${artists[1]}"
-        else -> {
-            val head = artists.dropLast(1).joinToString(", ")
-            "$head & ${artists.last()}"
-        }
     }
 }

@@ -120,6 +120,9 @@ dependencies {
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
+    
+    // palete
+    implementation(libs.androidx.palette)
 
     // Core library desugaring — MUST be declared in :app too (depends on :data)
     coreLibraryDesugaring(libs.desugar.jdk.libs)

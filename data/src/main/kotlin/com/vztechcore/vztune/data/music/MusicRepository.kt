@@ -99,6 +99,8 @@ class MusicRepository @Inject constructor(
         }
 
         val newHits = hits.filter { state.seenKeys.add(it.stableKey) }
+        val enriched = ytMusicRepository.enrichArtists(newHits)   
+        SearchResult.Success(enriched, hasMore)                    
         SearchResult.Success(newHits, hasMore)
     }
 

@@ -59,10 +59,12 @@ fun MiniPlayerBar(
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // No equalizer here — just the plain thumbnail.
+        // The equalizer overlay is applied on the list item thumbnail (SearchResultCard).
         MediaThumbnail(
             imageUrl = track.thumbnailUrl,
             shape = if (isDisc) ThumbnailShape.CIRCLE else ThumbnailShape.SQUARE,
-            isPlaying = isPlaying && !isLoading,
+            isPlaying = false,
             isLoading = isLoading,
             size = 44.dp,
             cornerRadius = 8.dp,

@@ -104,7 +104,13 @@ fun PlayingOverlay(clipShape: Shape) {
             ),
         contentAlignment = Alignment.Center,
     ) {
-        PlayingEqualizer(color = Color.White)
+        PlayingEqualizer(
+            color = Color.White,
+            barCount = 3,
+            maxHeight = 20.dp,
+            barWidth = 3.dp,
+            gap = 3.dp,
+        )
     }
 }
 
@@ -112,15 +118,15 @@ fun PlayingOverlay(clipShape: Shape) {
 fun PlayingEqualizer(
     color: Color,
     modifier: Modifier = Modifier,
-    barCount: Int = 4,
-    maxHeight: Dp = 14.dp,
+    barCount: Int = 3,
+    maxHeight: Dp = 20.dp,
     barWidth: Dp = 3.dp,
-    gap: Dp = 2.dp,
+    gap: Dp = 3.dp,
 ) {
     val anims = (0 until barCount).map { i ->
         val infinite = rememberInfiniteTransition(label = "eq$i")
         infinite.animateFloat(
-            initialValue = 0.25f,
+            initialValue = 0.3f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
                 animation = tween(

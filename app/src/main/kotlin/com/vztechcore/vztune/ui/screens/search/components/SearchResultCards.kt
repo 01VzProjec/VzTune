@@ -37,6 +37,7 @@ import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.ui.components.MediaThumbnail
 import com.vztechcore.vztune.ui.components.ThumbnailShape
 import com.vztechcore.vztune.ui.components.TrackSubtitle
+import com.vztechcore.vztune.ui.components.LocalNowPlaying
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,38 +103,50 @@ fun SearchResultsContent(
 }
 
 @Composable
-fun SearchResultCard(hit: SearchHit, onClick: () -> Unit) {
+fun SearchResultCard(
+    hit: SearchHit,
+    onClick: () -> Unit,
+) {
+    val nowPlaying = LocalNowPlaying.current
     when (hit) {
-        is SearchHit.SongHit -> RowCard(
-            imageUrl = hit.track.thumbnailUrl,
-            shape = ThumbnailShape.SQUARE,
-            title = hit.track.title,
-            subtitle = {
-                TrackSubtitle(
-                    track = hit.track,
-                    style = MaterialTheme.typography.bodySmall,
-                    prefixColor = Color.White.copy(alpha = 0.55f),
-                    artistColor = Color.White.copy(alpha = 0.6f),
-                )
-            },
-            durationLabel = formatDuration(hit.track.durationSeconds),
-            onClick = onClick,
-        )
-        is SearchHit.VideoHit -> RowCard(
-            imageUrl = hit.track.thumbnailUrl,
-            shape = ThumbnailShape.SQUARE,
-            title = hit.track.title,
-            subtitle = {
-                TrackSubtitle(
-                    track = hit.track,
-                    style = MaterialTheme.typography.bodySmall,
-                    prefixColor = Color.White.copy(alpha = 0.55f),
-                    artistColor = Color.White.copy(alpha = 0.6f),
-                )
-            },
-            durationLabel = formatDuration(hit.track.durationSeconds),
-            onClick = onClick,
-        )
+        is SearchHit.SongHit -> {
+            val isPlaying = nowPlaying.isCurrent(hit.track.id, hit.track.source)
+            RowCard(
+                imageUrl = hit.track.thumbnailUrl,
+                shape = ThumbnailShape.SQUARE,
+                title = hit.track.title,
+                subtitle = {
+                    TrackSubtitle(
+                        track = hit.track,
+                        style = MaterialTheme.typography.bodySmall,
+                        prefixColor = Color.White.copy(alpha = 0.55f),
+                        artistColor = Color.White.copy(alpha = 0.6f),
+                    )
+                },
+                durationLabel = formatDuration(hit.track.durationSeconds),
+                isPlaying = isPlaying,
+                onClick = onClick,
+            )
+        }
+        is SearchHit.VideoHit -> {
+            val isPlaying = nowPlaying.isCurrent(hit.track.id, hit.track.source)
+            RowCard(
+                imageUrl = hit.track.thumbnailUrl,
+                shape = ThumbnailShape.SQUARE,
+                title = hit.track.title,
+                subtitle = {
+                    TrackSubtitle(
+                        track = hit.track,
+                        style = MaterialTheme.typography.bodySmall,
+                        prefixColor = Color.White.copy(alpha = 0.55f),
+                        artistColor = Color.White.copy(alpha = 0.6f),
+                    )
+                },
+                durationLabel = formatDuration(hit.track.durationSeconds),
+                isPlaying = isPlaying,
+                onClick = onClick,
+            )
+        }
         is SearchHit.PlaylistHit -> RowCard(
             imageUrl = hit.playlist.thumbnailUrl,
             shape = ThumbnailShape.SQUARE,
@@ -148,6 +161,7 @@ fun SearchResultCard(hit: SearchHit, onClick: () -> Unit) {
                 )
             },
             durationLabel = null,
+            isPlaying = false,
             onClick = onClick,
         )
         is SearchHit.ArtistHit -> RowCard(
@@ -163,6 +177,7 @@ fun SearchResultCard(hit: SearchHit, onClick: () -> Unit) {
                 )
             },
             durationLabel = null,
+            isPlaying = false,
             onClick = onClick,
         )
         is SearchHit.AlbumHit -> RowCard(
@@ -179,6 +194,7 @@ fun SearchResultCard(hit: SearchHit, onClick: () -> Unit) {
                 )
             },
             durationLabel = null,
+            isPlaying = false,
             onClick = onClick,
         )
     }
@@ -223,6 +239,7 @@ private fun RowCard(
     title: String,
     subtitle: @Composable () -> Unit,
     durationLabel: String?,
+    isPlaying: Boolean,
     onClick: () -> Unit,
 ) {
     Row(
@@ -238,6 +255,7 @@ private fun RowCard(
             shape = shape,
             size = 56.dp,
             cornerRadius = 8.dp,
+            isPlaying = isPlaying,   // ← equalizer aparece aqui, não no mini player
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {

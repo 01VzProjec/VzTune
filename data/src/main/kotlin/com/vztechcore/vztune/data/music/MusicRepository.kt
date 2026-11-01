@@ -143,20 +143,21 @@ class MusicRepository @Inject constructor(
     /**
      * Resolve a playable audio URL.
      *
-     * IMPORTANT: we ALWAYS use NewPipe to resolve the stream URL, regardless
-     * of the track's `source`. InnerTube (YT Music) does not resolve the
-     * `n` cipher parameter, so URLs it produces are throttled to 0 bytes by
-     * Google → the player would never start. NewPipe handles ciphers for both
-     * regular YouTube and YouTube Music video IDs (the ID is the same).
+     * Playback ALWAYS goes through NewPipe (it decodes the `n` cipher that
+     * InnerTube doesn't). But we pass `track.source` so YouTubeRepository
+     * can pick the URL that matches the content the user is looking at:
+     *   - YOUTUBE       -> youtube.com (OMV / UGC video)
+     *   - YOUTUBE_MUSIC -> music.youtube.com (ATV audio-only)
      *
-     * The `source` field only affects WHERE the search result came from
-     * (InnerTube for YT Music, NewPipe for YouTube) — never how we play it.
+     * This prevents the "song shows as audio but plays the music video"
+     * conflict that happened in the previous project.
      */
     suspend fun getStreamUrl(track: Track): String? = withContext(Dispatchers.IO) {
         youTubeRepository.getStreamUrl(
             videoId = track.id,
             titleHint = track.title,
             artistHint = track.artist,
+            source = track.source,
         )
     }
 }

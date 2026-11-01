@@ -98,51 +98,65 @@ class YouTubeRepository @Inject constructor(
     }
 
     /**
-     * Resolve a playable audio URL using NewPipeExtractor.
+     * Resolve a playable audio URL for a given track.
      *
-     * CRITICAL: we use StreamInfo.getInfo() (not getStreamExtractor + fetchPage)
-     * because ONLY getInfo() resolves the `n` parameter cipher that YouTube
-     * now puts in the googlevideo URL. Without resolving `n`, the URL is
-     * throttled by Google and ExoPlayer gets 0 bytes → no playback.
+     * SOURCE-AWARE: the URL we ask for matches the `source` of the track.
+     *  - YOUTUBE       -> youtube.com (OMV / UGC video version)
+     *  - YOUTUBE_MUSIC -> music.youtube.com (ATV audio-only version)
+     *
+     * Why: the SAME videoId can serve different content depending on the
+     * URL. Asking youtube.com for a YT Music track may return the music
+     * video (OMV) instead of the album audio (ATV) — causing the "song
+     * plays but it's the video version" conflict.
+     *
+     * Uses StreamInfo.getInfo() — NOT getStreamExtractor() — because only
+     * getInfo() decodes the `n` cipher that YouTube injects into googlevideo
+     * URLs. Without it, Google throttles the download to 0 bytes.
      */
     suspend fun getStreamUrl(
         videoId: String,
         titleHint: String? = null,
         artistHint: String? = null,
+        source: Source,
     ): String? = withContext(Dispatchers.IO) {
-        // 1) Try direct extraction (with cipher resolution).
-        extractFromVideoId(videoId)?.let { return@withContext it }
+        // 1) Try the source-matching URL first.
+        val primaryUrl = when (source) {
+            Source.YOUTUBE -> "https://www.youtube.com/watch?v=$videoId"
+            Source.YOUTUBE_MUSIC -> "https://music.youtube.com/watch?v=$videoId"
+        }
+        runCatching { extractFromUrl(primaryUrl) }.getOrNull()?.let { return@withContext it }
 
-        // 2) Fallback: search for a different playable video with the same title.
+        // 2) Fallback to the other endpoint.
+        val fallbackUrl = when (source) {
+            Source.YOUTUBE -> "https://music.youtube.com/watch?v=$videoId"
+            Source.YOUTUBE_MUSIC -> "https://www.youtube.com/watch?v=$videoId"
+        }
+        runCatching { extractFromUrl(fallbackUrl) }.getOrNull()?.let { return@withContext it }
+
+        // 3) Last resort: search for a different playable video with the same title.
         if (!titleHint.isNullOrBlank()) {
             val altId = runCatching { findBestMatchVideoId(titleHint, artistHint) }.getOrNull()
             if (altId != null && altId != videoId) {
-                extractFromVideoId(altId)?.let { return@withContext it }
+                val altUrl = when (source) {
+                    Source.YOUTUBE -> "https://www.youtube.com/watch?v=$altId"
+                    Source.YOUTUBE_MUSIC -> "https://music.youtube.com/watch?v=$altId"
+                }
+                runCatching { extractFromUrl(altUrl) }.getOrNull()
+                    ?.let { return@withContext it }
             }
         }
+
         null
     }
 
-    private fun extractFromVideoId(videoId: String): String? {
-        // Try www.youtube.com first, then music.youtube.com.
-        runCatching {
-            return extractFromUrl("https://www.youtube.com/watch?v=$videoId")
-        }
-        runCatching {
-            return extractFromUrl("https://music.youtube.com/watch?v=$videoId")
-        }
-        return null
-    }
-
     private fun extractFromUrl(url: String): String {
-        // StreamInfo.getInfo resolves cipher + `n` + signature correctly.
+        // StreamInfo.getInfo resolves cipher + `n` + signature.
         val info = StreamInfo.getInfo(ServiceList.YouTube, url)
 
-        // 1) Prefer audio-only streams, highest bitrate.
+        // 1) Prefer audio-only streams, highest bitrate, mp4 (AAC) first.
         val audioStreams: List<AudioStream> = info.audioStreams
             .filter { it.averageBitrate > 0 }
 
-        // 1a) Prefer mp4 (AAC) — most compatible with ExoPlayer.
         val bestMp4 = audioStreams
             .filter { it.getFormat()?.mimeType?.contains("mp4", ignoreCase = true) == true }
             .maxByOrNull { it.averageBitrate }

@@ -35,13 +35,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 6450,
-          "line": 176
+          "index": 5983,
+          "line": 160
         },
         "start": {
           "column": 1,
-          "index": 6450,
-          "line": 176
+          "index": 5983,
+          "line": 160
         }
       }
     },
@@ -50,16 +50,61 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 5867,
-          "line": 160
+          "index": 5909,
+          "line": 161
         },
         "start": {
           "column": 1,
-          "index": 5867,
-          "line": 160
+          "index": 5909,
+          "line": 161
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/build.gradle.kts",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        },
+        "start": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeRepository.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 9639,
+          "line": 244
+        },
+        "start": {
+          "column": 1,
+          "index": 9639,
+          "line": 244
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicRepository.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 4345,
+          "line": 108
+        },
+        "start": {
+          "column": 1,
+          "index": 4345,
+          "line": 108
         }
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/innertube/Innertube.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicRepository.kt"
 }

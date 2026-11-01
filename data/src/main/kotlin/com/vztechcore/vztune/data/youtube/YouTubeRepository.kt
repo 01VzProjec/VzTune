@@ -12,7 +12,10 @@ import org.schabi.newpipe.extractor.Page
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.search.SearchExtractor
+import org.schabi.newpipe.extractor.stream.AudioStream
+import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
+import org.schabi.newpipe.extractor.stream.VideoStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -94,41 +97,64 @@ class YouTubeRepository @Inject constructor(
         }.getOrDefault(emptyList())
     }
 
+    /**
+     * Resolve a playable audio URL using NewPipeExtractor.
+     *
+     * CRITICAL: we use StreamInfo.getInfo() (not getStreamExtractor + fetchPage)
+     * because ONLY getInfo() resolves the `n` parameter cipher that YouTube
+     * now puts in the googlevideo URL. Without resolving `n`, the URL is
+     * throttled by Google and ExoPlayer gets 0 bytes → no playback.
+     */
     suspend fun getStreamUrl(
         videoId: String,
         titleHint: String? = null,
         artistHint: String? = null,
     ): String? = withContext(Dispatchers.IO) {
-        runCatching { extractStreamUrl(videoId) }.getOrNull()?.let { return@withContext it }
+        // 1) Try direct extraction (with cipher resolution).
+        extractFromVideoId(videoId)?.let { return@withContext it }
 
+        // 2) Fallback: search for a different playable video with the same title.
         if (!titleHint.isNullOrBlank()) {
             val altId = runCatching { findBestMatchVideoId(titleHint, artistHint) }.getOrNull()
             if (altId != null && altId != videoId) {
-                runCatching { extractStreamUrl(altId) }.getOrNull()?.let { return@withContext it }
+                extractFromVideoId(altId)?.let { return@withContext it }
             }
         }
         null
     }
 
-    private fun extractStreamUrl(videoId: String): String {
-        runCatching { extractFromUrl("https://www.youtube.com/watch?v=$videoId") }
-            .getOrNull()?.let { return it }
-        return extractFromUrl("https://music.youtube.com/watch?v=$videoId")
+    private fun extractFromVideoId(videoId: String): String? {
+        // Try www.youtube.com first, then music.youtube.com.
+        runCatching {
+            return extractFromUrl("https://www.youtube.com/watch?v=$videoId")
+        }
+        runCatching {
+            return extractFromUrl("https://music.youtube.com/watch?v=$videoId")
+        }
+        return null
     }
 
     private fun extractFromUrl(url: String): String {
-        val extractor = ServiceList.YouTube.getStreamExtractor(url)
-        extractor.fetchPage()
+        // StreamInfo.getInfo resolves cipher + `n` + signature correctly.
+        val info = StreamInfo.getInfo(ServiceList.YouTube, url)
 
-        val audio = extractor.audioStreams
+        // 1) Prefer audio-only streams, highest bitrate.
+        val audioStreams: List<AudioStream> = info.audioStreams
             .filter { it.averageBitrate > 0 }
+
+        // 1a) Prefer mp4 (AAC) — most compatible with ExoPlayer.
+        val bestMp4 = audioStreams
+            .filter { it.getFormat()?.mimeType?.contains("mp4", ignoreCase = true) == true }
             .maxByOrNull { it.averageBitrate }
-            ?: extractor.audioStreams.firstOrNull()
-        if (audio?.content?.isNotBlank() == true) return audio.content
 
-        extractor.hlsUrl?.takeIf { it.isNotBlank() }?.let { return it }
+        if (bestMp4?.content?.isNotBlank() == true) return bestMp4.content
 
-        val progressive = extractor.videoStreams
+        // 1b) Any audio stream (webm/opus also works on ExoPlayer).
+        val bestAudio = audioStreams.maxByOrNull { it.averageBitrate }
+        if (bestAudio?.content?.isNotBlank() == true) return bestAudio.content
+
+        // 2) Progressive video (audio + video in one container).
+        val progressive: VideoStream? = info.videoStreams
             .filter { !it.isVideoOnly }
             .minByOrNull {
                 it.resolution.removeSuffix("p").toIntOrNull() ?: Int.MAX_VALUE

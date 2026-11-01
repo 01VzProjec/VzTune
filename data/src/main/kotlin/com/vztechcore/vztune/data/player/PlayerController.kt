@@ -1,18 +1,15 @@
 package com.vztechcore.vztune.data.player
 
 import android.content.Context
+import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
-import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.vztechcore.vztune.core.domain.music.Track
@@ -28,7 +25,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -40,14 +36,6 @@ class PlayerController @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    private val mediaCache: SimpleCache by lazy {
-        SimpleCache(
-            File(context.cacheDir, "vztune_media"),
-            LeastRecentlyUsedCacheEvictor(CACHE_SIZE_BYTES),
-            StandaloneDatabaseProvider(context),
-        )
-    }
-
     val player: ExoPlayer = run {
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(USER_AGENT)
@@ -58,14 +46,10 @@ class PlayerController @Inject constructor(
                 mapOf("Referer" to "https://www.youtube.com/")
             )
 
-        val cacheFactory = CacheDataSource.Factory()
-            .setCache(mediaCache)
-            .setUpstreamDataSourceFactory(DefaultDataSource.Factory(context, httpFactory))
-            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(
-                DefaultMediaSourceFactory(context).setDataSourceFactory(cacheFactory)
+                DefaultMediaSourceFactory(context)
+                    .setDataSourceFactory(DefaultDataSource.Factory(context, httpFactory))
             )
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -90,6 +74,7 @@ class PlayerController @Inject constructor(
                         if (playbackState == Player.STATE_READY) {
                             _state.update { it.copy(isLoading = false) }
                         }
+                        Log.d("VzTunePlayer", "state=$playbackState duration=$duration")
                     }
 
                     override fun onPositionDiscontinuity(
@@ -106,6 +91,7 @@ class PlayerController @Inject constructor(
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
+                        Log.e("VzTunePlayer", "error=${error.errorCodeName}", error)
                         _state.update {
                             it.copy(
                                 isPlaying = false,
@@ -124,6 +110,7 @@ class PlayerController @Inject constructor(
     private var loadJob: Job? = null
 
     fun play(track: Track) {
+        Log.d("VzTunePlayer", "play track=${track.id} source=${track.source}")
         _state.update {
             it.copy(
                 currentTrack = track,
@@ -137,6 +124,7 @@ class PlayerController @Inject constructor(
         loadJob?.cancel()
         loadJob = scope.launch {
             val url = musicRepository.getStreamUrl(track)
+            Log.d("VzTunePlayer", "resolved url=$url")
             if (url != null) {
                 player.setMediaItem(MediaItem.fromUri(url))
                 player.prepare()
@@ -146,7 +134,7 @@ class PlayerController @Inject constructor(
                     it.copy(
                         isLoading = false,
                         isPlaying = false,
-                        error = "Não foi possível carregar o áudio.",
+                        error = "Não foi possível extrair a URL de áudio.",
                     )
                 }
             }
@@ -164,13 +152,9 @@ class PlayerController @Inject constructor(
     fun next() { /* TODO: queue */ }
     fun previous() { /* TODO: queue */ }
 
-    fun release() {
-        player.release()
-        mediaCache.release()
-    }
+    fun release() = player.release()
 
     private companion object {
-        const val CACHE_SIZE_BYTES = 200L * 1024 * 1024 // 200 MB
         const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }

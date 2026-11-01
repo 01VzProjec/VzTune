@@ -50,17 +50,12 @@ class YTMusicRepository @Inject constructor() {
             SearchSuggestions(queries = queries)
         }
 
-    suspend fun getStreamUrl(videoId: String): String? = withContext(Dispatchers.IO) {
-        runCatching {
-            val playerJson = InnerTube.player(videoId)
-            InnerTube.extractBestAudioUrl(playerJson)
-        }.getOrNull()
-    }
+    // NOTE: no getStreamUrl here — playback is always resolved by NewPipe
+    // (in YouTubeRepository) because InnerTube does not decode the `n` cipher.
 
     private fun InnerTubeParser.ParsedItem.toHit(filter: SearchFilter): SearchHit? {
         return when (this) {
             is InnerTubeParser.ParsedItem.Song -> {
-                // Skip YOUTUBE music-source items; those are handled by NewPipe.
                 if (source == Source.YOUTUBE) return null
                 if (filter != SearchFilter.ALL && filter != SearchFilter.SONGS) return null
                 SearchHit.SongHit(

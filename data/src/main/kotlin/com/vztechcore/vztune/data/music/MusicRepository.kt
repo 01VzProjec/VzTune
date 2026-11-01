@@ -1,6 +1,5 @@
 package com.vztechcore.vztune.data.music
 
-import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchFilter
 import com.vztechcore.vztune.core.domain.search.SearchHit
@@ -143,19 +142,21 @@ class MusicRepository @Inject constructor(
 
     /**
      * Resolve a playable audio URL.
-     * Strategy for YOUTUBE_MUSIC: NewPipe first (returns direct googlevideo URL
-     * with User-Agent, works with ExoPlayer out of the box). Fall back to
-     * InnerTube's player response only if NewPipe fails.
-     * Strategy for YOUTUBE: NewPipe direct.
+     *
+     * IMPORTANT: we ALWAYS use NewPipe to resolve the stream URL, regardless
+     * of the track's `source`. InnerTube (YT Music) does not resolve the
+     * `n` cipher parameter, so URLs it produces are throttled to 0 bytes by
+     * Google → the player would never start. NewPipe handles ciphers for both
+     * regular YouTube and YouTube Music video IDs (the ID is the same).
+     *
+     * The `source` field only affects WHERE the search result came from
+     * (InnerTube for YT Music, NewPipe for YouTube) — never how we play it.
      */
     suspend fun getStreamUrl(track: Track): String? = withContext(Dispatchers.IO) {
-        when (track.source) {
-            Source.YOUTUBE -> youTubeRepository.getStreamUrl(
-                track.id, track.title, track.artist,
-            )
-            Source.YOUTUBE_MUSIC -> youTubeRepository.getStreamUrl(
-                track.id, track.title, track.artist,
-            ) ?: ytMusicRepository.getStreamUrl(track.id)
-        }
+        youTubeRepository.getStreamUrl(
+            videoId = track.id,
+            titleHint = track.title,
+            artistHint = track.artist,
+        )
     }
 }

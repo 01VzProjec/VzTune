@@ -13,7 +13,6 @@ import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.search.SearchExtractor
 import org.schabi.newpipe.extractor.stream.AudioStream
-import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import org.schabi.newpipe.extractor.stream.VideoStream
 import javax.inject.Inject
@@ -26,6 +25,8 @@ class YouTubeRepository @Inject constructor(
     init {
         NewPipeInitializer.ensureInitialized(downloader)
     }
+
+    // ================= SEARCH SESSION STATE =================
 
     private var activeVideoSearch: SearchExtractor? = null
     private var lastVideoPage: Page? = null
@@ -44,6 +45,8 @@ class YouTubeRepository @Inject constructor(
         val items: List<SearchHit.VideoHit>,
         val hasMore: Boolean,
     )
+
+    // ================= SEARCH =================
 
     suspend fun searchVideos(
         query: String,
@@ -97,21 +100,23 @@ class YouTubeRepository @Inject constructor(
         }.getOrDefault(emptyList())
     }
 
+    // ================= STREAM URL RESOLUTION =================
+
     /**
-     * Resolve a playable audio URL for a given track.
+     * Resolve a playable audio URL.
+     * Mirrors the old YouTubeMusicNewPipeRepository that worked in VzMusic:
      *
-     * SOURCE-AWARE: the URL we ask for matches the `source` of the track.
-     *  - YOUTUBE       -> youtube.com (OMV / UGC video version)
-     *  - YOUTUBE_MUSIC -> music.youtube.com (ATV audio-only version)
+     *   1. Try www.youtube.com first (most reliable with NewPipe).
+     *   2. Fallback to music.youtube.com.
+     *   3. Last resort: search for a different playable video with the same title.
      *
-     * Why: the SAME videoId can serve different content depending on the
-     * URL. Asking youtube.com for a YT Music track may return the music
-     * video (OMV) instead of the album audio (ATV) — causing the "song
-     * plays but it's the video version" conflict.
+     * Uses getStreamExtractor + fetchPage — NOT StreamInfo.getInfo — because
+     * that's the exact path that worked in the old project for both regular
+     * YouTube videos and YouTube Music song IDs.
      *
-     * Uses StreamInfo.getInfo() — NOT getStreamExtractor() — because only
-     * getInfo() decodes the `n` cipher that YouTube injects into googlevideo
-     * URLs. Without it, Google throttles the download to 0 bytes.
+     * The `source` parameter is kept for future source-aware tweaks; today
+     * both endpoints return the same audio-only streams (ATV) when the
+     * videoId refers to a song.
      */
     suspend fun getStreamUrl(
         videoId: String,
@@ -119,63 +124,68 @@ class YouTubeRepository @Inject constructor(
         artistHint: String? = null,
         source: Source,
     ): String? = withContext(Dispatchers.IO) {
-        // 1) Try the source-matching URL first.
-        val primaryUrl = when (source) {
-            Source.YOUTUBE -> "https://www.youtube.com/watch?v=$videoId"
-            Source.YOUTUBE_MUSIC -> "https://music.youtube.com/watch?v=$videoId"
-        }
-        runCatching { extractFromUrl(primaryUrl) }.getOrNull()?.let { return@withContext it }
+        // 1) www.youtube.com first.
+        val fromWww = runCatching {
+            extractFromUrl("https://www.youtube.com/watch?v=$videoId")
+        }.getOrNull()
+        if (!fromWww.isNullOrBlank()) return@withContext fromWww
 
-        // 2) Fallback to the other endpoint.
-        val fallbackUrl = when (source) {
-            Source.YOUTUBE -> "https://music.youtube.com/watch?v=$videoId"
-            Source.YOUTUBE_MUSIC -> "https://www.youtube.com/watch?v=$videoId"
-        }
-        runCatching { extractFromUrl(fallbackUrl) }.getOrNull()?.let { return@withContext it }
+        // 2) music.youtube.com fallback.
+        val fromMusic = runCatching {
+            extractFromUrl("https://music.youtube.com/watch?v=$videoId")
+        }.getOrNull()
+        if (!fromMusic.isNullOrBlank()) return@withContext fromMusic
 
-        // 3) Last resort: search for a different playable video with the same title.
+        // 3) Search for an alternative playable video with the same title.
         if (!titleHint.isNullOrBlank()) {
             val altId = runCatching { findBestMatchVideoId(titleHint, artistHint) }.getOrNull()
             if (altId != null && altId != videoId) {
-                val altUrl = when (source) {
-                    Source.YOUTUBE -> "https://www.youtube.com/watch?v=$altId"
-                    Source.YOUTUBE_MUSIC -> "https://music.youtube.com/watch?v=$altId"
-                }
-                runCatching { extractFromUrl(altUrl) }.getOrNull()
-                    ?.let { return@withContext it }
+                val fromAlt = runCatching {
+                    extractFromUrl("https://www.youtube.com/watch?v=$altId")
+                }.getOrNull()
+                if (!fromAlt.isNullOrBlank()) return@withContext fromAlt
             }
         }
 
         null
     }
 
+    /**
+     * Exact strategy from the old YouTubeMusicNewPipeRepository.extractFrom():
+     *   1. best pure-audio stream (highest bitrate)
+     *   2. HLS manifest
+     *   3. lowest-resolution progressive (audio+video) as last resort
+     */
     private fun extractFromUrl(url: String): String {
-        // StreamInfo.getInfo resolves cipher + `n` + signature.
-        val info = StreamInfo.getInfo(ServiceList.YouTube, url)
+        val extractor = ServiceList.YouTube.getStreamExtractor(url)
+        extractor.fetchPage()
 
-        // 1) Prefer audio-only streams, highest bitrate, mp4 (AAC) first.
-        val audioStreams: List<AudioStream> = info.audioStreams
+        // 1) Best pure-audio stream.
+        val audioStreams = extractor.audioStreams
+        val bestAudio: AudioStream? = audioStreams
             .filter { it.averageBitrate > 0 }
-
-        val bestMp4 = audioStreams
-            .filter { it.getFormat()?.mimeType?.contains("mp4", ignoreCase = true) == true }
             .maxByOrNull { it.averageBitrate }
+            ?: audioStreams.firstOrNull()
 
-        if (bestMp4?.content?.isNotBlank() == true) return bestMp4.content
+        if (bestAudio?.content?.isNotBlank() == true) {
+            return bestAudio.content
+        }
 
-        // 1b) Any audio stream (webm/opus also works on ExoPlayer).
-        val bestAudio = audioStreams.maxByOrNull { it.averageBitrate }
-        if (bestAudio?.content?.isNotBlank() == true) return bestAudio.content
+        // 2) HLS.
+        extractor.hlsUrl?.takeIf { it.isNotBlank() }?.let { return it }
 
-        // 2) Progressive video (audio + video in one container).
-        val progressive: VideoStream? = info.videoStreams
+        // 3) Progressive video (audio + video), lowest resolution.
+        val progressive: VideoStream? = extractor.videoStreams
             .filter { !it.isVideoOnly }
             .minByOrNull {
                 it.resolution.removeSuffix("p").toIntOrNull() ?: Int.MAX_VALUE
             }
-        if (progressive?.content?.isNotBlank() == true) return progressive.content
 
-        throw Exception("Sem streams para $url")
+        if (progressive?.content?.isNotBlank() == true) {
+            return progressive.content
+        }
+
+        throw Exception("Nenhum stream disponível para $url")
     }
 
     private fun findBestMatchVideoId(title: String, artist: String?): String? {
@@ -212,6 +222,8 @@ class YouTubeRepository @Inject constructor(
             ?.first
     }
 
+    // ================= PARSERS =================
+
     private fun parseVideoItems(items: List<InfoItem>): List<SearchHit.VideoHit> {
         return items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
             val videoId = extractVideoId(stream.url) ?: return@mapNotNull null
@@ -242,6 +254,8 @@ class YouTubeRepository @Inject constructor(
             )
         }
     }
+
+    // ================= HELPERS =================
 
     private fun extractVideoId(url: String): String? = try {
         val uri = Uri.parse(url)

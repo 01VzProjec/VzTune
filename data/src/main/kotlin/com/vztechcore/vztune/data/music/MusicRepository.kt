@@ -233,9 +233,7 @@ class MusicRepository @Inject constructor(
             // Preferir áudio puro
             val audio = extractor.audioStreams.maxByOrNull { it.averageBitrate }
             if (audio != null) {
-                // Se averageBitrate falhar, tenta pegar o bitrate do formato, senão fica 0
-                val bitrate = if (audio.averageBitrate > 0) audio.averageBitrate else audio.getFormat()?.bitrate ?: 0
-                
+                val bitrate = audio.averageBitrate
                 return@runCatching TechnicalInfo(
                     itag = audio.itag.takeIf { it > 0 }?.toString() ?: "Desconhecido",
                     mimeType = audio.getFormat()?.mimeType ?: "Desconhecido",

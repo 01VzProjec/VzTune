@@ -207,6 +207,9 @@ fun SearchResultCard(hit: SearchHit, onClick: () -> Unit) {
 
 @Composable
 fun VideoResultCard(hit: SearchHit.VideoHit, onClick: () -> Unit) {
+    val nowPlaying = LocalNowPlaying.current
+    val isPlaying = nowPlaying.isCurrent(hit.track.id, hit.track.source)
+
     Column(
         Modifier
             .fillMaxWidth()
@@ -217,6 +220,7 @@ fun VideoResultCard(hit: SearchHit.VideoHit, onClick: () -> Unit) {
             imageUrl = hit.track.thumbnailUrl,
             shape = ThumbnailShape.WIDE,
             cornerRadius = 12.dp,
+            isPlaying = isPlaying, // Adicionado aqui
         )
         Spacer(Modifier.height(8.dp))
         Text(
@@ -290,12 +294,6 @@ private fun RowCard(
     }
 }
 
-/**
- * 2x2 grid of the first four playlist thumbnails.
- * Layout:
- *   [0] [1]
- *   [2] [3]
- */
 @Composable
 private fun PlaylistMosaic(thumbnails: List<String>) {
     Box(

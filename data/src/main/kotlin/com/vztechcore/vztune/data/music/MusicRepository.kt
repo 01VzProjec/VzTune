@@ -12,7 +12,6 @@ import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -76,7 +75,6 @@ class MusicRepository @Inject constructor(
     ): SearchResult = coroutineScope {
         val pageSize = if (loadMore) 10 else 20
 
-        // 1) First page: fetch top artists in parallel with videos/songs.
         val topArtistsDeferred = if (!state.topArtistsLoaded && !loadMore) {
             async {
                 runCatching { ytMusicRepository.searchArtists(query) }
@@ -85,7 +83,6 @@ class MusicRepository @Inject constructor(
             }
         } else null
 
-        // 2) Fetch videos + songs in parallel.
         val ytDeferred = async {
             youTubeRepository.searchVideos(
                 query = query,
@@ -109,10 +106,8 @@ class MusicRepository @Inject constructor(
         state.ytmContinuation = ytmPage.continuation
         state.ytmHasMore = ytmPage.continuation != null
 
-        // Build merged list.
         val merged = mutableListOf<SearchHit>()
 
-        // 3 artists at the very top (only on first page).
         if (topArtists.isNotEmpty()) {
             topArtists.forEach { artist ->
                 merged += SearchHit.ArtistHit(artist)
@@ -120,16 +115,18 @@ class MusicRepository @Inject constructor(
             state.topArtistsLoaded = true
         }
 
-        // Interleave YT videos and YTM songs.
-        val interleaved = interleave(
-            ytPage.items,
-            ytmPage.items.take(pageSize),
-        )
+        // Filtro anti-playlist vazia:
+        val validYtmItems = ytmPage.items.filter { hit ->
+            if (hit is SearchHit.PlaylistHit) {
+                hit.playlist.trackCount != 0 // Se for 0, descarta
+            } else true
+        }
+
+        val interleaved = interleave(ytPage.items, validYtmItems.take(pageSize))
         merged += interleaved
 
         val newHits = merged.filter { state.seenKeys.add(it.stableKey) }
-        val hasMore = state.ytHasMore || state.ytmHasMore
-        SearchResult.Success(newHits, hasMore)
+        SearchResult.Success(newHits, state.ytHasMore || state.ytmHasMore)
     }
 
     // ================= VIDEOS =================
@@ -187,10 +184,16 @@ class MusicRepository @Inject constructor(
         }
         val ytHits = ytDeferred.await()
         val ytmPage = ytmDeferred.await()
+        
         state.ytmContinuation = ytmPage.continuation
         state.ytmHasMore = ytmPage.continuation != null
 
-        val merged = ytHits + ytmPage.items
+        // Filtra playlists vazias
+        val validYtm = ytmPage.items.filter {
+            it !is SearchHit.PlaylistHit || it.playlist.trackCount != 0
+        }
+        
+        val merged = ytHits + validYtm
         val newHits = merged.filter { state.seenKeys.add(it.stableKey) }
         SearchResult.Success(newHits, state.ytmHasMore)
     }

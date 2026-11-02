@@ -49,24 +49,28 @@ class MediaListViewModel @Inject constructor(
                         it.copy(
                             isLoading = false,
                             title = album.title ?: it.title,
-                            subtitle = album.artist ?: it.subtitle,
+                            // Fallback: se o artista do álbum vier nulo, usa o da route
+                            subtitle = album.artist?.takeIf { a -> a != "Desconhecido" } ?: it.subtitle,
                             thumbnailUrl = album.coverUrl ?: it.thumbnailUrl,
+                            description = album.description,
                             allTracks = album.tracks,
                         )
                     }
                 } else {
-                    val tracks = ytMusicRepository.browseTracks(route.id)
+                    val playlist = ytMusicRepository.browsePlaylist(route.id)
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            allTracks = tracks,
+                            title = playlist.title ?: it.title,
+                            subtitle = playlist.owner ?: it.subtitle,
+                            thumbnailUrl = playlist.coverUrl ?: it.thumbnailUrl,
+                            description = playlist.description,
+                            allTracks = playlist.tracks,
                         )
                     }
                 }
             }.onFailure { e ->
-                _uiState.update {
-                    it.copy(isLoading = false, errorMessage = "Erro: ${e.message}")
-                }
+                _uiState.update { it.copy(isLoading = false, errorMessage = "Erro: ${e.message}") }
             }
         }
     }
@@ -82,15 +86,11 @@ class MediaListViewModel @Inject constructor(
 
     fun onPlayAll() {
         val tracks = _uiState.value.filteredTracks
-        if (tracks.isNotEmpty()) {
-            playerController.play(tracks.first())
-        }
+        if (tracks.isNotEmpty()) playerController.play(tracks.first())
     }
 
     fun onShuffle() {
         val shuffled = _uiState.value.filteredTracks.shuffled()
-        if (shuffled.isNotEmpty()) {
-            playerController.play(shuffled.first())
-        }
+        if (shuffled.isNotEmpty()) playerController.play(shuffled.first())
     }
 }

@@ -45,7 +45,6 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val playback = LocalNowPlaying.current
     val miniPlayerVm: MiniPlayerViewModel = hiltViewModel()
 
-    // Color source for the background gradient
     val colorSourceUrl = playback.currentTrack?.thumbnailUrl
     val dominantColor = rememberDominantColor(colorSourceUrl)
 
@@ -63,7 +62,6 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     val vm: SearchViewModel = hiltViewModel()
                     val state by vm.uiState.collectAsStateWithLifecycle()
 
-                    // Escuta eventos de navegação do Search
                     LaunchedEffect(Unit) {
                         vm.navigationEvent.collect { event ->
                             when (event) {
@@ -74,8 +72,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                                             isAlbum = false,
                                             title = event.title,
                                             subtitle = event.owner,
-                                            thumbnailUrl = event.thumb
-                                            // Nota: mosaic pode ser passado via param extra se necessário
+                                            thumbnailUrl = event.thumbnailUrl,
                                         )
                                     )
                                 }
@@ -86,7 +83,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                                             isAlbum = true,
                                             title = event.title,
                                             subtitle = event.artist,
-                                            thumbnailUrl = event.thumb
+                                            thumbnailUrl = event.thumbnailUrl,
                                         )
                                     )
                                 }

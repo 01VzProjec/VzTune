@@ -42,7 +42,7 @@ internal fun MediaListSearchOverlay(
     var query by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
-    val nowPlaying = LocalNowPlaying.current // Pega o estado global do player
+    val nowPlaying = LocalNowPlaying.current
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -73,7 +73,12 @@ internal fun MediaListSearchOverlay(
                         .padding(horizontal = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Filled.Search, contentDescription = null, tint = Color.White.copy(alpha = 0.55f), modifier = Modifier.size(20.dp))
+                    Icon(
+                        Icons.Filled.Search,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.55f),
+                        modifier = Modifier.size(20.dp),
+                    )
                     Spacer(Modifier.width(10.dp))
                     BasicTextField(
                         value = query,
@@ -87,15 +92,27 @@ internal fun MediaListSearchOverlay(
                         decorationBox = { inner ->
                             Box(contentAlignment = Alignment.CenterStart) {
                                 if (query.isEmpty()) {
-                                    Text("Pesquisar na playlist...", color = Color.White.copy(alpha = 0.45f), fontSize = 15.sp)
+                                    Text(
+                                        "Pesquisar na playlist...",
+                                        color = Color.White.copy(alpha = 0.45f),
+                                        fontSize = 15.sp,
+                                    )
                                 }
                                 inner()
                             }
                         },
                     )
                     if (query.isNotEmpty()) {
-                        Box(Modifier.size(24.dp).clip(CircleShape).clickable { query = "" }, contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Close, contentDescription = "Limpar", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                        Box(
+                            Modifier.size(24.dp).clip(CircleShape).clickable { query = "" },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = "Limpar",
+                                tint = Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(18.dp),
+                            )
                         }
                     }
                 }
@@ -103,10 +120,20 @@ internal fun MediaListSearchOverlay(
                 Spacer(Modifier.width(8.dp))
 
                 Box(
-                    Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f)).border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape).clickable { onClose() },
+                    Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.12f))
+                        .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                        .clickable { onClose() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Close, contentDescription = "Fechar busca", tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "Fechar busca",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
                 }
             }
 
@@ -119,7 +146,11 @@ internal fun MediaListSearchOverlay(
 
             if (filtered.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Nada encontrado pra \"$query\"", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.5f))
+                    Text(
+                        "Nada encontrado pra \"$query\"",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.5f),
+                    )
                 }
             } else {
                 LazyColumn(
@@ -127,7 +158,6 @@ internal fun MediaListSearchOverlay(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     itemsIndexed(filtered, key = { _, t -> t.id }) { _, track ->
-                        // AQUI ESTÁ A CORREÇÃO: O equalizador aparecerá se a música pesquisada for a atual
                         val isCurrent = nowPlaying.isCurrent(track.id, track.source)
                         val isPlaying = isCurrent && nowPlaying.isPlaying
                         val isPaused = isCurrent && !nowPlaying.isPlaying
@@ -138,6 +168,7 @@ internal fun MediaListSearchOverlay(
                             isPlaying = isPlaying,
                             isPaused = isPaused,
                             onClick = { onTrackClick(track) },
+                            onMoreClick = { /* TODO: menu de opções */ },
                             showDragHandle = false,
                             dragHandleModifier = Modifier,
                         )

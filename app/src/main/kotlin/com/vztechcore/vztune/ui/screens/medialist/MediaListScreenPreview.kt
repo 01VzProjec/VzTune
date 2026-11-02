@@ -13,8 +13,10 @@ private fun MediaListLoadingPreview() {
         MediaListScreen(
             state = MediaListUiState(isLoading = true),
             onBackClick = {},
+            onTabSelected = {},
             onTrackClick = {},
             onPlayAllClick = {},
+            onShuffleClick = {},
         )
     }
 }
@@ -28,15 +30,36 @@ private fun MediaListContentPreview() {
                 isLoading = false,
                 title = "Daft Punk Essentials",
                 subtitle = "Vários Artistas",
-                tracks = listOf(
-                    Track(id = "1", title = "Get Lucky", artist = "Daft Punk, Pharrell Williams", durationSeconds = 369, source = Source.YOUTUBE_MUSIC),
-                    Track(id = "2", title = "One More Time", artist = "Daft Punk", durationSeconds = 320, source = Source.YOUTUBE_MUSIC),
-                    Track(id = "3", title = "Get Lucky (Official Video)", artist = "Daft Punk", durationSeconds = 248, source = Source.YOUTUBE),
-                )
+                isAlbum = false,
+                allTracks = listOf(
+                    Track(
+                        id = "1",
+                        title = "Get Lucky",
+                        artist = "Daft Punk, Pharrell Williams",
+                        durationSeconds = 369,
+                        source = Source.YOUTUBE_MUSIC,
+                    ),
+                    Track(
+                        id = "2",
+                        title = "One More Time",
+                        artist = "Daft Punk",
+                        durationSeconds = 320,
+                        source = Source.YOUTUBE_MUSIC,
+                    ),
+                    Track(
+                        id = "3",
+                        title = "Get Lucky (Official Video)",
+                        artist = "Daft Punk",
+                        durationSeconds = 248,
+                        source = Source.YOUTUBE,
+                    ),
+                ),
             ),
             onBackClick = {},
+            onTabSelected = {},
             onTrackClick = {},
             onPlayAllClick = {},
+            onShuffleClick = {},
         )
     }
 }

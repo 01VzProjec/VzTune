@@ -25,6 +25,12 @@ data class MediaListUiState(
     val description: String? = null,
     val selectedTab: MediaListTab = MediaListTab.ALL,
 ) {
+    /**
+     * Albums only contain music, so the Tudo/Músicas/Vídeos tabs are hidden.
+     * Playlists can mix songs and videos, so tabs are shown.
+     */
+    val showTabs: Boolean get() = !isAlbum
+
     val filteredTracks: List<Track>
         get() = when (selectedTab) {
             MediaListTab.ALL -> allTracks

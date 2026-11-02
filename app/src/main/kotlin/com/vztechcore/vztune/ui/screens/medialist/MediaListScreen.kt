@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -115,20 +116,31 @@ fun MediaListScreen(
                     val isPlaying = isCurrent && nowPlaying.isPlaying
                     val isPaused = isCurrent && !nowPlaying.isPlaying
 
-                    TrackRow(
-                        track = track,
-                        index = if (state.isAlbum) index + 1 else null,
-                        isPlaying = isPlaying,
-                        isPaused = isPaused,
-                        onClick = { onTrackClick(track) },
-                    )
+                    // In a playlist, when the "Vídeos" tab is active, render as 16:9 card
+                    val useVideoLayout = state.selectedTab == MediaListTab.VIDEOS
+
+                    if (useVideoLayout) {
+                        VideoTrackCard(
+                            track = track,
+                            isPlaying = isPlaying,
+                            isPaused = isPaused,
+                            onClick = { onTrackClick(track) },
+                        )
+                    } else {
+                        TrackRow(
+                            track = track,
+                            index = if (state.isAlbum) index + 1 else null,
+                            isPlaying = isPlaying,
+                            isPaused = isPaused,
+                            onClick = { onTrackClick(track) },
+                        )
+                    }
                 }
             }
 
             item { MediaListFooter(state = state) }
         }
 
-        // Floating collapsed header (thumb + title + actions)
         AnimatedVisibility(
             visible = isCollapsed,
             enter = fadeIn(),
@@ -144,7 +156,7 @@ fun MediaListScreen(
     }
 }
 
-// ================= EXPANDED HEADER (scrolls away) =================
+// ================= EXPANDED HEADER =================
 
 @Composable
 private fun MediaListExpandedHeader(
@@ -169,11 +181,8 @@ private fun MediaListExpandedHeader(
 
         Spacer(Modifier.height(8.dp))
 
-        // Cover grande quadrada
         Box(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             contentAlignment = Alignment.Center,
         ) {
             if (state.mosaicThumbnails.size >= 4) {
@@ -223,9 +232,11 @@ private fun MediaListExpandedHeader(
             )
         }
 
-        Spacer(Modifier.height(16.dp))
-
-        MediaListTabs(state.selectedTab, onTabSelected)
+        // Tabs only for playlists
+        if (state.showTabs) {
+            Spacer(Modifier.height(16.dp))
+            MediaListTabs(state.selectedTab, onTabSelected)
+        }
 
         Spacer(Modifier.height(12.dp))
 
@@ -261,7 +272,7 @@ private fun MediaListExpandedHeader(
     }
 }
 
-// ================= COLLAPSED HEADER (floats on top) =================
+// ================= COLLAPSED HEADER =================
 
 @Composable
 private fun MediaListCollapsedHeader(
@@ -372,6 +383,54 @@ private fun TrackRow(
         }
         IconButton(onClick = { /* TODO */ }) {
             Icon(Icons.Filled.MoreVert, contentDescription = "Mais opções", tint = Color.White.copy(alpha = 0.7f))
+        }
+    }
+}
+
+// ================= VIDEO TRACK CARD (16:9) =================
+
+@Composable
+private fun VideoTrackCard(
+    track: Track,
+    isPlaying: Boolean,
+    isPaused: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        MediaThumbnail(
+            imageUrl = track.thumbnailUrl,
+            shape = ThumbnailShape.WIDE,
+            cornerRadius = 10.dp,
+            isPlaying = isPlaying,
+            isPaused = isPaused,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = track.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(2.dp))
+                TrackSubtitle(
+                    track = track,
+                    style = MaterialTheme.typography.bodySmall,
+                    prefixColor = Color.White.copy(alpha = 0.55f),
+                    artistColor = Color.White.copy(alpha = 0.6f),
+                )
+            }
+            IconButton(onClick = { /* TODO */ }) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "Mais opções", tint = Color.White.copy(alpha = 0.7f))
+            }
         }
     }
 }

@@ -68,7 +68,7 @@ class MusicRepository @Inject constructor(
         }
     }
 
-    // ================= ALL (3 artists top + only tracks below) =================
+    // ================= ALL =================
 
     private suspend fun searchAll(
         query: String,
@@ -86,18 +86,10 @@ class MusicRepository @Inject constructor(
         } else null
 
         val ytDeferred = async {
-            youTubeRepository.searchVideos(
-                query = query,
-                loadMore = loadMore,
-                pageSize = pageSize,
-            )
+            youTubeRepository.searchVideos(query, loadMore, pageSize)
         }
         val ytmDeferred = async {
-            ytMusicRepository.search(
-                query = query,
-                filter = SearchFilter.ALL,
-                continuation = state.ytmContinuation,
-            )
+            ytMusicRepository.search(query, SearchFilter.ALL, state.ytmContinuation)
         }
 
         val ytPage = ytDeferred.await()
@@ -111,11 +103,10 @@ class MusicRepository @Inject constructor(
         val merged = mutableListOf<SearchHit>()
 
         if (topArtists.isNotEmpty()) {
-            topArtists.forEach { artist -> merged += SearchHit.ArtistHit(artist) }
+            topArtists.forEach { merged += SearchHit.ArtistHit(it) }
             state.topArtistsLoaded = true
         }
 
-        // Apenas faixas (SongHit do YTM + VideoHit do YT). Sem álbum, sem playlist, sem artist.
         val ytmTracksOnly = ytmPage.items.filterIsInstance<SearchHit.SongHit>()
         val interleaved = interleave(ytPage.items, ytmTracksOnly.take(pageSize))
         merged += interleaved
@@ -144,18 +135,14 @@ class MusicRepository @Inject constructor(
         loadMore: Boolean,
         state: SearchState,
     ): SearchResult {
-        val ytmPage = ytMusicRepository.search(
-            query = query,
-            filter = SearchFilter.SONGS,
-            continuation = state.ytmContinuation,
-        )
+        val ytmPage = ytMusicRepository.search(query, SearchFilter.SONGS, state.ytmContinuation)
         state.ytmContinuation = ytmPage.continuation
         state.ytmHasMore = ytmPage.continuation != null
         val newHits = ytmPage.items.take(30).filter { state.seenKeys.add(it.stableKey) }
         return SearchResult.Success(newHits, state.ytmHasMore)
     }
 
-    // ================= PLAYLISTS (with empty-filter) =================
+    // ================= PLAYLISTS =================
 
     private suspend fun searchPlaylists(
         query: String,
@@ -167,11 +154,7 @@ class MusicRepository @Inject constructor(
             else emptyList()
         }
         val ytmDeferred = async {
-            ytMusicRepository.search(
-                query = query,
-                filter = SearchFilter.PLAYLISTS,
-                continuation = state.ytmContinuation,
-            )
+            ytMusicRepository.search(query, SearchFilter.PLAYLISTS, state.ytmContinuation)
         }
         val ytHits = ytDeferred.await()
         val ytmPage = ytmDeferred.await()
@@ -181,9 +164,8 @@ class MusicRepository @Inject constructor(
 
         val ytmPlaylists = ytmPage.items.filterIsInstance<SearchHit.PlaylistHit>()
 
-        // Filtro real: verifica em paralelo se cada playlist tem faixas.
-        // YouTube playlists (YT:) NÃO são verificados (o NewPipe já garante).
-        val ytmValidated = filterEmptyPlaylists(ytmPlaylists)
+        // Filtro robusto: só mantém playlists que REALMENTE têm faixas.
+        val ytmValidated = validatePlaylists(ytmPlaylists)
 
         val merged = ytHits + ytmValidated
         val newHits = merged.filter { state.seenKeys.add(it.stableKey) }
@@ -191,32 +173,29 @@ class MusicRepository @Inject constructor(
     }
 
     /**
-     * Runs a real `browsePlaylist()` on each candidate to check whether the
-     * playlist actually contains tracks. Runs in parallel (Semaphore 10) with
-     * a 3s per-request timeout so a single slow playlist can't stall the whole
-     * page. Timeouts and errors keep the playlist (fail-open) to avoid hiding
-     * valid ones.
+     * For each playlist, browse it and keep only if `tracks.isNotEmpty()`.
+     * Any timeout / error is treated as "empty" (removed) to guarantee the
+     * user never sees a broken/empty playlist. Logs every skip for debugging.
      */
-    private suspend fun filterEmptyPlaylists(
+    private suspend fun validatePlaylists(
         playlists: List<SearchHit.PlaylistHit>,
     ): List<SearchHit.PlaylistHit> = coroutineScope {
-        val semaphore = Semaphore(10)
+        val semaphore = Semaphore(8)
         playlists.map { hit ->
             async {
                 semaphore.withPermit {
-                    val result = runCatching {
-                        withTimeoutOrNull(3000L) {
+                    val hasTracks = runCatching {
+                        withTimeoutOrNull(4000L) {
                             ytMusicRepository.browsePlaylist(hit.playlist.id)
                                 .tracks.isNotEmpty()
                         }
-                    }.getOrNull()
+                    }.getOrNull() ?: false // timeout/erro => remove
 
-                    // null = timeout/erro -> fail-open (mantém)
-                    // true  = tem faixas -> mantém
-                    // false = vazia -> remove
-                    when (result) {
-                        false -> null
-                        else -> hit
+                    if (!hasTracks) {
+                        Log.d(TAG, "skip empty playlist: ${hit.playlist.id} '${hit.playlist.title}'")
+                        null
+                    } else {
+                        hit
                     }
                 }
             }
@@ -231,11 +210,7 @@ class MusicRepository @Inject constructor(
         loadMore: Boolean,
         state: SearchState,
     ): SearchResult {
-        val ytmPage = ytMusicRepository.search(
-            query = query,
-            filter = filter,
-            continuation = state.ytmContinuation,
-        )
+        val ytmPage = ytMusicRepository.search(query, filter, state.ytmContinuation)
         state.ytmContinuation = ytmPage.continuation
         state.ytmHasMore = ytmPage.continuation != null
         val newHits = ytmPage.items.filter { state.seenKeys.add(it.stableKey) }

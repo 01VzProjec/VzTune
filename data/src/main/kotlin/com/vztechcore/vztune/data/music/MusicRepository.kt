@@ -233,7 +233,11 @@ class MusicRepository @Inject constructor(
             // Preferir áudio puro
             val audio = extractor.audioStreams.maxByOrNull { it.averageBitrate }
             if (audio != null) {
-                val bitrate = audio.averageBitrate
+                // O NewPipe pode retornar averageBitrate = 0 para Opus.
+                // O bitrate do formato é mais confiável.
+                val bitrate = if (audio.averageBitrate > 0) audio.averageBitrate
+                            else audio.getFormat()?.bitrate ?: 0
+
                 return@runCatching TechnicalInfo(
                     itag = audio.itag.takeIf { it > 0 }?.toString() ?: "Desconhecido",
                     mimeType = audio.getFormat()?.mimeType ?: "Desconhecido",
@@ -245,7 +249,7 @@ class MusicRepository @Inject constructor(
             val video = extractor.videoStreams
                 .filter { !it.isVideoOnly }
                 .minByOrNull { it.resolution.removeSuffix("p").toIntOrNull() ?: Int.MAX_VALUE }
-            
+
             if (video != null) {
                 return@runCatching TechnicalInfo(
                     itag = video.itag.takeIf { it > 0 }?.toString() ?: "Desconhecido",

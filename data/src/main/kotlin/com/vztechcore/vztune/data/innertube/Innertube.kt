@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit
 
 object InnerTube {
 
-    private const val API = "https://www.youtube.com/youtubei/v1"
+    private const val API = "https://music.youtube.com/youtubei/v1"
     private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
     private val http = OkHttpClient.Builder()
@@ -21,43 +21,40 @@ object InnerTube {
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
 
+    // ================= CLIENTS (valores do InnerTune) =================
+
+    private data class Client(
+        val name: String,
+        val version: String,
+        val apiKey: String,
+        val userAgent: String,
+        val referer: String? = null,
+    )
+
+    // Usado para search, browse, álbum, playlist, artist
+    private val WEB_REMIX = Client(
+        name = "WEB_REMIX",
+        version = "1.20220606.03.00",
+        apiKey = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30",
+        userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.157 Safari/537.36",
+        referer = "https://music.youtube.com/",
+    )
+
+    // Usado para o player (streaming / metadados técnicos)
+    private val ANDROID_MUSIC = Client(
+        name = "ANDROID_MUSIC",
+        version = "5.01",
+        apiKey = "AIzaSyAOghZGza2MQSZkY_zfZ370N-PUdXEo8AI",
+        userAgent = "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Mobile Safari/537.36",
+    )
+
     // ================= BODY BUILDERS =================
 
-    private fun webRemixBody(): JSONObject = JSONObject().apply {
+    private fun buildBody(client: Client): JSONObject = JSONObject().apply {
         put("context", JSONObject().apply {
             put("client", JSONObject().apply {
-                put("clientName", "WEB_REMIX")
-                put("clientVersion", "1.20250801.01.00")
-                put("hl", "pt")
-                put("gl", "BR")
-            })
-        })
-    }
-
-    private fun androidMusicBody(): JSONObject = JSONObject().apply {
-        put("context", JSONObject().apply {
-            put("client", JSONObject().apply {
-                put("clientName", "ANDROID_MUSIC")
-                put("clientVersion", "7.27.52")
-                put("androidSdkVersion", 30)
-                put("osName", "Android")
-                put("osVersion", "11")
-                put("hl", "pt")
-                put("gl", "BR")
-            })
-        })
-    }
-
-    private fun androidVrBody(): JSONObject = JSONObject().apply {
-        put("context", JSONObject().apply {
-            put("client", JSONObject().apply {
-                put("clientName", "ANDROID_VR")
-                put("clientVersion", "1.60.19")
-                put("deviceMake", "Oculus")
-                put("deviceModel", "Quest 3")
-                put("androidSdkVersion", 32)
-                put("osName", "Android")
-                put("osVersion", "12")
+                put("clientName", client.name)
+                put("clientVersion", client.version)
                 put("hl", "pt")
                 put("gl", "BR")
             })
@@ -67,48 +64,53 @@ object InnerTube {
     // ================= ENDPOINTS =================
 
     fun search(query: String, params: String? = null): JSONObject =
-        post("search", webRemixBody().apply {
+        post("search", WEB_REMIX, buildBody(WEB_REMIX).apply {
             put("query", query)
             if (params != null) put("params", params)
         })
 
     fun searchContinuation(token: String): JSONObject =
-        post("search", webRemixBody().apply { put("continuation", token) })
+        post("search", WEB_REMIX, buildBody(WEB_REMIX).apply {
+            put("continuation", token)
+        })
 
     fun browse(browseId: String): JSONObject =
-        post("browse", webRemixBody().apply { put("browseId", browseId) })
+        post("browse", WEB_REMIX, buildBody(WEB_REMIX).apply {
+            put("browseId", browseId)
+        })
 
     fun searchSuggestions(input: String): JSONObject =
-        post("music/get_search_suggestions", webRemixBody().apply { put("input", input) })
+        post("music/get_search_suggestions", WEB_REMIX, buildBody(WEB_REMIX).apply {
+            put("input", input)
+        })
 
+    /**
+     * Player endpoint.
+     * Usa ANDROID_MUSIC (client oficial de streaming).
+     * Retorna streamingData com bitrate real.
+     */
     suspend fun player(videoId: String): JSONObject = coroutineScope {
-        val clients = listOf(::androidMusicBody, ::androidVrBody)
-        val deferreds = clients.map { build ->
-            async {
-                val json = post("player", build().apply {
-                    put("videoId", videoId)
-                    put("contentCheckOk", true)
-                    put("racyCheckOk", true)
-                    put("params", "CgIQBg")
-                })
-                if (isPlayable(json)) json else throw Exception("Not playable")
-            }
-        }
-        select { deferreds.forEach { d -> d.onAwait { it } } }
+        val json = post("player", ANDROID_MUSIC, buildBody(ANDROID_MUSIC).apply {
+            put("videoId", videoId)
+            put("contentCheckOk", true)
+            put("racyCheckOk", true)
+            put("params", "CgIQBg")
+        })
+        if (isPlayable(json)) json else throw Exception("Not playable")
     }
 
-    private fun post(endpoint: String, body: JSONObject): JSONObject {
+    private fun post(endpoint: String, client: Client, body: JSONObject): JSONObject {
         val request = Request.Builder()
-            .url("$API/$endpoint?prettyPrint=false")
+            .url("$API/$endpoint?prettyPrint=false&key=${client.apiKey}")
             .addHeader("Content-Type", "application/json")
-            .addHeader(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            )
-            .addHeader("X-Goog-Api-Format-Version", "2")
-            .addHeader("X-YouTube-Client-Name", "67")
-            .addHeader("X-YouTube-Client-Version", "1.20250801.01.00")
+            .addHeader("User-Agent", client.userAgent)
+            .addHeader("X-Goog-Api-Format-Version", "1")
+            .addHeader("X-YouTube-Client-Name", client.name)
+            .addHeader("X-YouTube-Client-Version", client.version)
+            .addHeader("x-origin", "https://music.youtube.com")
+            .apply {
+                if (client.referer != null) addHeader("Referer", client.referer)
+            }
             .post(body.toString().toRequestBody(JSON_MEDIA))
             .build()
 
@@ -123,33 +125,6 @@ object InnerTube {
 
     fun isPlayable(playerJson: JSONObject): Boolean =
         playerJson.optJSONObject("playabilityStatus")?.optString("status") == "OK"
-
-    fun extractBestAudioUrl(playerJson: JSONObject): String? {
-        val streaming = playerJson.optJSONObject("streamingData") ?: return null
-        var bestUrl: String? = null
-        var bestBitrate = 0
-
-        streaming.optJSONArray("adaptiveFormats")?.let { formats ->
-            for (i in 0 until formats.length()) {
-                val fmt = formats.optJSONObject(i) ?: continue
-                if (!fmt.optString("mimeType").startsWith("audio/")) continue
-                val url = fmt.optString("url").takeIf { it.isNotBlank() && it != "null" } ?: continue
-                val br = fmt.optInt("bitrate", 0)
-                if (br > bestBitrate) { bestBitrate = br; bestUrl = url }
-            }
-        }
-        if (bestUrl != null) return bestUrl
-
-        streaming.optJSONArray("formats")?.let { formats ->
-            for (i in 0 until formats.length()) {
-                val fmt = formats.optJSONObject(i) ?: continue
-                val url = fmt.optString("url").takeIf { it.isNotBlank() && it != "null" } ?: continue
-                val br = fmt.optInt("bitrate", 0)
-                if (br > bestBitrate) { bestBitrate = br; bestUrl = url }
-            }
-        }
-        return bestUrl
-    }
 
     fun findContinuationToken(node: Any?): String? {
         when (node) {

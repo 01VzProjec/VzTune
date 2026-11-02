@@ -18,6 +18,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import org.schabi.newpipe.extractor.ServiceList
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,6 +28,12 @@ class MusicRepository @Inject constructor(
     private val ytMusicRepository: YTMusicRepository,
     private val youTubeMusicNewPipeRepository: YouTubeMusicNewPipeRepository,
 ) {
+
+    data class TechnicalInfo(
+        val itag: String?,
+        val mimeType: String?,
+        val quality: String?,
+    )
 
     private data class SearchState(
         val seenKeys: MutableSet<String> = mutableSetOf(),
@@ -82,9 +89,7 @@ class MusicRepository @Inject constructor(
             }
         } else null
 
-        val ytDeferred = async {
-            youTubeRepository.searchVideos(query, loadMore, pageSize)
-        }
+        val ytDeferred = async { youTubeRepository.searchVideos(query, loadMore, pageSize) }
         val ytmDeferred = async {
             ytMusicRepository.search(query, SearchFilter.ALL, state.ytmContinuation)
         }
@@ -126,9 +131,7 @@ class MusicRepository @Inject constructor(
         loadMore: Boolean,
         state: SearchState,
     ): SearchResult {
-        val ytmPage = ytMusicRepository.search(
-            query, SearchFilter.SONGS, state.ytmContinuation,
-        )
+        val ytmPage = ytMusicRepository.search(query, SearchFilter.SONGS, state.ytmContinuation)
         state.ytmContinuation = ytmPage.continuation
         state.ytmHasMore = ytmPage.continuation != null
         val newHits = ytmPage.items.take(30).filter { state.seenKeys.add(it.stableKey) }
@@ -161,16 +164,6 @@ class MusicRepository @Inject constructor(
         SearchResult.Success(newHits, state.ytmHasMore)
     }
 
-    /**
-     * Two-stage validation:
-     *  1. If `trackCount != null && > 0` -> trust the search (fast path).
-     *     The YT Music search already tells us how many tracks it has.
-     *  2. If `trackCount == null` OR `== 0` -> do a real browse to double-check.
-     *     Playlists whose browse comes back empty are removed.
-     *
-     * This avoids the previous bug where playlists with videos were being
-     * dropped because `browsePlaylist` didn't parse their tracks.
-     */
     private suspend fun validatePlaylists(
         playlists: List<SearchHit.PlaylistHit>,
     ): List<SearchHit.PlaylistHit> = coroutineScope {
@@ -179,11 +172,8 @@ class MusicRepository @Inject constructor(
             async {
                 semaphore.withPermit {
                     val count = hit.playlist.trackCount
-
-                    // Fast path: count from search already confirms
                     if (count != null && count > 0) return@withPermit hit
 
-                    // Slow path: browse with 5s timeout
                     val hasTracks = runCatching {
                         withTimeoutOrNull(5000L) {
                             ytMusicRepository.browsePlaylist(hit.playlist.id)
@@ -192,14 +182,11 @@ class MusicRepository @Inject constructor(
                     }.getOrNull()
 
                     when {
-                        // null == timeout/error -> keep (fail-open)
-                        hasTracks == null -> hit
-                        // false == empty confirmed -> drop
+                        hasTracks == null -> hit // fail-open em caso de erro
                         hasTracks == false -> {
-                            Log.d(TAG, "skip empty playlist: ${hit.playlist.id} '${hit.playlist.title}' (count=$count)")
+                            Log.d(TAG, "skip empty playlist: ${hit.playlist.id} '${hit.playlist.title}'")
                             null
                         }
-                        // true -> keep
                         else -> hit
                     }
                 }
@@ -222,11 +209,6 @@ class MusicRepository @Inject constructor(
 
     // ================= RADIO QUEUE =================
 
-    /**
-     * Builds a "radio" queue for the tapped track.
-     * - Song  -> only YOUTUBE_MUSIC songs, seed first, then similar
-     * - Video -> only YOUTUBE videos, seed first, then similar
-     */
     suspend fun buildRadioQueue(track: Track): List<Track> = withContext(Dispatchers.IO) {
         val queue = when (track.source) {
             Source.YOUTUBE_MUSIC -> runCatching {
@@ -238,6 +220,45 @@ class MusicRepository @Inject constructor(
             }.getOrDefault(listOf(track))
         }
         if (queue.isEmpty()) listOf(track) else queue
+    }
+
+    // ================= TECHNICAL INFO =================
+
+    suspend fun getTechnicalInfo(track: Track): TechnicalInfo? = withContext(Dispatchers.IO) {
+        runCatching {
+            val url = "https://www.youtube.com/watch?v=${track.id}"
+            val extractor = ServiceList.YouTube.getStreamExtractor(url)
+            extractor.fetchPage()
+
+            // Preferir áudio puro
+            val audio = extractor.audioStreams.maxByOrNull { it.averageBitrate }
+            if (audio != null) {
+                return@runCatching TechnicalInfo(
+                    itag = audio.itag.takeIf { it > 0 }?.toString(),
+                    mimeType = audio.getFormat()?.mimeType,
+                    quality = if (audio.averageBitrate > 0) {
+                        "${audio.averageBitrate / 1000} kbps"
+                    } else null,
+                )
+            }
+
+            // Fallback para vídeo
+            val video = extractor.videoStreams
+                .filter { !it.isVideoOnly }
+                .minByOrNull { it.resolution.removeSuffix("p").toIntOrNull() ?: Int.MAX_VALUE }
+            if (video != null) {
+                return@runCatching TechnicalInfo(
+                    itag = video.itag.takeIf { it > 0 }?.toString(),
+                    mimeType = video.getFormat()?.mimeType,
+                    quality = video.resolution.takeIf { it.isNotBlank() },
+                )
+            }
+
+            null
+        }.getOrElse { e ->
+            Log.w(TAG, "getTechnicalInfo failed for ${track.id}: ${e.message}")
+            null
+        }
     }
 
     // ================= SUGGESTIONS =================

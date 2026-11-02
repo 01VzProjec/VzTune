@@ -37,6 +37,12 @@ class YTMusicRepository @Inject constructor(
         val tracks: List<Track>,
     )
 
+    data class VideoDetails(
+        val viewCount: String?,
+        val likeCount: String?,
+        val description: String?,
+    )
+
     // ================= SEARCH =================
 
     suspend fun search(
@@ -100,9 +106,6 @@ class YTMusicRepository @Inject constructor(
         val owner = header?.let { extractHeaderArtist(it) }
         val desc = extractDescription(json)
 
-        // IMPORTANTE: collectMusicItems agora pega também musicTwoRowItemRenderer,
-        // que é o renderer usado por playlists com vídeos. Sem isso, o browse
-        // retornava lista vazia e validatePlaylists removia a playlist por engano.
         val rawTracks = collectMusicItems(json).distinctBy { it.id }
         val finalTracks = enricher.enrichTracks(rawTracks, null)
 
@@ -172,14 +175,6 @@ class YTMusicRepository @Inject constructor(
 
     // ================= QUEUE =================
 
-    /**
-     * Builds a "radio" queue for a song: searches for artist + title in YT Music
-     * and returns only YOUTUBE_MUSIC songs. Seed is first, then similar tracks.
-     *
-     * The "genre aspect" the user asked for is implicit: YT Music already
-     * returns same-genre results when we search by artist (MC X = funk,
-     * Jorge & Mateus = sertanejo, etc). That's how the algorithm works.
-     */
     suspend fun buildSongQueue(seed: Track): List<Track> = withContext(Dispatchers.IO) {
         val query = buildString {
             if (seed.artist.isNotBlank()) append(seed.artist)
@@ -214,7 +209,31 @@ class YTMusicRepository @Inject constructor(
         list.take(50)
     }
 
-    // ================= INTERNAL HELPERS =================
+    // ================= VIDEO DETAILS (for TrackInfo screen) =================
+
+    suspend fun getVideoDetails(videoId: String): VideoDetails? =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val json = InnerTube.player(videoId)
+                val videoDetails = json.optJSONObject("videoDetails")
+                    ?: return@runCatching null
+
+                val viewCountRaw = videoDetails.optString("viewCount")
+                    .takeIf { it.isNotBlank() && it != "null" }
+                    ?.toLongOrNull()
+
+                val description = videoDetails.optString("shortDescription")
+                    .takeIf { it.isNotBlank() && it != "null" }
+
+                VideoDetails(
+                    viewCount = viewCountRaw?.let { formatNumber(it) },
+                    likeCount = null, // Player não expõe likeCount direto
+                    description = description,
+                )
+            }.getOrNull()
+        }
+
+    // ================= HELPERS =================
 
     private fun extractDescription(json: JSONObject): String? {
         val shelf = YTMusicTextUtils.findFirst(json, "musicDescriptionShelfRenderer")
@@ -224,11 +243,6 @@ class YTMusicRepository @Inject constructor(
         return text.takeIf { it.isNotBlank() }
     }
 
-    /**
-     * Walks the browse JSON collecting BOTH renderers.
-     * musicResponsiveListItemRenderer = songs
-     * musicTwoRowItemRenderer          = videos / playlist items (with watchEndpoint)
-     */
     private fun collectMusicItems(
         node: Any?,
         out: MutableList<Track> = mutableListOf(),
@@ -255,8 +269,6 @@ class YTMusicRepository @Inject constructor(
                         )
                     }
                 }
-
-                // Videos / items rendered as musicTwoRowItemRenderer
                 node.optJSONObject("musicTwoRowItemRenderer")?.let { r ->
                     val videoId = r.optJSONObject("navigationEndpoint")
                         ?.optJSONObject("watchEndpoint")?.optString("videoId")
@@ -275,7 +287,6 @@ class YTMusicRepository @Inject constructor(
                         )
                     }
                 }
-
                 val keys = node.keys()
                 while (keys.hasNext()) collectMusicItems(node.opt(keys.next()), out)
             }
@@ -307,5 +318,12 @@ class YTMusicRepository @Inject constructor(
             if (artists.isNotEmpty()) return artists.joinToString(", ")
         }
         return null
+    }
+
+    private fun formatNumber(n: Long): String = when {
+        n >= 1_000_000_000L -> String.format("%.1fB", n / 1_000_000_000.0)
+        n >= 1_000_000L -> String.format("%.1fM", n / 1_000_000.0)
+        n >= 1_000L -> String.format("%.1fK", n / 1_000.0)
+        else -> n.toString()
     }
 }

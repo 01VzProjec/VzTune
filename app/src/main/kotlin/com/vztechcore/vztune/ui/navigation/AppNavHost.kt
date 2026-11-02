@@ -28,6 +28,8 @@ import com.vztechcore.vztune.ui.screens.medialist.MediaListScreen
 import com.vztechcore.vztune.ui.screens.medialist.MediaListViewModel
 import com.vztechcore.vztune.ui.screens.search.SearchScreen
 import com.vztechcore.vztune.ui.screens.search.SearchViewModel
+import com.vztechcore.vztune.ui.screens.trackinfo.TrackInfoScreen
+import com.vztechcore.vztune.ui.screens.trackinfo.TrackInfoViewModel
 import com.vztechcore.vztune.ui.theme.VzOnSurface
 
 @Composable
@@ -43,6 +45,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     }
 
     val isMediaListScreen = backStackEntry?.destination?.hasRoute<Routes.MediaList>() == true
+    val isTrackInfoScreen = backStackEntry?.destination?.hasRoute<Routes.TrackInfo>() == true
 
     val playback = LocalNowPlaying.current
     val miniPlayerVm: MiniPlayerViewModel = hiltViewModel()
@@ -52,7 +55,10 @@ fun AppNavHost(modifier: Modifier = Modifier) {
 
     EclipseBackground(baseColor = dominantColor) {
         Box(modifier = Modifier.fillMaxSize()) {
-            NavHost(navController = navController, startDestination = Routes.Home) {
+            NavHost(
+                navController = navController,
+                startDestination = Routes.Home,
+            ) {
                 composable<Routes.Home> { Placeholder("Home — coming soon") }
                 composable<Routes.Analytics> { Placeholder("Analytics — coming soon") }
                 composable<Routes.Library> { Placeholder("Library — coming soon") }
@@ -64,8 +70,28 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     LaunchedEffect(Unit) {
                         vm.navigationEvent.collect { event ->
                             when (event) {
-                                is SearchViewModel.NavigationEvent.OpenPlaylist -> navController.navigate(Routes.MediaList(id = event.id, isAlbum = false, title = event.title, subtitle = event.owner, thumbnailUrl = event.thumbnailUrl))
-                                is SearchViewModel.NavigationEvent.OpenAlbum -> navController.navigate(Routes.MediaList(id = event.id, isAlbum = true, title = event.title, subtitle = event.artist, thumbnailUrl = event.thumbnailUrl))
+                                is SearchViewModel.NavigationEvent.OpenPlaylist -> {
+                                    navController.navigate(
+                                        Routes.MediaList(
+                                            id = event.id,
+                                            isAlbum = false,
+                                            title = event.title,
+                                            subtitle = event.owner,
+                                            thumbnailUrl = event.thumbnailUrl,
+                                        )
+                                    )
+                                }
+                                is SearchViewModel.NavigationEvent.OpenAlbum -> {
+                                    navController.navigate(
+                                        Routes.MediaList(
+                                            id = event.id,
+                                            isAlbum = true,
+                                            title = event.title,
+                                            subtitle = event.artist,
+                                            thumbnailUrl = event.thumbnailUrl,
+                                        )
+                                    )
+                                }
                             }
                         }
                     }
@@ -81,6 +107,19 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onClearHistory = vm::onClearHistory,
                         onLoadMore = vm::onLoadMore,
                         onHitClick = vm::onHitClick,
+                        onTrackInfoClick = { track ->
+                            navController.navigate(
+                                Routes.TrackInfo(
+                                    id = track.id,
+                                    title = track.title,
+                                    artist = track.artist,
+                                    album = track.album,
+                                    thumbnailUrl = track.thumbnailUrl,
+                                    sourceName = track.source.name,
+                                    durationSeconds = track.durationSeconds,
+                                )
+                            )
+                        },
                     )
                 }
 
@@ -95,48 +134,75 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onPlayAllClick = vm::onPlayAll,
                         onShuffleClick = vm::onShuffle,
                         onSortSelected = vm::onSortOrderSelected,
-                        onReorder = vm::onReorder,                // NOVO
-                        onStartShuffle = vm::startShuffle,        // NOVO
-                        onShuffleOnce = vm::shuffleOnce,          // NOVO
-                        onStopShuffle = vm::stopShuffle,          // NOVO
+                        onReorder = vm::onReorder,
+                        onStartShuffle = vm::startShuffle,
+                        onShuffleOnce = vm::shuffleOnce,
+                        onStopShuffle = vm::stopShuffle,
+                        onTrackInfoClick = { track ->
+                            navController.navigate(
+                                Routes.TrackInfo(
+                                    id = track.id,
+                                    title = track.title,
+                                    artist = track.artist,
+                                    album = track.album,
+                                    thumbnailUrl = track.thumbnailUrl,
+                                    sourceName = track.source.name,
+                                    durationSeconds = track.durationSeconds,
+                                )
+                            )
+                        },
+                    )
+                }
+
+                composable<Routes.TrackInfo> {
+                    val vm: TrackInfoViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    TrackInfoScreen(
+                        state = state,
+                        onBackClick = { navController.popBackStack() },
                     )
                 }
             }
 
-            Column(
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding(),
-            ) {
-                val track = playback.currentTrack
-                if (track != null) {
-                    MiniPlayerBar(
-                        track = track,
-                        isPlaying = playback.isPlaying,
-                        isLoading = playback.isLoading,
-                        onPlayPauseClick = miniPlayerVm::togglePlayPause,
-                        onNextClick = miniPlayerVm::next,
-                        onPrevClick = miniPlayerVm::previous,
-                        onClick = { /* TODO: open Now Playing */ },
-                    )
-                }
+            // Bottom stack (MiniPlayer + BottomBar) — escondida nas telas cheias
+            if (!isTrackInfoScreen) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .navigationBarsPadding(),
+                ) {
+                    val track = playback.currentTrack
+                    if (track != null) {
+                        MiniPlayerBar(
+                            track = track,
+                            isPlaying = playback.isPlaying,
+                            isLoading = playback.isLoading,
+                            onPlayPauseClick = miniPlayerVm::togglePlayPause,
+                            onNextClick = miniPlayerVm::next,
+                            onPrevClick = miniPlayerVm::previous,
+                            onClick = { /* TODO: open Now Playing */ },
+                        )
+                    }
 
-                // Esconde a BottomBar se estiver na tela MediaList
-                if (!isMediaListScreen) {
-                    AppBottomBar(
-                        selected = currentTab,
-                        onSelect = { tab ->
-                            val route = when (tab) {
-                                AppTab.HOME -> Routes.Home
-                                AppTab.ANALYTICS -> Routes.Analytics
-                                AppTab.LIBRARY -> Routes.Library
-                                AppTab.SEARCH -> Routes.Search
-                            }
-                            navController.navigate(route) {
-                                popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                    )
+                    if (!isMediaListScreen && !isTrackInfoScreen) {
+                        AppBottomBar(
+                            selected = currentTab,
+                            onSelect = { tab ->
+                                val route = when (tab) {
+                                    AppTab.HOME -> Routes.Home
+                                    AppTab.ANALYTICS -> Routes.Analytics
+                                    AppTab.LIBRARY -> Routes.Library
+                                    AppTab.SEARCH -> Routes.Search
+                                }
+                                navController.navigate(route) {
+                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }

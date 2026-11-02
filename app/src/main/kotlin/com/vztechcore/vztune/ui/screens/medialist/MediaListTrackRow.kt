@@ -2,21 +2,26 @@ package com.vztechcore.vztune.ui.screens.medialist
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,82 +38,119 @@ internal fun MediaListTrackRow(
     isPaused: Boolean,
     onClick: () -> Unit,
     onMoreClick: () -> Unit,
+    onInfoRequested: () -> Unit,
     showDragHandle: Boolean,
     dragHandleModifier: Modifier,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var screenWidth by remember { mutableIntStateOf(1080) }
+
+    Box(
+        modifier
+            .fillMaxWidth()
+            .onSizeChanged { screenWidth = it.width },
     ) {
-        if (index != null) {
-            Text(
-                "$index",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier.width(24.dp),
-            )
-        }
-        if (track.thumbnailUrl == null && index != null) {
+        if (dragOffset > 0) {
             Box(
                 Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color.White.copy(alpha = 0.08f)),
-                contentAlignment = Alignment.Center,
+                    .fillMaxHeight()
+                    .width(dragOffset.dp.coerceAtMost(80.dp))
+                    .padding(start = 12.dp),
+                contentAlignment = Alignment.CenterStart,
             ) {
-                Text(
-                    "$index",
-                    color = Color.White.copy(alpha = 0.4f),
-                    style = MaterialTheme.typography.titleMedium,
+                Icon(
+                    imageVector = Icons.Filled.Info,
+                    contentDescription = "Informações",
+                    tint = Color(0xFF60A5FA),
+                    modifier = Modifier.size(24.dp),
                 )
             }
-        } else {
-            MediaThumbnail(
-                imageUrl = track.thumbnailUrl,
-                shape = ThumbnailShape.SQUARE,
-                size = 52.dp,
-                cornerRadius = 6.dp,
-                isPlaying = isPlaying,
-                isPaused = isPaused,
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                track.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(2.dp))
-            TrackSubtitle(
-                track = track,
-                style = MaterialTheme.typography.bodySmall,
-                prefixColor = Color.White.copy(alpha = 0.55f),
-                artistColor = Color.White.copy(alpha = 0.6f),
-            )
         }
 
-        IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
-            Icon(
-                Icons.Filled.MoreVert,
-                contentDescription = "Mais opções",
-                tint = Color.White.copy(alpha = 0.7f),
-            )
-        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .graphicsLayer { translationX = dragOffset }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            if (dragOffset > screenWidth * 0.4f) onInfoRequested()
+                            dragOffset = 0f
+                        },
+                        onDragCancel = { dragOffset = 0f },
+                    ) { change, dragAmount ->
+                        if (dragAmount > 0 || dragOffset > 0) {
+                            dragOffset = (dragOffset + dragAmount).coerceIn(0f, 300f)
+                            change.consume()
+                        }
+                    }
+                }
+                .clickable { onClick() }
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (index != null) {
+                Text(
+                    "$index",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier.width(24.dp),
+                )
+            }
+            if (track.thumbnailUrl == null && index != null) {
+                Box(
+                    Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.White.copy(alpha = 0.08f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("$index", color = Color.White.copy(alpha = 0.4f), style = MaterialTheme.typography.titleMedium)
+                }
+            } else {
+                MediaThumbnail(
+                    imageUrl = track.thumbnailUrl,
+                    shape = ThumbnailShape.SQUARE,
+                    size = 52.dp,
+                    cornerRadius = 6.dp,
+                    isPlaying = isPlaying,
+                    isPaused = isPaused,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    track.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(2.dp))
+                TrackSubtitle(
+                    track = track,
+                    style = MaterialTheme.typography.bodySmall,
+                    prefixColor = Color.White.copy(alpha = 0.55f),
+                    artistColor = Color.White.copy(alpha = 0.6f),
+                )
+            }
 
-        if (showDragHandle) {
-            Icon(
-                imageVector = Icons.Filled.DragHandle,
-                contentDescription = "Arrastar",
-                tint = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier
-                    .size(32.dp)
-                    .padding(4.dp)
-                    .then(dragHandleModifier),
-            )
+            IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
+            }
+
+            if (showDragHandle) {
+                Icon(
+                    imageVector = Icons.Filled.DragHandle,
+                    contentDescription = "Arrastar",
+                    tint = Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier
+                        .size(32.dp)
+                        .padding(4.dp)
+                        .then(dragHandleModifier),
+                )
+            }
         }
     }
 }
@@ -133,8 +175,6 @@ internal fun MediaListVideoCard(
                 isPlaying = isPlaying,
                 isPaused = isPaused,
             )
-            
-            // 3 pontinhos no canto superior direito
             IconButton(
                 onClick = onMoreClick,
                 modifier = Modifier
@@ -142,14 +182,9 @@ internal fun MediaListVideoCard(
                     .padding(8.dp)
                     .size(32.dp)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f))
+                    .background(Color.Black.copy(alpha = 0.55f)),
             ) {
-                Icon(
-                    imageVector = Icons.Filled.MoreVert,
-                    contentDescription = "Mais opções",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
+                Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White, modifier = Modifier.size(20.dp))
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -186,18 +221,9 @@ internal fun MediaListTabs(selected: MediaListTab, onSelect: (MediaListTab) -> U
             val bg = if (isSelected) Color.White else Color.White.copy(alpha = 0.08f)
             val fg = if (isSelected) Color.Black else Color.White.copy(alpha = 0.75f)
             Box(
-                Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(bg)
-                    .clickable { onSelect(tab) }
-                    .padding(horizontal = 18.dp, vertical = 8.dp),
+                Modifier.clip(RoundedCornerShape(50)).background(bg).clickable { onSelect(tab) }.padding(horizontal = 18.dp, vertical = 8.dp),
             ) {
-                Text(
-                    tab.label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = fg,
-                    fontWeight = FontWeight.Bold,
-                )
+                Text(tab.label, style = MaterialTheme.typography.labelMedium, color = fg, fontWeight = FontWeight.Bold)
             }
         }
     }

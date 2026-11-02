@@ -14,11 +14,15 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -41,6 +45,7 @@ fun MediaThumbnail(
     modifier: Modifier = Modifier,
     shape: ThumbnailShape = ThumbnailShape.SQUARE,
     isPlaying: Boolean = false,
+    isPaused: Boolean = false,
     isLoading: Boolean = false,
     size: Dp = 56.dp,
     cornerRadius: Dp = 8.dp,
@@ -70,10 +75,10 @@ fun MediaThumbnail(
             )
         }
 
-        if (isPlaying) {
-            PlayingOverlay(clipShape = clipShape)
-        } else if (isLoading) {
-            Box(
+        when {
+            isPlaying -> PlayingOverlayLarge(clipShape)
+            isPaused -> PlayingOverlayPaused(clipShape)
+            isLoading -> Box(
                 Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -87,15 +92,19 @@ fun MediaThumbnail(
     }
 }
 
+/**
+ * Big equalizer centered on the thumbnail.
+ * Shown while the track is actively playing.
+ */
 @Composable
-fun PlayingOverlay(clipShape: Shape) {
+private fun PlayingOverlayLarge(clipShape: Shape) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .clip(clipShape)
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(
+                    listOf(
                         Color.Black.copy(alpha = 0.15f),
                         VzSecondary.copy(alpha = 0.25f),
                         Color.Black.copy(alpha = 0.6f),
@@ -111,6 +120,42 @@ fun PlayingOverlay(clipShape: Shape) {
             barWidth = 3.dp,
             gap = 3.dp,
         )
+    }
+}
+
+/**
+ * Paused state: dark overlay + a Pause icon in the center + a tiny
+ * equalizer in the bottom-end corner (looks "frozen").
+ */
+@Composable
+private fun PlayingOverlayPaused(clipShape: Shape) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clip(clipShape)
+            .background(Color.Black.copy(alpha = 0.5f)),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Pause,
+            contentDescription = "Pausado",
+            tint = Color.White,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(24.dp),
+        )
+        Box(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .padding(4.dp),
+        ) {
+            PlayingEqualizer(
+                color = Color.White,
+                barCount = 3,
+                maxHeight = 8.dp,
+                barWidth = 2.dp,
+                gap = 2.dp,
+            )
+        }
     }
 }
 

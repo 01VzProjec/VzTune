@@ -12,8 +12,12 @@ import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -41,9 +45,7 @@ class MusicRepository @Inject constructor(
         filter: SearchFilter,
         loadMore: Boolean,
     ): SearchResult = withContext(Dispatchers.IO) {
-        if (query.isBlank()) {
-            return@withContext SearchResult.Success(emptyList(), false)
-        }
+        if (query.isBlank()) return@withContext SearchResult.Success(emptyList(), false)
 
         val stateKey = "$query|${filter.name}"
         val state = searchStates.getOrPut(stateKey) { SearchState() }
@@ -66,7 +68,7 @@ class MusicRepository @Inject constructor(
         }
     }
 
-    // ================= ALL (3 artists top + interleaved) =================
+    // ================= ALL (3 artists top + only tracks below) =================
 
     private suspend fun searchAll(
         query: String,
@@ -109,20 +111,13 @@ class MusicRepository @Inject constructor(
         val merged = mutableListOf<SearchHit>()
 
         if (topArtists.isNotEmpty()) {
-            topArtists.forEach { artist ->
-                merged += SearchHit.ArtistHit(artist)
-            }
+            topArtists.forEach { artist -> merged += SearchHit.ArtistHit(artist) }
             state.topArtistsLoaded = true
         }
 
-        // Filtro anti-playlist vazia:
-        val validYtmItems = ytmPage.items.filter { hit ->
-            if (hit is SearchHit.PlaylistHit) {
-                hit.playlist.trackCount != 0 // Se for 0, descarta
-            } else true
-        }
-
-        val interleaved = interleave(ytPage.items, validYtmItems.take(pageSize))
+        // Apenas faixas (SongHit do YTM + VideoHit do YT). Sem álbum, sem playlist, sem artist.
+        val ytmTracksOnly = ytmPage.items.filterIsInstance<SearchHit.SongHit>()
+        val interleaved = interleave(ytPage.items, ytmTracksOnly.take(pageSize))
         merged += interleaved
 
         val newHits = merged.filter { state.seenKeys.add(it.stableKey) }
@@ -136,11 +131,7 @@ class MusicRepository @Inject constructor(
         loadMore: Boolean,
         state: SearchState,
     ): SearchResult {
-        val ytPage = youTubeRepository.searchVideos(
-            query = query,
-            loadMore = loadMore,
-            pageSize = 30,
-        )
+        val ytPage = youTubeRepository.searchVideos(query, loadMore, 30)
         state.ytHasMore = ytPage.hasMore
         val newHits = ytPage.items.filter { state.seenKeys.add(it.stableKey) }
         return SearchResult.Success(newHits, state.ytHasMore)
@@ -164,7 +155,7 @@ class MusicRepository @Inject constructor(
         return SearchResult.Success(newHits, state.ytmHasMore)
     }
 
-    // ================= PLAYLISTS =================
+    // ================= PLAYLISTS (with empty-filter) =================
 
     private suspend fun searchPlaylists(
         query: String,
@@ -184,21 +175,55 @@ class MusicRepository @Inject constructor(
         }
         val ytHits = ytDeferred.await()
         val ytmPage = ytmDeferred.await()
-        
+
         state.ytmContinuation = ytmPage.continuation
         state.ytmHasMore = ytmPage.continuation != null
 
-        // Filtra playlists vazias
-        val validYtm = ytmPage.items.filter {
-            it !is SearchHit.PlaylistHit || it.playlist.trackCount != 0
-        }
-        
-        val merged = ytHits + validYtm
+        val ytmPlaylists = ytmPage.items.filterIsInstance<SearchHit.PlaylistHit>()
+
+        // Filtro real: verifica em paralelo se cada playlist tem faixas.
+        // YouTube playlists (YT:) NÃO são verificados (o NewPipe já garante).
+        val ytmValidated = filterEmptyPlaylists(ytmPlaylists)
+
+        val merged = ytHits + ytmValidated
         val newHits = merged.filter { state.seenKeys.add(it.stableKey) }
         SearchResult.Success(newHits, state.ytmHasMore)
     }
 
-    // ================= OTHERS (artists / albums) =================
+    /**
+     * Runs a real `browsePlaylist()` on each candidate to check whether the
+     * playlist actually contains tracks. Runs in parallel (Semaphore 10) with
+     * a 3s per-request timeout so a single slow playlist can't stall the whole
+     * page. Timeouts and errors keep the playlist (fail-open) to avoid hiding
+     * valid ones.
+     */
+    private suspend fun filterEmptyPlaylists(
+        playlists: List<SearchHit.PlaylistHit>,
+    ): List<SearchHit.PlaylistHit> = coroutineScope {
+        val semaphore = Semaphore(10)
+        playlists.map { hit ->
+            async {
+                semaphore.withPermit {
+                    val result = runCatching {
+                        withTimeoutOrNull(3000L) {
+                            ytMusicRepository.browsePlaylist(hit.playlist.id)
+                                .tracks.isNotEmpty()
+                        }
+                    }.getOrNull()
+
+                    // null = timeout/erro -> fail-open (mantém)
+                    // true  = tem faixas -> mantém
+                    // false = vazia -> remove
+                    when (result) {
+                        false -> null
+                        else -> hit
+                    }
+                }
+            }
+        }.awaitAll().filterNotNull()
+    }
+
+    // ================= OTHERS =================
 
     private suspend fun searchOther(
         query: String,

@@ -41,7 +41,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -69,33 +68,21 @@ fun MediaListScreen(
     val listState = rememberLazyListState()
     val nowPlaying = LocalNowPlaying.current
 
-    val showTopBar by remember {
-        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 400 }
+    val isCollapsed by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 ||
+                listState.firstVisibleItemScrollOffset > 250
+        }
     }
 
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
-
-        // 1) BLUR BACKGROUND (Efeito capa borrada)
-        if (state.thumbnailUrl != null || state.mosaicThumbnails.isNotEmpty()) {
-            AsyncImage(
-                model = state.thumbnailUrl ?: state.mosaicThumbnails.firstOrNull(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(400.dp)
-                    .blur(50.dp)
-                    .background(Color.Black.copy(alpha = 0.6f))
-            )
-        }
-
         LazyColumn(
             state = listState,
             contentPadding = PaddingValues(bottom = 140.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
             item {
-                MediaListHeader(
+                MediaListExpandedHeader(
                     state = state,
                     onBackClick = onBackClick,
                     onTabSelected = onTabSelected,
@@ -105,15 +92,34 @@ fun MediaListScreen(
             }
 
             when {
-                state.isLoading -> item { Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color.White) } }
-                state.errorMessage != null -> item { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text(state.errorMessage, color = Color.Red) } }
-                state.filteredTracks.isEmpty() -> item { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text("Nenhuma faixa por aqui.", color = Color.White.copy(alpha = 0.6f)) } }
-                else -> itemsIndexed(items = state.filteredTracks, key = { _, t -> t.id }) { index, track ->
-                    val isPlaying = nowPlaying.isCurrent(track.id, track.source)
+                state.isLoading -> item {
+                    Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Color.White)
+                    }
+                }
+                state.errorMessage != null -> item {
+                    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        Text(state.errorMessage, color = Color.Red)
+                    }
+                }
+                state.filteredTracks.isEmpty() -> item {
+                    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        Text("Nenhuma faixa por aqui.", color = Color.White.copy(alpha = 0.6f))
+                    }
+                }
+                else -> itemsIndexed(
+                    items = state.filteredTracks,
+                    key = { _, t -> t.id },
+                ) { index, track ->
+                    val isCurrent = nowPlaying.isCurrent(track.id, track.source)
+                    val isPlaying = isCurrent && nowPlaying.isPlaying
+                    val isPaused = isCurrent && !nowPlaying.isPlaying
+
                     TrackRow(
                         track = track,
                         index = if (state.isAlbum) index + 1 else null,
                         isPlaying = isPlaying,
+                        isPaused = isPaused,
                         onClick = { onTrackClick(track) },
                     )
                 }
@@ -122,19 +128,26 @@ fun MediaListScreen(
             item { MediaListFooter(state = state) }
         }
 
+        // Floating collapsed header (thumb + title + actions)
         AnimatedVisibility(
-            visible = showTopBar,
+            visible = isCollapsed,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopCenter),
         ) {
-            MediaListTopBar(title = state.title, onBackClick = onBackClick)
+            MediaListCollapsedHeader(
+                title = state.title,
+                thumbnailUrl = state.thumbnailUrl ?: state.mosaicThumbnails.firstOrNull(),
+                onBackClick = onBackClick,
+            )
         }
     }
 }
 
+// ================= EXPANDED HEADER (scrolls away) =================
+
 @Composable
-private fun MediaListHeader(
+private fun MediaListExpandedHeader(
     state: MediaListUiState,
     onBackClick: () -> Unit,
     onTabSelected: (MediaListTab) -> Unit,
@@ -154,35 +167,72 @@ private fun MediaListHeader(
             }
         }
 
-        Box(Modifier.fillMaxWidth().height(220.dp).padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+        Spacer(Modifier.height(8.dp))
+
+        // Cover grande quadrada
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            contentAlignment = Alignment.Center,
+        ) {
             if (state.mosaicThumbnails.size >= 4) {
                 PlaylistMosaicLarge(state.mosaicThumbnails)
             } else {
                 AsyncImage(
-                    model = state.thumbnailUrl, contentDescription = state.title, contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(200.dp).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.1f)),
+                    model = state.thumbnailUrl,
+                    contentDescription = state.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(240.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.1f)),
                 )
             }
         }
 
         Spacer(Modifier.height(16.dp))
-        Text(state.title, style = MaterialTheme.typography.headlineMedium, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 20.dp))
+
+        Text(
+            text = state.title,
+            style = MaterialTheme.typography.headlineMedium,
+            color = Color.White,
+            fontWeight = FontWeight.ExtraBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 20.dp),
+        )
 
         if (!state.subtitle.isNullOrBlank()) {
             Spacer(Modifier.height(4.dp))
-            Text(state.subtitle, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(horizontal = 20.dp))
+            Text(
+                text = state.subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.7f),
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
         }
+
         if (state.metadataLabel.isNotBlank()) {
             Spacer(Modifier.height(2.dp))
-            Text(state.metadataLabel, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 20.dp))
+            Text(
+                text = state.metadataLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.5f),
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
         }
 
         Spacer(Modifier.height(16.dp))
+
         MediaListTabs(state.selectedTab, onTabSelected)
+
         Spacer(Modifier.height(12.dp))
 
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            // Botão Play Menor
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Row(
                 Modifier.clip(RoundedCornerShape(50)).background(Color(0xFF1E40AF)).clickable { onPlayAllClick() }.padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -194,7 +244,6 @@ private fun MediaListHeader(
 
             Spacer(Modifier.width(8.dp))
 
-            // Botão Shuffle Menor
             Box(
                 Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.10f)).clickable { onShuffleClick() },
                 contentAlignment = Alignment.Center,
@@ -203,10 +252,69 @@ private fun MediaListHeader(
             }
 
             Spacer(Modifier.weight(1f))
-            IconButton(onClick = { /* TODO */ }) { Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Ordenar", tint = Color.White) }
+            IconButton(onClick = { /* TODO */ }) {
+                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Ordenar", tint = Color.White)
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+// ================= COLLAPSED HEADER (floats on top) =================
+
+@Composable
+private fun MediaListCollapsedHeader(
+    title: String,
+    thumbnailUrl: String?,
+    onBackClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color.Black.copy(alpha = 0.95f),
+                        Color.Black.copy(alpha = 0.85f),
+                        Color.Transparent,
+                    )
+                )
+            )
+            .statusBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CircleIconButton(Icons.Filled.Close, "Fechar", onBackClick)
+        Spacer(Modifier.width(12.dp))
+        if (!thumbnailUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)),
+            )
+            Spacer(Modifier.width(10.dp))
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = { /* TODO */ }) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White)
+        }
+        IconButton(onClick = { /* TODO */ }) {
+            Icon(Icons.Filled.Search, contentDescription = "Pesquisar", tint = Color.White)
         }
     }
 }
+
+// ================= TABS =================
 
 @Composable
 private fun MediaListTabs(selected: MediaListTab, onSelect: (MediaListTab) -> Unit) {
@@ -222,8 +330,16 @@ private fun MediaListTabs(selected: MediaListTab, onSelect: (MediaListTab) -> Un
     }
 }
 
+// ================= TRACK ROW =================
+
 @Composable
-private fun TrackRow(track: Track, index: Int?, isPlaying: Boolean, onClick: () -> Unit) {
+private fun TrackRow(
+    track: Track,
+    index: Int?,
+    isPlaying: Boolean,
+    isPaused: Boolean,
+    onClick: () -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -232,7 +348,6 @@ private fun TrackRow(track: Track, index: Int?, isPlaying: Boolean, onClick: () 
             Text("$index", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.5f), modifier = Modifier.width(24.dp))
         }
 
-        // Capa Numérica para álbuns se não tiver thumb
         if (track.thumbnailUrl == null && index != null) {
             Box(Modifier.size(52.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
                 Text("$index", color = Color.White.copy(alpha = 0.4f), style = MaterialTheme.typography.titleMedium)
@@ -243,7 +358,8 @@ private fun TrackRow(track: Track, index: Int?, isPlaying: Boolean, onClick: () 
                 shape = ThumbnailShape.SQUARE,
                 size = 52.dp,
                 cornerRadius = 6.dp,
-                isPlaying = isPlaying, // Equalizer marker
+                isPlaying = isPlaying,
+                isPaused = isPaused,
             )
         }
 
@@ -260,6 +376,8 @@ private fun TrackRow(track: Track, index: Int?, isPlaying: Boolean, onClick: () 
     }
 }
 
+// ================= FOOTER =================
+
 @Composable
 private fun MediaListFooter(state: MediaListUiState) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 32.dp)) {
@@ -271,22 +389,11 @@ private fun MediaListFooter(state: MediaListUiState) {
     }
 }
 
-@Composable
-private fun MediaListTopBar(title: String, onBackClick: () -> Unit) {
-    Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.92f), Color.Black.copy(alpha = 0.75f), Color.Transparent))).statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            CircleIconButton(Icons.Filled.Close, "Fechar", onBackClick)
-            Spacer(Modifier.width(12.dp))
-            Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            IconButton(onClick = { /* TODO */ }) { Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White) }
-            IconButton(onClick = { /* TODO */ }) { Icon(Icons.Filled.Search, contentDescription = "Pesquisar", tint = Color.White) }
-        }
-    }
-}
+// ================= HELPERS =================
 
 @Composable
 private fun PlaylistMosaicLarge(thumbnails: List<String>) {
-    Box(Modifier.size(200.dp).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.1f))) {
+    Box(Modifier.size(240.dp).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.1f))) {
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f)) {
                 AsyncImage(model = thumbnails.getOrNull(0), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())

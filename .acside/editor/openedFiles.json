@@ -1,407 +1,47 @@
 {
   "allFiles": [
     {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/innertube/Innertube.kt",
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/core/src/main/kotlin/com/vztechcore/vztune/core/domain/music/Playlist.kt",
       "selection": {
         "end": {
           "column": 1,
-          "index": 6793,
-          "line": 175
+          "index": 504,
+          "line": 15
         },
         "start": {
           "column": 1,
-          "index": 6793,
-          "line": 175
+          "index": 504,
+          "line": 15
         }
       }
     },
     {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/innertube/InnerTubeParser.kt",
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicAlbumParser.kt",
       "selection": {
         "end": {
           "column": 1,
-          "index": 15873,
-          "line": 405
+          "index": 4678,
+          "line": 120
         },
         "start": {
           "column": 1,
-          "index": 15873,
-          "line": 405
+          "index": 4678,
+          "line": 120
         }
       }
     },
     {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/player/PlayerController.kt",
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicPlaylistMosaic.kt",
       "selection": {
         "end": {
           "column": 1,
-          "index": 6150,
-          "line": 169
+          "index": 1759,
+          "line": 52
         },
         "start": {
           "column": 1,
-          "index": 6150,
-          "line": 169
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/music/MusicRepository.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 8825,
-          "line": 257
-        },
-        "start": {
-          "column": 1,
-          "index": 8825,
-          "line": 257
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/build.gradle.kts",
-      "selection": {
-        "end": {
-          "column": 0,
-          "index": 0,
-          "line": 0
-        },
-        "start": {
-          "column": 0,
-          "index": 0,
-          "line": 0
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeRepository.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 17520,
-          "line": 456
-        },
-        "start": {
-          "column": 1,
-          "index": 17520,
-          "line": 456
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicRepository.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 14337,
-          "line": 347
-        },
-        "start": {
-          "column": 1,
-          "index": 14337,
-          "line": 347
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/core/src/main/kotlin/com/vztechcore/vztune/core/domain/player/PlaybackState.kt",
-      "selection": {
-        "end": {
-          "column": 39,
-          "index": 809,
-          "line": 24
-        },
-        "start": {
-          "column": 39,
-          "index": 809,
-          "line": 24
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeMusicNewPipeRepository.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 3243,
-          "line": 89
-        },
-        "start": {
-          "column": 1,
-          "index": 3243,
-          "line": 89
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/main/MainViewModel.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 1089,
-          "line": 27
-        },
-        "start": {
-          "column": 1,
-          "index": 1089,
-          "line": 27
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/MainActivity.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 1303,
-          "line": 33
-        },
-        "start": {
-          "column": 1,
-          "index": 1303,
-          "line": 33
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchViewModel.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 8066,
-          "line": 248
-        },
-        "start": {
-          "column": 1,
-          "index": 8066,
-          "line": 248
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/gradle/libs.versions.toml",
-      "selection": {
-        "end": {
-          "column": 96,
-          "index": 6462,
-          "line": 143
-        },
-        "start": {
-          "column": 96,
-          "index": 6462,
-          "line": 143
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/youtube/NewPipeDownloader.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 2131,
-          "line": 61
-        },
-        "start": {
-          "column": 1,
-          "index": 2131,
-          "line": 61
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/youtube/NewPipeInitializer.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 1095,
-          "line": 37
-        },
-        "start": {
-          "column": 1,
-          "index": 1095,
-          "line": 37
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/build.gradle.kts",
-      "selection": {
-        "end": {
-          "column": 41,
-          "index": 3592,
-          "line": 124
-        },
-        "start": {
-          "column": 41,
-          "index": 3592,
-          "line": 124
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/TrackText.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 2011,
-          "line": 66
-        },
-        "start": {
-          "column": 1,
-          "index": 2011,
-          "line": 66
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/EclipseBackground.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 3358,
-          "line": 102
-        },
-        "start": {
-          "column": 1,
-          "index": 3358,
-          "line": 102
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/MediaThumbnail.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 5043,
-          "line": 157
-        },
-        "start": {
-          "column": 1,
-          "index": 5043,
-          "line": 157
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/MiniPlayerBar.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 4441,
-          "line": 118
-        },
-        "start": {
-          "column": 1,
-          "index": 4441,
-          "line": 118
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/components/SearchResultCards.kt",
-      "selection": {
-        "end": {
-          "column": 58,
-          "index": 1961,
-          "line": 39
-        },
-        "start": {
-          "column": 58,
-          "index": 1961,
-          "line": 39
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 6353,
-          "line": 141
-        },
-        "start": {
-          "column": 1,
-          "index": 6353,
-          "line": 141
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchScreen.kt",
-      "selection": {
-        "end": {
-          "column": 0,
-          "index": 0,
-          "line": 0
-        },
-        "start": {
-          "column": 0,
-          "index": 0,
-          "line": 0
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/core/src/main/kotlin/com/vztechcore/vztune/core/domain/search/SearchFilter.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 604,
-          "line": 14
-        },
-        "start": {
-          "column": 1,
-          "index": 604,
-          "line": 14
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicCaches.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 790,
-          "line": 22
-        },
-        "start": {
-          "column": 1,
-          "index": 790,
-          "line": 22
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicTextUtils.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 4978,
-          "line": 134
-        },
-        "start": {
-          "column": 1,
-          "index": 4978,
-          "line": 134
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicThubnailUtils.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 3351,
-          "line": 89
-        },
-        "start": {
-          "column": 1,
-          "index": 3351,
-          "line": 89
+          "index": 1759,
+          "line": 52
         }
       }
     },
@@ -410,28 +50,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 14610,
-          "line": 369
+          "index": 17297,
+          "line": 428
         },
         "start": {
           "column": 1,
-          "index": 14610,
-          "line": 369
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicArtistParser.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 11037,
-          "line": 243
-        },
-        "start": {
-          "column": 1,
-          "index": 11037,
-          "line": 243
+          "index": 17297,
+          "line": 428
         }
       }
     },
@@ -440,16 +65,16 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 10524,
-          "line": 277
+          "index": 11979,
+          "line": 323
         },
         "start": {
           "column": 1,
-          "index": 10524,
-          "line": 277
+          "index": 11979,
+          "line": 323
         }
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/music/MusicRepository.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicEnricher.kt"
 }

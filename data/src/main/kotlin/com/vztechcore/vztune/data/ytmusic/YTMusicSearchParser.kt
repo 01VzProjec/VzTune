@@ -229,17 +229,26 @@ internal object YTMusicSearchParser {
         }
 
         val browseId = extractBrowseId(r) ?: return
-        val author = subtitle.substringBefore("•").trim()
         when {
-            browseId.startsWith("VL") -> out += ParsedItem.Playlist(
-                browseId, title, author.ifBlank { "Playlist" }, thumb
-            )
-            browseId.startsWith("MPREb_") -> out += ParsedItem.Album(
-                browseId, title, author, thumb
-            )
-            browseId.startsWith("UC") -> out += ParsedItem.Artist(
-                browseId, title, thumb
-            )
+            browseId.startsWith("VL") -> {
+                val owner = extractPlaylistOwner(subtitleCol)
+                    ?: subtitle.substringBefore("•").trim().takeIf {
+                        it.isNotBlank() && !YTMusicTextUtils.isTypeWord(it)
+                    }
+                    ?: "Playlist"
+                out += ParsedItem.Playlist(browseId, title, owner, thumb)
+            }
+            browseId.startsWith("MPREb_") -> {
+                val artist = extractAlbumArtist(subtitleCol)
+                    ?: subtitle.substringBefore("•").trim().takeIf {
+                        it.isNotBlank() && !YTMusicTextUtils.isTypeWord(it)
+                    }
+                    ?: ""
+                out += ParsedItem.Album(browseId, title, artist, thumb)
+            }
+            browseId.startsWith("UC") -> {
+                out += ParsedItem.Artist(browseId, title, thumb)
+            }
         }
     }
 
@@ -252,37 +261,88 @@ internal object YTMusicSearchParser {
             ?.optString("browseId")
             ?.takeIf { it.isNotBlank() && it != "null" }
             ?: extractBrowseId(r) ?: return
-        val subtitle = YTMusicTextUtils.runsText(r.optJSONObject("subtitle"))
+        val subtitleCol = r.optJSONObject("subtitle")
+        val subtitle = YTMusicTextUtils.runsText(subtitleCol)
         val thumb = YTMusicThumbnailUtils.thumbnailOf(r.optJSONObject("thumbnailRenderer"))
-        val author = subtitle.substringBefore("•").trim()
 
         when {
-            browseId.startsWith("MPREb_") -> out += ParsedItem.Album(
-                browseId, title, author, thumb
-            )
-            browseId.startsWith("VL") -> out += ParsedItem.Playlist(
-                browseId, title, author.ifBlank { "Playlist" }, thumb
-            )
-            browseId.startsWith("UC") -> out += ParsedItem.Artist(
-                browseId, title, thumb
-            )
+            browseId.startsWith("MPREb_") -> {
+                val artist = extractAlbumArtist(subtitleCol)
+                    ?: subtitle.substringBefore("•").trim().takeIf {
+                        it.isNotBlank() && !YTMusicTextUtils.isTypeWord(it)
+                    }
+                    ?: ""
+                out += ParsedItem.Album(browseId, title, artist, thumb)
+            }
+            browseId.startsWith("VL") -> {
+                val owner = extractPlaylistOwner(subtitleCol)
+                    ?: subtitle.substringBefore("•").trim().takeIf {
+                        it.isNotBlank() && !YTMusicTextUtils.isTypeWord(it)
+                    }
+                    ?: "Playlist"
+                out += ParsedItem.Playlist(browseId, title, owner, thumb)
+            }
+            browseId.startsWith("UC") -> {
+                out += ParsedItem.Artist(browseId, title, thumb)
+            }
         }
+    }
+
+    // ================= AUTHOR EXTRACTION =================
+
+    /**
+     * Album artist: only runs with browseId starting with "UC" or "MPAD"
+     * are considered real artists. This is what fixes the "Single" bug —
+     * because "Single" has no browseId (it's just text), it's filtered out.
+     */
+    private fun extractAlbumArtist(subtitleCol: JSONObject?): String? {
+        val runs = subtitleCol?.optJSONObject("text")?.optJSONArray("runs")
+            ?: subtitleCol?.optJSONArray("runs") ?: return null
+
+        val artists = mutableListOf<String>()
+        for (i in 0 until runs.length()) {
+            val run = runs.optJSONObject(i) ?: continue
+            val text = run.optString("text").trim()
+                .trim(' ', ',', '&', '·', '•', '-', '/', ';', '\n', '\t')
+            if (text.isBlank() || text == "•" || text == "·") continue
+
+            val browseId = run.optJSONObject("navigationEndpoint")
+                ?.optJSONObject("browseEndpoint")?.optString("browseId")
+
+            if (browseId?.startsWith("UC") == true || browseId?.startsWith("MPAD") == true) {
+                if (text !in artists) artists += text
+            }
+        }
+        return if (artists.isNotEmpty()) artists.joinToString(", ") else null
+    }
+
+    /**
+     * Playlist owner: same logic but only "UC" prefixes (playlist owner is
+     * always a channel, not an artist page).
+     */
+    private fun extractPlaylistOwner(subtitleCol: JSONObject?): String? {
+        val runs = subtitleCol?.optJSONObject("text")?.optJSONArray("runs")
+            ?: subtitleCol?.optJSONArray("runs") ?: return null
+
+        val owners = mutableListOf<String>()
+        for (i in 0 until runs.length()) {
+            val run = runs.optJSONObject(i) ?: continue
+            val text = run.optString("text").trim()
+                .trim(' ', ',', '&', '·', '•', '-', '/', ';', '\n', '\t')
+            if (text.isBlank() || text == "•" || text == "·") continue
+
+            val browseId = run.optJSONObject("navigationEndpoint")
+                ?.optJSONObject("browseEndpoint")?.optString("browseId")
+
+            if (browseId?.startsWith("UC") == true) {
+                if (text !in owners) owners += text
+            }
+        }
+        return if (owners.isNotEmpty()) owners.joinToString(", ") else null
     }
 
     // ================= ARTIST / CHANNEL =================
 
-    /**
-     * Extracts the artist list.
-     *
-     * First pass: iterate runs, break on duration/album/playlist, skip
-     * type words, dates, years, view counts.
-     *
-     * Fallback (no runs): split the raw subtitle by "•" and apply the SAME
-     * filters to each segment. This is what fixes the
-     *   "Música • 3:45"
-     * case that used to leak through as an artist name — now all segments
-     * get filtered and null is returned, so the enricher kicks in.
-     */
     private fun extractArtistFromSubtitle(
         subtitleCol: JSONObject?,
         subtitleText: String,
@@ -318,7 +378,6 @@ internal object YTMusicSearchParser {
             if (artists.isNotEmpty()) return artists.joinToString(", ")
         }
 
-        // Fallback: split by "•" and filter each segment.
         val segments = subtitleText
             .split("•")
             .map { it.trim().trim(',', '&', '·', '•', '-', '/', ';', ' ') }

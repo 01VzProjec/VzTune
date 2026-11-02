@@ -16,14 +16,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Fixes fake/missing artist names.
+ * Fixes fake/missing metadata after a search:
  *
- * Three-step cascade (all cached per videoId):
- *   1. InnerTube.player    -> videoDetails.author (fast, YT Music native)
- *   2. YouTube NewPipe     -> findVideoMetadata (smart match by id/title/duration/thumb)
- *   3. If both fail, leave the track as-is.
+ *   SongHit    -> real artist via player endpoint (or YouTube NewPipe fallback)
+ *   AlbumHit   -> real artist + cover via album browse response
+ *   PlaylistHit-> mosaic thumbnails from the first 4 tracks + real cover
  *
- * Semaphore(10) keeps it fast without hammering the endpoints.
+ * All work is cached, so the same id never gets re-processed.
  */
 @Singleton
 class YTMusicEnricher @Inject constructor(
@@ -43,8 +42,17 @@ class YTMusicEnricher @Inject constructor(
     }
 
     private suspend fun enrichSingleHit(hit: SearchHit): SearchHit {
-        if (hit !is SearchHit.SongHit) return hit
+        return when (hit) {
+            is SearchHit.SongHit -> enrichSongHit(hit)
+            is SearchHit.AlbumHit -> enrichAlbumHit(hit)
+            is SearchHit.PlaylistHit -> enrichPlaylistHit(hit)
+            else -> hit
+        }
+    }
 
+    // ================= SONG =================
+
+    private suspend fun enrichSongHit(hit: SearchHit.SongHit): SearchHit {
         val track = hit.track
         val cachedAuthor = YTMusicCaches.authorCache[track.id]
         if (!cachedAuthor.isNullOrBlank()) {
@@ -53,13 +61,11 @@ class YTMusicEnricher @Inject constructor(
             } else hit
         }
 
-        // Fast path: the parser already got a plausible artist.
         if (!isLikelyMetadata(track.artist)) {
             YTMusicCaches.authorCache[track.id] = track.artist
             return hit
         }
 
-        // Cascade: player -> YouTube NewPipe.
         val real = resolveAuthor(track)
         if (real.isNullOrBlank()) return hit
 
@@ -67,13 +73,7 @@ class YTMusicEnricher @Inject constructor(
         return SearchHit.SongHit(track.copy(artist = real))
     }
 
-    /**
-     * 1) InnerTube.player -> videoDetails.author
-     * 2) YouTube NewPipe findVideoMetadata -> channelName
-     * Returns null if neither yields a clean name.
-     */
     private suspend fun resolveAuthor(track: Track): String? {
-        // Step 1: InnerTube player.
         runCatching {
             val playerJson = InnerTube.player(track.id)
             val fromPlayer = extractArtistFromPlayer(playerJson)
@@ -82,7 +82,6 @@ class YTMusicEnricher @Inject constructor(
             Log.d(TAG, "InnerTube player failed for ${track.id}: ${e.message}")
         }
 
-        // Step 2: YouTube NewPipe.
         return runCatching {
             youTubeRepository.findVideoMetadata(
                 videoId = track.id,
@@ -95,6 +94,54 @@ class YTMusicEnricher @Inject constructor(
             Log.w(TAG, "YouTube fallback failed for ${track.id}: ${e.message}")
             null
         }
+    }
+
+    // ================= ALBUM =================
+
+    private suspend fun enrichAlbumHit(hit: SearchHit.AlbumHit): SearchHit {
+        val album = hit.album
+
+        val needsArtist = album.artist.isBlank() ||
+            YTMusicTextUtils.isTypeWord(album.artist) ||
+            isLikelyMetadata(album.artist)
+        val needsThumb = album.thumbnailUrl.isNullOrBlank()
+
+        if (!needsArtist && !needsThumb) return hit
+
+        val header = YTMusicAlbumParser.parseAlbumHeader(album.id) ?: return hit
+
+        val newArtist = if (needsArtist && !header.artist.isNullOrBlank()) {
+            header.artist
+        } else {
+            album.artist
+        }
+        val newThumb = if (needsThumb) header.coverUrl ?: album.thumbnailUrl else album.thumbnailUrl
+
+        return SearchHit.AlbumHit(
+            album.copy(
+                artist = newArtist,
+                thumbnailUrl = newThumb,
+            )
+        )
+    }
+
+    // ================= PLAYLIST =================
+
+    private suspend fun enrichPlaylistHit(hit: SearchHit.PlaylistHit): SearchHit {
+        val playlist = hit.playlist
+
+        // Skip YouTube playlists (NewPipe already provides the mosaic).
+        if (playlist.id.startsWith("YT:")) return hit
+
+        val mosaic = YTMusicPlaylistMosaic.fetchMosaic(playlist.id)
+        if (mosaic.isEmpty() && playlist.thumbnailUrl != null) return hit
+
+        return SearchHit.PlaylistHit(
+            playlist.copy(
+                thumbnailUrl = playlist.thumbnailUrl ?: mosaic.firstOrNull(),
+                mosaicThumbnails = mosaic,
+            )
+        )
     }
 
     // ================= TRACKS (album / playlist / queue) =================
@@ -158,7 +205,6 @@ class YTMusicEnricher @Inject constructor(
             }
         }
 
-        // Fallback to YouTube NewPipe for artist / thumbnail.
         if (isLikelyMetadata(working.artist) || needsThumb) {
             val fromYt = runCatching {
                 youTubeRepository.findVideoMetadata(

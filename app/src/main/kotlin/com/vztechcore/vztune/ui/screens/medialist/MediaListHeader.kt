@@ -2,12 +2,30 @@ package com.vztechcore.vztune.ui.screens.medialist
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -24,10 +42,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.search.SortOrder
+import com.vztechcore.vztune.ui.components.PlayingOverlayLarge
+import com.vztechcore.vztune.ui.components.PlayingOverlayPaused
 
 @Composable
 internal fun MediaListExpandedHeader(
     state: MediaListUiState,
+    isThisListPlaying: Boolean,
+    isThisListPaused: Boolean,
     onBackClick: () -> Unit,
     onTabSelected: (MediaListTab) -> Unit,
     onPlayAllClick: () -> Unit,
@@ -56,17 +78,16 @@ internal fun MediaListExpandedHeader(
             contentAlignment = Alignment.Center,
         ) {
             if (state.mosaicThumbnails.size >= 4) {
-                PlaylistMosaicLarge(state.mosaicThumbnails)
+                PlaylistMosaicLarge(
+                    thumbnails = state.mosaicThumbnails,
+                    isPlaying = isThisListPlaying,
+                    isPaused = isThisListPaused,
+                )
             } else {
-                AsyncImage(
-                    model = state.thumbnailUrl,
-                    contentDescription = state.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(alpha = 0.1f)),
+                MediaListCover(
+                    imageUrl = state.thumbnailUrl,
+                    isPlaying = isThisListPlaying,
+                    isPaused = isThisListPaused,
                 )
             }
         }
@@ -187,6 +208,7 @@ internal fun MediaListCollapsedHeader(
     title: String,
     thumbnailUrl: String?,
     onBackClick: () -> Unit,
+    onSearchClick: () -> Unit,
 ) {
     Row(
         Modifier
@@ -220,18 +242,54 @@ internal fun MediaListCollapsedHeader(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        IconButton(onClick = { }) { Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White) }
-        IconButton(onClick = { }) { Icon(Icons.Filled.Search, contentDescription = "Pesquisar", tint = Color.White) }
+        // Only the search icon (open search overlay)
+        IconButton(onClick = onSearchClick) {
+            Icon(Icons.Filled.Search, contentDescription = "Pesquisar", tint = Color.White)
+        }
     }
 }
 
 @Composable
-internal fun PlaylistMosaicLarge(thumbnails: List<String>) {
+private fun MediaListCover(
+    imageUrl: String?,
+    isPlaying: Boolean,
+    isPaused: Boolean,
+) {
+    val shape = RoundedCornerShape(12.dp)
     Box(
         Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(shape)
+            .background(Color.White.copy(alpha = 0.1f))
+    ) {
+        if (imageUrl != null) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        when {
+            isPlaying -> PlayingOverlayLarge(shape)
+            isPaused -> PlayingOverlayPaused(shape)
+        }
+    }
+}
+
+@Composable
+internal fun PlaylistMosaicLarge(
+    thumbnails: List<String>,
+    isPlaying: Boolean = false,
+    isPaused: Boolean = false,
+) {
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+            .clip(shape)
             .background(Color.White.copy(alpha = 0.1f)),
     ) {
         Row(Modifier.fillMaxSize()) {
@@ -263,6 +321,10 @@ internal fun PlaylistMosaicLarge(thumbnails: List<String>) {
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 )
             }
+        }
+        when {
+            isPlaying -> PlayingOverlayLarge(shape)
+            isPaused -> PlayingOverlayPaused(shape)
         }
     }
 }

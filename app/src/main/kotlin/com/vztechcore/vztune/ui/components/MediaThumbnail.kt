@@ -92,12 +92,8 @@ fun MediaThumbnail(
     }
 }
 
-/**
- * Big equalizer centered on the thumbnail.
- * Shown while the track is actively playing.
- */
 @Composable
-private fun PlayingOverlayLarge(clipShape: Shape) {
+internal fun PlayingOverlayLarge(clipShape: Shape) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -123,12 +119,8 @@ private fun PlayingOverlayLarge(clipShape: Shape) {
     }
 }
 
-/**
- * Paused state: dark overlay + a Pause icon in the center + a tiny
- * equalizer in the bottom-end corner (looks "frozen").
- */
 @Composable
-private fun PlayingOverlayPaused(clipShape: Shape) {
+internal fun PlayingOverlayPaused(clipShape: Shape) {
     Box(
         modifier = Modifier
             .fillMaxSize()

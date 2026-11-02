@@ -63,6 +63,15 @@ fun MediaListScreen(
     var showSearchOverlay by remember { mutableStateOf(false) }
     var shuffleJob by remember { mutableStateOf<Job?>(null) }
 
+    // Is the currently playing track part of this playlist/album?
+    val currentTrackId = nowPlaying.currentTrack?.id
+    val currentTrackSource = nowPlaying.currentTrack?.source
+    val isThisListPlaying = remember(currentTrackId, currentTrackSource, state.allTracks) {
+        currentTrackId != null && currentTrackSource != null &&
+            state.allTracks.any { it.id == currentTrackId && it.source == currentTrackSource }
+    }
+    val isThisListPaused = isThisListPlaying && !nowPlaying.isPlaying
+
     val isCollapsed by remember {
         derivedStateOf {
             listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 250
@@ -117,6 +126,8 @@ fun MediaListScreen(
             item {
                 MediaListExpandedHeader(
                     state = state,
+                    isThisListPlaying = isThisListPlaying && nowPlaying.isPlaying,
+                    isThisListPaused = isThisListPaused,
                     onBackClick = onBackClick,
                     onTabSelected = onTabSelected,
                     onPlayAllClick = onPlayAllClick,
@@ -198,6 +209,7 @@ fun MediaListScreen(
                 title = state.title,
                 thumbnailUrl = state.thumbnailUrl ?: state.mosaicThumbnails.firstOrNull(),
                 onBackClick = onBackClick,
+                onSearchClick = { showSearchOverlay = true },
             )
         }
 

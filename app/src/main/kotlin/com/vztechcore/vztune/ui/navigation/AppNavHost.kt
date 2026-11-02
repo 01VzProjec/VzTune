@@ -94,6 +94,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onTrackClick = vm::onTrackClick,
                         onPlayAllClick = vm::onPlayAll,
                         onShuffleClick = vm::onShuffle,
+                        onSortSelected = vm::onSortOrderSelected,
                     )
                 }
             }

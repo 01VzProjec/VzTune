@@ -19,14 +19,14 @@
       "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/music/MusicRepository.kt",
       "selection": {
         "end": {
-          "column": 1,
-          "index": 10329,
-          "line": 278
+          "column": 9,
+          "index": 6397,
+          "line": 170
         },
         "start": {
-          "column": 1,
-          "index": 10329,
-          "line": 278
+          "column": 9,
+          "index": 6397,
+          "line": 170
         }
       }
     },
@@ -50,13 +50,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 4235,
-          "line": 110
+          "index": 4706,
+          "line": 120
         },
         "start": {
           "column": 1,
-          "index": 4235,
-          "line": 110
+          "index": 4706,
+          "line": 120
         }
       }
     },
@@ -104,7 +104,52 @@
           "line": 23
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListUiState.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 3191,
+          "line": 91
+        },
+        "start": {
+          "column": 1,
+          "index": 3191,
+          "line": 91
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreen.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 21400,
+          "line": 529
+        },
+        "start": {
+          "column": 1,
+          "index": 21400,
+          "line": 529
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt",
+      "selection": {
+        "end": {
+          "column": 53,
+          "index": 5616,
+          "line": 111
+        },
+        "start": {
+          "column": 53,
+          "index": 5616,
+          "line": 111
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/main/MiniPlayerViewModel.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/music/MusicRepository.kt"
 }

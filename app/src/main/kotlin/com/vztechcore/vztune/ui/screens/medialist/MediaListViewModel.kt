@@ -9,6 +9,7 @@ import com.vztechcore.vztune.data.player.PlayerController
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,7 +59,17 @@ class MediaListViewModel @Inject constructor(
                         )
                     }
                 } else {
-                    val playlist = ytMusicRepository.browsePlaylist(route.id)
+                    // First attempt
+                    var playlist = ytMusicRepository.browsePlaylist(route.id)
+
+                    // Retry: if playlist came back empty, wait 1s and try again.
+                    // (User hypothesis: sometimes YT Music returns empty on
+                    // first call due to race condition — this gives it a second shot.)
+                    if (playlist.tracks.isEmpty()) {
+                        delay(1000)
+                        playlist = ytMusicRepository.browsePlaylist(route.id)
+                    }
+
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -81,27 +92,26 @@ class MediaListViewModel @Inject constructor(
         _uiState.update { it.copy(selectedTab = tab) }
     }
 
-    /**
-     * Tap a track -> build a queue starting at THAT position, using the
-     * *filtered* tracks of the current tab. So:
-     *   - Tudo     -> mixed songs + videos, from tapped index to the end
-     *   - Músicas  -> only songs, from tapped index
-     *   - Vídeos   -> only videos, from tapped index
-     *   - Album    -> album tracks in order (no tabs, so filteredTracks == all)
-     */
+    fun onSortOrderSelected(order: SortOrder) {
+        if (order == _uiState.value.sortOrder) return
+        _uiState.update { it.copy(sortOrder = order) }
+    }
+
     fun onTrackClick(track: Track) {
-        val tracks = _uiState.value.filteredTracks
-        val idx = tracks.indexOfFirst { it.id == track.id && it.source == track.source }
+        // When the user taps a track, we use the FULL list from the current tab
+        // (sorted) so the queue order matches what the user sees.
+        val sorted = _uiState.value.applySort(_uiState.value.filteredTracks)
+        val idx = sorted.indexOfFirst { it.id == track.id && it.source == track.source }
         if (idx >= 0) {
-            playerController.playQueue(tracks, idx)
+            playerController.playQueue(sorted, idx)
         } else {
             playerController.playQueue(listOf(track), 0)
         }
     }
 
     fun onPlayAll() {
-        val tracks = _uiState.value.filteredTracks
-        if (tracks.isNotEmpty()) playerController.playQueue(tracks, 0)
+        val sorted = _uiState.value.applySort(_uiState.value.filteredTracks)
+        if (sorted.isNotEmpty()) playerController.playQueue(sorted, 0)
     }
 
     fun onShuffle() {

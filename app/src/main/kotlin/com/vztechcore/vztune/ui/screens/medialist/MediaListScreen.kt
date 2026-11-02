@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,14 +31,21 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,6 +62,7 @@ import com.vztechcore.vztune.ui.components.MediaThumbnail
 import com.vztechcore.vztune.ui.components.ThumbnailShape
 import com.vztechcore.vztune.ui.components.TrackSubtitle
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MediaListScreen(
     state: MediaListUiState,
@@ -64,16 +71,34 @@ fun MediaListScreen(
     onTrackClick: (Track) -> Unit,
     onPlayAllClick: () -> Unit,
     onShuffleClick: () -> Unit,
+    onSortSelected: (SortOrder) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
     val nowPlaying = LocalNowPlaying.current
+    var showSortSheet by remember { mutableStateOf(false) }
 
     val isCollapsed by remember {
         derivedStateOf {
             listState.firstVisibleItemIndex > 0 ||
                 listState.firstVisibleItemScrollOffset > 250
         }
+    }
+
+    // Apply sort. `remember` prevents SHUFFLE from re-running on every frame.
+    val displayedTracks = remember(state.filteredTracks, state.sortOrder) {
+        state.applySort(state.filteredTracks)
+    }
+
+    if (showSortSheet) {
+        SortBottomSheet(
+            currentSort = state.sortOrder,
+            onSelect = {
+                onSortSelected(it)
+                showSortSheet = false
+            },
+            onDismiss = { showSortSheet = false },
+        )
     }
 
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
@@ -89,6 +114,7 @@ fun MediaListScreen(
                     onTabSelected = onTabSelected,
                     onPlayAllClick = onPlayAllClick,
                     onShuffleClick = onShuffleClick,
+                    onSortClick = { showSortSheet = true },
                 )
             }
 
@@ -103,20 +129,19 @@ fun MediaListScreen(
                         Text(state.errorMessage, color = Color.Red)
                     }
                 }
-                state.filteredTracks.isEmpty() -> item {
+                displayedTracks.isEmpty() -> item {
                     Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                         Text("Nenhuma faixa por aqui.", color = Color.White.copy(alpha = 0.6f))
                     }
                 }
                 else -> itemsIndexed(
-                    items = state.filteredTracks,
+                    items = displayedTracks,
                     key = { _, t -> t.id },
                 ) { index, track ->
                     val isCurrent = nowPlaying.isCurrent(track.id, track.source)
                     val isPlaying = isCurrent && nowPlaying.isPlaying
                     val isPaused = isCurrent && !nowPlaying.isPlaying
 
-                    // In a playlist, when the "Vídeos" tab is active, render as 16:9 card
                     val useVideoLayout = state.selectedTab == MediaListTab.VIDEOS
 
                     if (useVideoLayout) {
@@ -165,6 +190,7 @@ private fun MediaListExpandedHeader(
     onTabSelected: (MediaListTab) -> Unit,
     onPlayAllClick: () -> Unit,
     onShuffleClick: () -> Unit,
+    onSortClick: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
         Row(
@@ -181,10 +207,7 @@ private fun MediaListExpandedHeader(
 
         Spacer(Modifier.height(8.dp))
 
-        Box(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            contentAlignment = Alignment.Center,
-        ) {
+        Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
             if (state.mosaicThumbnails.size >= 4) {
                 PlaylistMosaicLarge(state.mosaicThumbnails)
             } else {
@@ -192,10 +215,7 @@ private fun MediaListExpandedHeader(
                     model = state.thumbnailUrl,
                     contentDescription = state.title,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(240.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(alpha = 0.1f)),
+                    modifier = Modifier.size(240.dp).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.1f)),
                 )
             }
         }
@@ -232,7 +252,6 @@ private fun MediaListExpandedHeader(
             )
         }
 
-        // Tabs only for playlists
         if (state.showTabs) {
             Spacer(Modifier.height(16.dp))
             MediaListTabs(state.selectedTab, onTabSelected)
@@ -263,12 +282,67 @@ private fun MediaListExpandedHeader(
             }
 
             Spacer(Modifier.weight(1f))
-            IconButton(onClick = { /* TODO */ }) {
-                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Ordenar", tint = Color.White)
+
+            IconButton(onClick = onSortClick) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Sort,
+                    contentDescription = "Ordenar",
+                    tint = Color.White,
+                )
             }
         }
 
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+// ================= SORT BOTTOM SHEET =================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SortBottomSheet(
+    currentSort: SortOrder,
+    onSelect: (SortOrder) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Color(0xFF141B30),
+        contentColor = Color.White,
+    ) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 32.dp)) {
+            Text(
+                text = "Ordenar por",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+            )
+            SortOrder.entries.forEach { option ->
+                Row(
+                    Modifier.fillMaxWidth().clickable { onSelect(option) }.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = option == currentSort,
+                        onClick = { onSelect(option) },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Color(0xFF60A5FA),
+                            unselectedColor = Color.White.copy(alpha = 0.5f),
+                        ),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = option.label,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White,
+                        fontWeight = if (option == currentSort) FontWeight.Bold else FontWeight.Normal,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -358,7 +432,6 @@ private fun TrackRow(
         if (index != null) {
             Text("$index", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.5f), modifier = Modifier.width(24.dp))
         }
-
         if (track.thumbnailUrl == null && index != null) {
             Box(Modifier.size(52.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
                 Text("$index", color = Color.White.copy(alpha = 0.4f), style = MaterialTheme.typography.titleMedium)
@@ -373,9 +446,7 @@ private fun TrackRow(
                 isPaused = isPaused,
             )
         }
-
         Spacer(Modifier.width(12.dp))
-
         Column(Modifier.weight(1f)) {
             Text(track.title, style = MaterialTheme.typography.titleSmall, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(2.dp))
@@ -387,7 +458,7 @@ private fun TrackRow(
     }
 }
 
-// ================= VIDEO TRACK CARD (16:9) =================
+// ================= VIDEO TRACK CARD =================
 
 @Composable
 private fun VideoTrackCard(
@@ -397,10 +468,7 @@ private fun VideoTrackCard(
     onClick: () -> Unit,
 ) {
     Column(
-        Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         MediaThumbnail(
             imageUrl = track.thumbnailUrl,
@@ -412,21 +480,9 @@ private fun VideoTrackCard(
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(
-                    text = track.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Text(track.title, style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
-                TrackSubtitle(
-                    track = track,
-                    style = MaterialTheme.typography.bodySmall,
-                    prefixColor = Color.White.copy(alpha = 0.55f),
-                    artistColor = Color.White.copy(alpha = 0.6f),
-                )
+                TrackSubtitle(track = track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
             }
             IconButton(onClick = { /* TODO */ }) {
                 Icon(Icons.Filled.MoreVert, contentDescription = "Mais opções", tint = Color.White.copy(alpha = 0.7f))

@@ -180,22 +180,27 @@ class MusicRepository @Inject constructor(
                 semaphore.withPermit {
                     val count = hit.playlist.trackCount
 
-                    // Fast path: trust the count from search.
+                    // Fast path: count from search already confirms
                     if (count != null && count > 0) return@withPermit hit
 
-                    // Slow path: verify with browse.
+                    // Slow path: browse with 5s timeout
                     val hasTracks = runCatching {
-                        withTimeoutOrNull(4000L) {
+                        withTimeoutOrNull(5000L) {
                             ytMusicRepository.browsePlaylist(hit.playlist.id)
                                 .tracks.isNotEmpty()
                         }
-                    }.getOrNull() ?: false
+                    }.getOrNull()
 
-                    if (!hasTracks) {
-                        Log.d(TAG, "skip empty playlist: ${hit.playlist.id} '${hit.playlist.title}' (count=$count)")
-                        null
-                    } else {
-                        hit
+                    when {
+                        // null == timeout/error -> keep (fail-open)
+                        hasTracks == null -> hit
+                        // false == empty confirmed -> drop
+                        hasTracks == false -> {
+                            Log.d(TAG, "skip empty playlist: ${hit.playlist.id} '${hit.playlist.title}' (count=$count)")
+                            null
+                        }
+                        // true -> keep
+                        else -> hit
                     }
                 }
             }

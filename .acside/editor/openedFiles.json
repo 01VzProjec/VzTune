@@ -184,14 +184,14 @@
       "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/gradle/libs.versions.toml",
       "selection": {
         "end": {
-          "column": 100,
-          "index": 6640,
-          "line": 149
+          "column": 66,
+          "index": 7407,
+          "line": 163
         },
         "start": {
-          "column": 100,
-          "index": 6640,
-          "line": 149
+          "column": 66,
+          "index": 7407,
+          "line": 163
         }
       }
     },
@@ -241,5 +241,5 @@
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreen.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/build.gradle.kts"
 }

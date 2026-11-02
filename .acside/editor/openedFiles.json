@@ -5,13 +5,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 504,
-          "line": 15
+          "index": 359,
+          "line": 11
         },
         "start": {
           "column": 1,
-          "index": 504,
-          "line": 15
+          "index": 359,
+          "line": 11
         }
       }
     },
@@ -34,14 +34,14 @@
       "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicPlaylistMosaic.kt",
       "selection": {
         "end": {
-          "column": 1,
-          "index": 1759,
-          "line": 52
+          "column": 22,
+          "index": 771,
+          "line": 21
         },
         "start": {
-          "column": 1,
-          "index": 1759,
-          "line": 52
+          "column": 16,
+          "index": 765,
+          "line": 21
         }
       }
     },
@@ -65,16 +65,31 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 11979,
-          "line": 323
+          "index": 11922,
+          "line": 325
         },
         "start": {
           "column": 1,
-          "index": 11979,
-          "line": 323
+          "index": 11922,
+          "line": 325
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/components/SearchResultCards.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 11976,
+          "line": 344
+        },
+        "start": {
+          "column": 1,
+          "index": 11976,
+          "line": 344
         }
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicEnricher.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/components/SearchResultCards.kt"
 }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -29,15 +30,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.vztechcore.vztune.core.domain.music.Source
+import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.search.SearchHit
+import com.vztechcore.vztune.ui.components.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.MediaThumbnail
 import com.vztechcore.vztune.ui.components.ThumbnailShape
 import com.vztechcore.vztune.ui.components.TrackSubtitle
-import com.vztechcore.vztune.ui.components.LocalNowPlaying
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,11 +105,9 @@ fun SearchResultsContent(
 }
 
 @Composable
-fun SearchResultCard(
-    hit: SearchHit,
-    onClick: () -> Unit,
-) {
+fun SearchResultCard(hit: SearchHit, onClick: () -> Unit) {
     val nowPlaying = LocalNowPlaying.current
+
     when (hit) {
         is SearchHit.SongHit -> {
             val isPlaying = nowPlaying.isCurrent(hit.track.id, hit.track.source)
@@ -128,6 +128,7 @@ fun SearchResultCard(
                 onClick = onClick,
             )
         }
+
         is SearchHit.VideoHit -> {
             val isPlaying = nowPlaying.isCurrent(hit.track.id, hit.track.source)
             RowCard(
@@ -147,8 +148,10 @@ fun SearchResultCard(
                 onClick = onClick,
             )
         }
+
         is SearchHit.PlaylistHit -> RowCard(
             imageUrl = hit.playlist.thumbnailUrl,
+            mosaic = hit.playlist.mosaicThumbnails,
             shape = ThumbnailShape.SQUARE,
             title = hit.playlist.title,
             subtitle = {
@@ -164,6 +167,7 @@ fun SearchResultCard(
             isPlaying = false,
             onClick = onClick,
         )
+
         is SearchHit.ArtistHit -> RowCard(
             imageUrl = hit.artist.thumbnailUrl,
             shape = ThumbnailShape.CIRCLE,
@@ -180,6 +184,7 @@ fun SearchResultCard(
             isPlaying = false,
             onClick = onClick,
         )
+
         is SearchHit.AlbumHit -> RowCard(
             imageUrl = hit.album.thumbnailUrl,
             shape = ThumbnailShape.SQUARE,
@@ -241,6 +246,7 @@ private fun RowCard(
     durationLabel: String?,
     isPlaying: Boolean,
     onClick: () -> Unit,
+    mosaic: List<String> = emptyList(),
 ) {
     Row(
         Modifier
@@ -250,13 +256,17 @@ private fun RowCard(
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MediaThumbnail(
-            imageUrl = imageUrl,
-            shape = shape,
-            size = 56.dp,
-            cornerRadius = 8.dp,
-            isPlaying = isPlaying,   // ← equalizer aparece aqui, não no mini player
-        )
+        if (mosaic.size >= 4) {
+            PlaylistMosaic(mosaic)
+        } else {
+            MediaThumbnail(
+                imageUrl = imageUrl,
+                shape = shape,
+                size = 56.dp,
+                cornerRadius = 8.dp,
+                isPlaying = isPlaying,
+            )
+        }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -276,6 +286,53 @@ private fun RowCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.White.copy(alpha = 0.5f),
             )
+        }
+    }
+}
+
+/**
+ * 2x2 grid of the first four playlist thumbnails.
+ * Layout:
+ *   [0] [1]
+ *   [2] [3]
+ */
+@Composable
+private fun PlaylistMosaic(thumbnails: List<String>) {
+    Box(
+        Modifier
+            .size(56.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.White.copy(alpha = 0.06f)),
+    ) {
+        Row(Modifier.fillMaxSize()) {
+            Column(Modifier.weight(1f)) {
+                AsyncImage(
+                    model = thumbnails.getOrNull(0),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+                AsyncImage(
+                    model = thumbnails.getOrNull(2),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+            }
+            Column(Modifier.weight(1f)) {
+                AsyncImage(
+                    model = thumbnails.getOrNull(1),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+                AsyncImage(
+                    model = thumbnails.getOrNull(3),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+            }
         }
     }
 }

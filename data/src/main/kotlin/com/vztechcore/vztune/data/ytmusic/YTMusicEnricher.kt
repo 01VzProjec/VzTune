@@ -18,9 +18,9 @@ import javax.inject.Singleton
 /**
  * Fixes fake/missing metadata after a search:
  *
- *   SongHit    -> real artist via player endpoint (or YouTube NewPipe fallback)
- *   AlbumHit   -> real artist + cover via album browse response
- *   PlaylistHit-> mosaic thumbnails from the first 4 tracks + real cover
+ *   SongHit     -> real artist via player endpoint (or YouTube NewPipe fallback)
+ *   AlbumHit    -> real artist + cover via album browse response
+ *   PlaylistHit -> mosaic thumbnails from the first 4 tracks + real cover
  *
  * All work is cached, so the same id never gets re-processed.
  */
@@ -115,7 +115,11 @@ class YTMusicEnricher @Inject constructor(
         } else {
             album.artist
         }
-        val newThumb = if (needsThumb) header.coverUrl ?: album.thumbnailUrl else album.thumbnailUrl
+        val newThumb = if (needsThumb) {
+            header.coverUrl ?: album.thumbnailUrl
+        } else {
+            album.thumbnailUrl
+        }
 
         return SearchHit.AlbumHit(
             album.copy(
@@ -129,8 +133,6 @@ class YTMusicEnricher @Inject constructor(
 
     private suspend fun enrichPlaylistHit(hit: SearchHit.PlaylistHit): SearchHit {
         val playlist = hit.playlist
-
-        // Skip YouTube playlists (NewPipe already provides the mosaic).
         if (playlist.id.startsWith("YT:")) return hit
 
         val mosaic = YTMusicPlaylistMosaic.fetchMosaic(playlist.id)
@@ -144,7 +146,7 @@ class YTMusicEnricher @Inject constructor(
         )
     }
 
-    // ================= TRACKS (album / playlist / queue) =================
+    // ================= TRACKS =================
 
     suspend fun enrichTracks(
         items: List<Track>,
@@ -261,7 +263,7 @@ class YTMusicEnricher @Inject constructor(
         return working
     }
 
-    // ================= PUBLIC UTILITIES =================
+    // ================= UTILITIES =================
 
     fun isLikelyMetadata(s: String): Boolean {
         if (s.isBlank()) return true

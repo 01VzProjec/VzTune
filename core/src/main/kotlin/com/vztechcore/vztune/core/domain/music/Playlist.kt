@@ -7,10 +7,6 @@ data class Playlist(
     val thumbnailUrl: String? = null,
     val trackCount: Int? = null,
     val source: Source,
-    /**
-     * Up to 4 thumbnails of the first tracks in the playlist.
-     * Used by the UI to render a 2x2 mosaic when the playlist has no
-     * custom cover (auto-generated playlists, radio, etc.).
-     */
+    // Até 4 thumbnails das primeiras faixas para o mosaico 2x2.
     val mosaicThumbnails: List<String> = emptyList(),
 )

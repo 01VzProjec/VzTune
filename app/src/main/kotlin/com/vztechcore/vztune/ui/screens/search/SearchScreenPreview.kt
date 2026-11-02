@@ -1,65 +1,43 @@
-package com.vztechcore.vztune.ui.screens.medialist
+package com.vztechcore.vztune.ui.screens.search
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
-import com.vztechcore.vztune.core.domain.music.Source
-import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.ui.theme.VzTuneTheme
 
-@Preview(showBackground = true)
+@Preview(name = "Search - Idle", showBackground = true)
 @Composable
-private fun MediaListLoadingPreview() {
+private fun SearchIdlePreview() {
     VzTuneTheme {
-        MediaListScreen(
-            state = MediaListUiState(isLoading = true),
-            onBackClick = {},
-            onTabSelected = {},
-            onTrackClick = {},
-            onPlayAllClick = {},
-            onShuffleClick = {},
+        SearchScreen(
+            state = SearchUiState(),
+            onQueryChange = {},
+            onFocusChanged = {},
+            onFilterSelect = {},
+            onSubmit = {},
+            onRefresh = {},
+            onRemoveHistory = {},
+            onClearHistory = {},
+            onLoadMore = {},
+            onHitClick = {},
         )
     }
 }
 
-@Preview(showBackground = true)
+@Preview(name = "Search - Loading", showBackground = true)
 @Composable
-private fun MediaListContentPreview() {
+private fun SearchLoadingPreview() {
     VzTuneTheme {
-        MediaListScreen(
-            state = MediaListUiState(
-                isLoading = false,
-                title = "Daft Punk Essentials",
-                subtitle = "Vários Artistas",
-                isAlbum = false,
-                allTracks = listOf(
-                    Track(
-                        id = "1",
-                        title = "Get Lucky",
-                        artist = "Daft Punk, Pharrell Williams",
-                        durationSeconds = 369,
-                        source = Source.YOUTUBE_MUSIC,
-                    ),
-                    Track(
-                        id = "2",
-                        title = "One More Time",
-                        artist = "Daft Punk",
-                        durationSeconds = 320,
-                        source = Source.YOUTUBE_MUSIC,
-                    ),
-                    Track(
-                        id = "3",
-                        title = "Get Lucky (Official Video)",
-                        artist = "Daft Punk",
-                        durationSeconds = 248,
-                        source = Source.YOUTUBE,
-                    ),
-                ),
-            ),
-            onBackClick = {},
-            onTabSelected = {},
-            onTrackClick = {},
-            onPlayAllClick = {},
-            onShuffleClick = {},
+        SearchScreen(
+            state = SearchUiState(query = "daft punk", isLoading = true, hasSearched = true),
+            onQueryChange = {},
+            onFocusChanged = {},
+            onFilterSelect = {},
+            onSubmit = {},
+            onRefresh = {},
+            onRemoveHistory = {},
+            onClearHistory = {},
+            onLoadMore = {},
+            onHitClick = {},
         )
     }
 }

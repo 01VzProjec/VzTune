@@ -17,6 +17,7 @@ private fun MediaListLoadingPreview() {
             onTrackClick = {},
             onPlayAllClick = {},
             onShuffleClick = {},
+            onSortSelected = {}, // ADICIONADO
         )
     }
 }
@@ -60,6 +61,7 @@ private fun MediaListContentPreview() {
             onTrackClick = {},
             onPlayAllClick = {},
             onShuffleClick = {},
+            onSortSelected = {}, // ADICIONADO
         )
     }
 }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchFilter
 import com.vztechcore.vztune.ui.screens.search.components.SearchAutocomplete
 import com.vztechcore.vztune.ui.screens.search.components.SearchBar
@@ -27,6 +28,7 @@ fun SearchScreen(
     onClearHistory: () -> Unit,
     onLoadMore: () -> Unit,
     onHitClick: (com.vztechcore.vztune.core.domain.search.SearchHit) -> Unit = {},
+    onTrackInfoClick: (Track) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -59,18 +61,13 @@ fun SearchScreen(
                     onClearHistory = onClearHistory,
                 )
             }
-
             state.showIdleState -> SearchEmptyState()
-
             state.isLoading -> SearchLoadingState()
-
             state.errorMessage != null -> SearchErrorState(
                 message = state.errorMessage,
                 onRetry = onSubmit,
             )
-
             state.isEmptyResult -> SearchNoResultsState(query = state.query)
-
             else -> SearchResultsContent(
                 hits = state.hits,
                 isLoadingMore = state.isLoadingMore,
@@ -78,6 +75,7 @@ fun SearchScreen(
                 onRefresh = onRefresh,
                 onLoadMore = onLoadMore,
                 onHitClick = onHitClick,
+                onTrackInfoClick = onTrackInfoClick,
             )
         }
     }

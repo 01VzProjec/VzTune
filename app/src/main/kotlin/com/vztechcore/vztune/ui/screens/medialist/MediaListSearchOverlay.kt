@@ -3,7 +3,19 @@ package com.vztechcore.vztune.ui.screens.medialist
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -17,7 +29,12 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +55,7 @@ internal fun MediaListSearchOverlay(
     allTracks: List<Track>,
     onClose: () -> Unit,
     onTrackClick: (Track) -> Unit,
+    onTrackInfoClick: (Track) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
@@ -49,9 +67,8 @@ internal fun MediaListSearchOverlay(
     }
 
     val filtered = remember(allTracks, query) {
-        if (query.isBlank()) {
-            allTracks.sortedBy { it.title.lowercase() }
-        } else {
+        if (query.isBlank()) allTracks.sortedBy { it.title.lowercase() }
+        else {
             val q = query.lowercase().trim()
             allTracks.filter { it.title.lowercase().contains(q) }
         }
@@ -59,26 +76,13 @@ internal fun MediaListSearchOverlay(
 
     Box(Modifier.fillMaxSize().background(Color(0xFF0A0F1E))) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(
-                    Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(Color.White.copy(alpha = 0.12f))
-                        .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(50))
-                        .padding(horizontal = 14.dp),
+                    Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.12f))
+                        .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(50)).padding(horizontal = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        Icons.Filled.Search,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.55f),
-                        modifier = Modifier.size(20.dp),
-                    )
+                    Icon(Icons.Filled.Search, contentDescription = null, tint = Color.White.copy(alpha = 0.55f), modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
                     BasicTextField(
                         value = query,
@@ -91,49 +95,24 @@ internal fun MediaListSearchOverlay(
                         modifier = Modifier.weight(1f).focusRequester(focusRequester),
                         decorationBox = { inner ->
                             Box(contentAlignment = Alignment.CenterStart) {
-                                if (query.isEmpty()) {
-                                    Text(
-                                        "Pesquisar na playlist...",
-                                        color = Color.White.copy(alpha = 0.45f),
-                                        fontSize = 15.sp,
-                                    )
-                                }
+                                if (query.isEmpty()) Text("Pesquisar na playlist...", color = Color.White.copy(alpha = 0.45f), fontSize = 15.sp)
                                 inner()
                             }
                         },
                     )
                     if (query.isNotEmpty()) {
-                        Box(
-                            Modifier.size(24.dp).clip(CircleShape).clickable { query = "" },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Filled.Close,
-                                contentDescription = "Limpar",
-                                tint = Color.White.copy(alpha = 0.6f),
-                                modifier = Modifier.size(18.dp),
-                            )
+                        Box(Modifier.size(24.dp).clip(CircleShape).clickable { query = "" }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Close, contentDescription = "Limpar", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                         }
                     }
                 }
-
                 Spacer(Modifier.width(8.dp))
-
                 Box(
-                    Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.12f))
-                        .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
-                        .clickable { onClose() },
+                    Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
+                        .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape).clickable { onClose() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = "Fechar busca",
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp),
-                    )
+                    Icon(Icons.Filled.Close, contentDescription = "Fechar busca", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             }
 
@@ -146,11 +125,7 @@ internal fun MediaListSearchOverlay(
 
             if (filtered.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        "Nada encontrado pra \"$query\"",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.5f),
-                    )
+                    Text("Nada encontrado pra \"$query\"", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.5f))
                 }
             } else {
                 LazyColumn(
@@ -159,16 +134,14 @@ internal fun MediaListSearchOverlay(
                 ) {
                     itemsIndexed(filtered, key = { _, t -> t.id }) { _, track ->
                         val isCurrent = nowPlaying.isCurrent(track.id, track.source)
-                        val isPlaying = isCurrent && nowPlaying.isPlaying
-                        val isPaused = isCurrent && !nowPlaying.isPlaying
-
                         MediaListTrackRow(
                             track = track,
                             index = null,
-                            isPlaying = isPlaying,
-                            isPaused = isPaused,
+                            isPlaying = isCurrent && nowPlaying.isPlaying,
+                            isPaused = isCurrent && !nowPlaying.isPlaying,
                             onClick = { onTrackClick(track) },
-                            onMoreClick = { /* TODO: menu de opções */ },
+                            onMoreClick = { /* TODO */ },
+                            onInfoRequested = { onTrackInfoClick(track) },
                             showDragHandle = false,
                             dragHandleModifier = Modifier,
                         )

@@ -55,6 +55,7 @@ fun MediaListScreen(
     onStartShuffle: () -> Unit,
     onShuffleOnce: () -> Unit,
     onStopShuffle: () -> Unit,
+    onTrackInfoClick: (Track) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -172,6 +173,7 @@ fun MediaListScreen(
                                 isPaused = isPaused,
                                 onClick = { onTrackClick(track) },
                                 onMoreClick = { /* TODO */ },
+                                onInfoRequested = { onTrackInfoClick(track) },
                                 showDragHandle = true,
                                 dragHandleModifier = Modifier.longPressDraggableHandle(),
                                 modifier = Modifier
@@ -189,6 +191,7 @@ fun MediaListScreen(
                             isPaused = isPaused,
                             onClick = { onTrackClick(track) },
                             onMoreClick = { /* TODO */ },
+                            onInfoRequested = { onTrackInfoClick(track) },
                             showDragHandle = false,
                             dragHandleModifier = Modifier,
                             modifier = Modifier,
@@ -219,6 +222,7 @@ fun MediaListScreen(
                 allTracks = displayedTracks,
                 onClose = { showSearchOverlay = false },
                 onTrackClick = onTrackClick,
+                onTrackInfoClick = onTrackInfoClick,
             )
         }
     }

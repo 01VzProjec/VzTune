@@ -335,13 +335,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 8704,
-          "line": 199
+          "index": 8884,
+          "line": 205
         },
         "start": {
           "column": 1,
-          "index": 8704,
-          "line": 199
+          "index": 8884,
+          "line": 205
         }
       }
     },
@@ -365,13 +365,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 15709,
-          "line": 387
+          "index": 15082,
+          "line": 350
         },
         "start": {
           "column": 1,
-          "index": 15709,
-          "line": 387
+          "index": 15082,
+          "line": 350
         }
       }
     },
@@ -451,5 +451,5 @@
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreenPreview.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListTrackRow.kt"
 }

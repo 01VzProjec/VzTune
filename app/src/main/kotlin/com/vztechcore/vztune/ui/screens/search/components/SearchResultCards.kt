@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -36,7 +37,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -47,7 +47,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -94,16 +93,12 @@ fun SearchResultsContent(
         ) {
             itemsIndexed(hits, key = { _, item -> item.stableKey }) { _, hit ->
                 if (isVideoMode && hit is SearchHit.VideoHit) {
-                    VideoResultCard(
-                        hit = hit,
-                        onClick = { onHitClick(hit) },
-                        onMoreClick = { /* TODO */ },
-                    )
+                    VideoResultCard(hit = hit, onClick = { onHitClick(hit) }, onMoreClick = { })
                 } else {
                     SearchResultCard(
                         hit = hit,
                         onClick = { onHitClick(hit) },
-                        onMoreClick = { /* TODO */ },
+                        onMoreClick = { },
                         onTrackInfoClick = onTrackInfoClick,
                     )
                 }
@@ -138,12 +133,7 @@ fun SearchResultCard(
                     shape = ThumbnailShape.SQUARE,
                     title = hit.track.title,
                     subtitle = {
-                        TrackSubtitle(
-                            track = hit.track,
-                            style = MaterialTheme.typography.bodySmall,
-                            prefixColor = Color.White.copy(alpha = 0.55f),
-                            artistColor = Color.White.copy(alpha = 0.6f),
-                        )
+                        TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
                     },
                     durationLabel = formatDuration(hit.track.durationSeconds),
                     isPlaying = isCurrent && nowPlaying.isPlaying,
@@ -162,14 +152,9 @@ fun SearchResultCard(
                     shape = ThumbnailShape.SQUARE,
                     title = hit.track.title,
                     subtitle = {
-                        TrackSubtitle(
-                            track = hit.track,
-                            style = MaterialTheme.typography.bodySmall,
-                            prefixColor = Color.White.copy(alpha = 0.55f),
-                            artistColor = Color.White.copy(alpha = 0.6f),
-                        )
+                        TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
                     },
-                    durationLabel = null, // Sem duração em vídeos (regra do usuário)
+                    durationLabel = null,
                     isPlaying = isCurrent && nowPlaying.isPlaying,
                     isPaused = isCurrent && !nowPlaying.isPlaying,
                     onClick = onClick,
@@ -184,70 +169,37 @@ fun SearchResultCard(
             shape = ThumbnailShape.SQUARE,
             title = hit.playlist.title,
             subtitle = {
-                Text(
-                    "Playlist · ${hit.playlist.owner ?: ""}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Text("Playlist · ${hit.playlist.owner ?: ""}", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             },
-            durationLabel = null,
-            isPlaying = false,
-            isPaused = false,
-            onClick = onClick,
-            onMoreClick = onMoreClick,
-            showMoreButton = false, // ❌ Sem 3 pontinhos em playlist
+            durationLabel = null, isPlaying = false, isPaused = false,
+            onClick = onClick, onMoreClick = onMoreClick, showMoreButton = false,
         )
         is SearchHit.ArtistHit -> RowCard(
             imageUrl = hit.artist.thumbnailUrl,
             shape = ThumbnailShape.CIRCLE,
             title = hit.artist.name,
-            subtitle = {
-                Text("Artista", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f))
-            },
-            durationLabel = null,
-            isPlaying = false,
-            isPaused = false,
-            onClick = onClick,
-            onMoreClick = onMoreClick,
-            showMoreButton = false, // ❌ Sem 3 pontinhos em artist
+            subtitle = { Text("Artista", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f)) },
+            durationLabel = null, isPlaying = false, isPaused = false,
+            onClick = onClick, onMoreClick = onMoreClick, showMoreButton = false,
         )
         is SearchHit.AlbumHit -> RowCard(
             imageUrl = hit.album.thumbnailUrl,
             shape = ThumbnailShape.SQUARE,
             title = hit.album.title,
             subtitle = {
-                Text(
-                    "Álbum · ${hit.album.artist}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Text("Álbum · ${hit.album.artist}", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             },
-            durationLabel = null,
-            isPlaying = false,
-            isPaused = false,
-            onClick = onClick,
-            onMoreClick = onMoreClick,
-            showMoreButton = false, // ❌ Sem 3 pontinhos em album
+            durationLabel = null, isPlaying = false, isPaused = false,
+            onClick = onClick, onMoreClick = onMoreClick, showMoreButton = false,
         )
     }
 }
 
 @Composable
-fun VideoResultCard(
-    hit: SearchHit.VideoHit,
-    onClick: () -> Unit,
-    onMoreClick: () -> Unit,
-) {
+fun VideoResultCard(hit: SearchHit.VideoHit, onClick: () -> Unit, onMoreClick: () -> Unit) {
     val nowPlaying = LocalNowPlaying.current
     val isCurrent = nowPlaying.isCurrent(hit.track.id, hit.track.source)
-
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onClick() },
-    ) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onClick() }) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
             MediaThumbnail(
                 imageUrl = hit.track.thumbnailUrl,
@@ -258,12 +210,7 @@ fun VideoResultCard(
             )
             IconButton(
                 onClick = onMoreClick,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f)),
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(32.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
             ) {
                 Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White, modifier = Modifier.size(20.dp))
             }
@@ -271,7 +218,7 @@ fun VideoResultCard(
         Spacer(Modifier.height(8.dp))
         Text(hit.track.title, style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.height(2.dp))
-        TrackSubtitle(track = hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
+        TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
     }
 }
 
@@ -281,17 +228,32 @@ private fun SwipeableRow(
     content: @Composable () -> Unit,
 ) {
     var dragOffset by remember { mutableFloatStateOf(0f) }
-    var screenWidth by remember { mutableIntStateOf(1080) }
 
-    Box(Modifier.fillMaxWidth().onSizeChanged { screenWidth = it.width }) {
-        if (dragOffset > 0) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+    ) {
+        // Background reveal (info icon fica visível conforme arrastamos)
+        if (dragOffset > 0f) {
+            // Ícone clareia conforme arrastamos: 0.4f → 1f em ~100dp de deslocamento
+            val iconAlpha = (dragOffset / 100f).coerceIn(0.4f, 1f)
             Box(
-                Modifier.fillMaxHeight().width(dragOffset.dp.coerceAtMost(80.dp)).padding(start = 12.dp),
+                Modifier
+                    .fillMaxHeight()
+                    .width(dragOffset.dp.coerceAtMost(80.dp))
+                    .padding(start = 16.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                Icon(Icons.Filled.Info, contentDescription = "Informações", tint = Color(0xFF60A5FA), modifier = Modifier.size(24.dp))
+                Icon(
+                    imageVector = Icons.Filled.Info,
+                    contentDescription = "Informações",
+                    tint = Color.White.copy(alpha = iconAlpha),
+                    modifier = Modifier.size(24.dp),
+                )
             }
         }
+
         Box(
             Modifier
                 .fillMaxWidth()
@@ -299,7 +261,8 @@ private fun SwipeableRow(
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
-                            if (dragOffset > screenWidth * 0.4f) onInfoRequested()
+                            // Qualquer arraste > 30dp abre
+                            if (dragOffset > 30f) onInfoRequested()
                             dragOffset = 0f
                         },
                         onDragCancel = { dragOffset = 0f },
@@ -369,12 +332,12 @@ private fun PlaylistMosaic(thumbnails: List<String>) {
     Box(Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.06f))) {
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f)) {
-                AsyncImage(model = thumbnails.getOrNull(0), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
-                AsyncImage(model = thumbnails.getOrNull(2), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
+                AsyncImage(model = thumbnails.getOrNull(0), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
+                AsyncImage(model = thumbnails.getOrNull(2), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
             }
             Column(Modifier.weight(1f)) {
-                AsyncImage(model = thumbnails.getOrNull(1), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
-                AsyncImage(model = thumbnails.getOrNull(3), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
+                AsyncImage(model = thumbnails.getOrNull(1), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
+                AsyncImage(model = thumbnails.getOrNull(3), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
             }
         }
     }

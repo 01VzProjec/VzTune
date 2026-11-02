@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -28,7 +29,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,7 +37,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -60,15 +59,28 @@ internal fun MediaListTrackRow(
     modifier: Modifier = Modifier,
 ) {
     var dragOffset by remember { mutableFloatStateOf(0f) }
-    var screenWidth by remember { mutableIntStateOf(1080) }
 
-    Box(modifier.fillMaxWidth().onSizeChanged { screenWidth = it.width }) {
-        if (dragOffset > 0) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+    ) {
+        // Background reveal com ícone branco clareando
+        if (dragOffset > 0f) {
+            val iconAlpha = (dragOffset / 100f).coerceIn(0.4f, 1f)
             Box(
-                Modifier.fillMaxHeight().width(dragOffset.dp.coerceAtMost(80.dp)).padding(start = 12.dp),
+                Modifier
+                    .fillMaxHeight()
+                    .width(dragOffset.dp.coerceAtMost(80.dp))
+                    .padding(start = 16.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                Icon(Icons.Filled.Info, contentDescription = "Informações", tint = Color(0xFF60A5FA), modifier = Modifier.size(24.dp))
+                Icon(
+                    imageVector = Icons.Filled.Info,
+                    contentDescription = "Informações",
+                    tint = Color.White.copy(alpha = iconAlpha),
+                    modifier = Modifier.size(24.dp),
+                )
             }
         }
 
@@ -79,7 +91,8 @@ internal fun MediaListTrackRow(
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
-                            if (dragOffset > screenWidth * 0.4f) onInfoRequested()
+                            // Qualquer arraste > 30dp abre
+                            if (dragOffset > 30f) onInfoRequested()
                             dragOffset = 0f
                         },
                         onDragCancel = { dragOffset = 0f },
@@ -120,11 +133,9 @@ internal fun MediaListTrackRow(
                 Spacer(Modifier.height(2.dp))
                 TrackSubtitle(track = track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
             }
-
             IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
             }
-
             if (showDragHandle) {
                 Icon(
                     imageVector = Icons.Filled.DragHandle,
@@ -157,12 +168,7 @@ internal fun MediaListVideoCard(
             )
             IconButton(
                 onClick = onMoreClick,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f)),
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(32.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
             ) {
                 Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White, modifier = Modifier.size(20.dp))
             }

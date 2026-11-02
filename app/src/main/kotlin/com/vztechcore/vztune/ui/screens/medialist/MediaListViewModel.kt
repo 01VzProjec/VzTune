@@ -97,8 +97,9 @@ class MediaListViewModel @Inject constructor(
     }
 
     fun onReorder(fromIndex: Int, toIndex: Int) {
-        val currentTracks = _uiState.value.applySort(_uiState.value.filteredTracks)
-        if (fromIndex !in currentTracks.indices || toIndex !in currentTracks.indices) return
+        val currentTracks = _uiState.value.getDisplayTracks()
+        if (fromIndex !in currentTracks.indices) return
+        if (toIndex !in currentTracks.indices) return
 
         val newList = currentTracks.toMutableList()
         val item = newList.removeAt(fromIndex)
@@ -128,14 +129,14 @@ class MediaListViewModel @Inject constructor(
     }
 
     fun onTrackClick(track: Track) {
-        val sorted = _uiState.value.applySort(_uiState.value.filteredTracks)
+        val sorted = _uiState.value.getDisplayTracks()
         val idx = sorted.indexOfFirst { it.id == track.id && it.source == track.source }
         if (idx >= 0) playerController.playQueue(sorted, idx)
         else playerController.playQueue(listOf(track), 0)
     }
 
     fun onPlayAll() {
-        val sorted = _uiState.value.applySort(_uiState.value.filteredTracks)
+        val sorted = _uiState.value.getDisplayTracks()
         if (sorted.isNotEmpty()) playerController.playQueue(sorted, 0)
     }
 

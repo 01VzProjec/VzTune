@@ -26,8 +26,6 @@ data class MediaListUiState(
     val isShuffling: Boolean = false,
 ) {
     val showTabs: Boolean get() = !isAlbum
-    
-    // Sort only applies to ALL tab. The other tabs force RECENT_TO_OLD.
     val isSortEnabled: Boolean get() = selectedTab == MediaListTab.ALL
 
     val filteredTracks: List<Track>
@@ -37,26 +35,37 @@ data class MediaListUiState(
             MediaListTab.VIDEOS -> allTracks.filter { it.source == Source.YOUTUBE }
         }
 
+    /**
+     * Applies sortOrder to the given list.
+     * Kept for the ViewModel's onTrackClick / onPlayAll / onReorder flows.
+     */
+    fun applySort(tracks: List<Track>): List<Track> = when (sortOrder) {
+        SortOrder.MANUAL, SortOrder.SHUFFLE -> {
+            if (manualOrder.isEmpty()) tracks
+            else {
+                val map = manualOrder.withIndex().associate { it.value to it.index }
+                tracks.sortedBy { map[it.id] ?: Int.MAX_VALUE }
+            }
+        }
+        SortOrder.RECENT_TO_OLD -> tracks.reversed()
+        SortOrder.OLD_TO_RECENT -> tracks
+        SortOrder.TITLE_ASC -> tracks.sortedBy { it.title.lowercase() }
+        SortOrder.TITLE_DESC -> tracks.sortedByDescending { it.title.lowercase() }
+        SortOrder.ARTIST_ASC -> tracks.sortedBy { it.artist.lowercase() }
+        SortOrder.ARTIST_DESC -> tracks.sortedByDescending { it.artist.lowercase() }
+    }
+
+    /**
+     * Used by the UI. Combines filteredTracks + sort logic + tab rules:
+     *   - ALL: applies sortOrder
+     *   - SONGS/VIDEOS: forces RECENT_TO_OLD
+     */
     fun getDisplayTracks(): List<Track> {
         val filtered = filteredTracks
         return if (isSortEnabled) {
-            when (sortOrder) {
-                SortOrder.MANUAL, SortOrder.SHUFFLE -> {
-                    if (manualOrder.isEmpty()) filtered
-                    else {
-                        val map = manualOrder.withIndex().associate { it.value to it.index }
-                        filtered.sortedBy { map[it.id] ?: Int.MAX_VALUE }
-                    }
-                }
-                SortOrder.RECENT_TO_OLD -> filtered.reversed()
-                SortOrder.OLD_TO_RECENT -> filtered
-                SortOrder.TITLE_ASC -> filtered.sortedBy { it.title.lowercase() }
-                SortOrder.TITLE_DESC -> filtered.sortedByDescending { it.title.lowercase() }
-                SortOrder.ARTIST_ASC -> filtered.sortedBy { it.artist.lowercase() }
-                SortOrder.ARTIST_DESC -> filtered.sortedByDescending { it.artist.lowercase() }
-            }
+            applySort(filtered)
         } else {
-            filtered.reversed() // Default for SONGS/VIDEOS
+            filtered.reversed()
         }
     }
 

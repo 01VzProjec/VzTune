@@ -84,7 +84,6 @@ fun MediaListScreen(
         onReorder(fromTrack, toTrack)
     }
 
-    // Shuffle Animation Loop (1.5s)
     LaunchedEffect(state.isShuffling) {
         if (state.isShuffling) {
             shuffleJob?.cancel()

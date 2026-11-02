@@ -233,11 +233,9 @@ class MusicRepository @Inject constructor(
             // Preferir áudio puro
             val audio = extractor.audioStreams.maxByOrNull { it.averageBitrate }
             if (audio != null) {
-                // O NewPipe pode retornar averageBitrate = 0 para Opus.
-                // O bitrate do formato é mais confiável.
-                val bitrate = if (audio.averageBitrate > 0) audio.averageBitrate
-                            else audio.getFormat()?.bitrate ?: 0
-
+                // averageBitrate é a única propriedade que o NewPipe expõe.
+                // Se for 0 (Opus às vezes vem zerado), escrevemos "Desconhecida".
+                val bitrate = audio.averageBitrate
                 return@runCatching TechnicalInfo(
                     itag = audio.itag.takeIf { it > 0 }?.toString() ?: "Desconhecido",
                     mimeType = audio.getFormat()?.mimeType ?: "Desconhecido",

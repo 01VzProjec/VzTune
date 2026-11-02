@@ -3,34 +3,15 @@ package com.vztechcore.vztune.ui.screens.medialist
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.DragHandle
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,52 +28,25 @@ import com.vztechcore.vztune.ui.components.TrackSubtitle
 
 @Composable
 internal fun MediaListTrackRow(
-    track: Track,
-    index: Int?,
-    isPlaying: Boolean,
-    isPaused: Boolean,
-    onClick: () -> Unit,
-    onMoreClick: () -> Unit,
-    onInfoRequested: () -> Unit,
-    showDragHandle: Boolean,
-    dragHandleModifier: Modifier,
-    modifier: Modifier = Modifier,
+    track: Track, index: Int?, isPlaying: Boolean, isPaused: Boolean,
+    onClick: () -> Unit, onMoreClick: () -> Unit, onPlayNext: () -> Unit,
+    showDragHandle: Boolean, dragHandleModifier: Modifier, modifier: Modifier = Modifier,
 ) {
     var dragOffset by remember { mutableFloatStateOf(0f) }
 
-    Box(
-        modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min),
-    ) {
-        // Background reveal com ícone branco clareando
+    Box(modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
         if (dragOffset > 0f) {
             val iconAlpha = (dragOffset / 100f).coerceIn(0.4f, 1f)
-            Box(
-                Modifier
-                    .fillMaxHeight()
-                    .width(dragOffset.dp.coerceAtMost(80.dp))
-                    .padding(start = 16.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Info,
-                    contentDescription = "Informações",
-                    tint = Color.White.copy(alpha = iconAlpha),
-                    modifier = Modifier.size(24.dp),
-                )
+            Box(Modifier.fillMaxHeight().width(dragOffset.dp.coerceAtMost(80.dp)).padding(start = 16.dp), contentAlignment = Alignment.CenterStart) {
+                Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Tocar em seguida", tint = Color.White.copy(alpha = iconAlpha), modifier = Modifier.size(24.dp))
             }
         }
-
         Row(
-            Modifier
-                .fillMaxWidth()
-                .graphicsLayer { translationX = dragOffset }
+            Modifier.fillMaxWidth().graphicsLayer { translationX = dragOffset }
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
-                            // Qualquer arraste > 30dp abre
-                            if (dragOffset > 30f) onInfoRequested()
+                            if (dragOffset > 30f) onPlayNext()
                             dragOffset = 0f
                         },
                         onDragCancel = { dragOffset = 0f },
@@ -107,25 +61,13 @@ internal fun MediaListTrackRow(
                 .padding(horizontal = 16.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (index != null) {
-                Text("$index", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.5f), modifier = Modifier.width(24.dp))
-            }
+            if (index != null) Text("$index", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.5f), modifier = Modifier.width(24.dp))
             if (track.thumbnailUrl == null && index != null) {
-                Box(
-                    Modifier.size(52.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.08f)),
-                    contentAlignment = Alignment.Center,
-                ) {
+                Box(Modifier.size(52.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
                     Text("$index", color = Color.White.copy(alpha = 0.4f), style = MaterialTheme.typography.titleMedium)
                 }
             } else {
-                MediaThumbnail(
-                    imageUrl = track.thumbnailUrl,
-                    shape = ThumbnailShape.SQUARE,
-                    size = 52.dp,
-                    cornerRadius = 6.dp,
-                    isPlaying = isPlaying,
-                    isPaused = isPaused,
-                )
+                MediaThumbnail(imageUrl = track.thumbnailUrl, shape = ThumbnailShape.SQUARE, size = 52.dp, cornerRadius = 6.dp, isPlaying = isPlaying, isPaused = isPaused)
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -137,12 +79,7 @@ internal fun MediaListTrackRow(
                 Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
             }
             if (showDragHandle) {
-                Icon(
-                    imageVector = Icons.Filled.DragHandle,
-                    contentDescription = "Arrastar",
-                    tint = Color.White.copy(alpha = 0.5f),
-                    modifier = Modifier.size(32.dp).padding(4.dp).then(dragHandleModifier),
-                )
+                Icon(Icons.Filled.DragHandle, contentDescription = "Arrastar", tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(32.dp).padding(4.dp).then(dragHandleModifier))
             }
         }
     }
@@ -150,40 +87,19 @@ internal fun MediaListTrackRow(
 
 @Composable
 internal fun MediaListVideoCard(
-    track: Track,
-    isPlaying: Boolean,
-    isPaused: Boolean,
-    onClick: () -> Unit,
-    onMoreClick: () -> Unit,
-    modifier: Modifier = Modifier,
+    track: Track, isPlaying: Boolean, isPaused: Boolean, onClick: () -> Unit, onMoreClick: () -> Unit, modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 12.dp, vertical = 8.dp)) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
-            MediaThumbnail(
-                imageUrl = track.thumbnailUrl,
-                shape = ThumbnailShape.WIDE,
-                cornerRadius = 10.dp,
-                isPlaying = isPlaying,
-                isPaused = isPaused,
-            )
-            IconButton(
-                onClick = onMoreClick,
-                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(32.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
-            ) {
+            MediaThumbnail(imageUrl = track.thumbnailUrl, shape = ThumbnailShape.WIDE, cornerRadius = 10.dp, isPlaying = isPlaying, isPaused = isPaused)
+            IconButton(onClick = onMoreClick, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(32.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f))) {
                 Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White, modifier = Modifier.size(20.dp))
             }
         }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(
-                    track.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Text(track.title, style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
                 TrackSubtitle(track = track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
             }

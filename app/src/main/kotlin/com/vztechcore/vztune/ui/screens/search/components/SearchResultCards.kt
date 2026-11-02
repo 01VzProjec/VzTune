@@ -3,43 +3,18 @@ package com.vztechcore.vztune.ui.screens.search.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,7 +42,7 @@ fun SearchResultsContent(
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
     onHitClick: (SearchHit) -> Unit,
-    onTrackInfoClick: (Track) -> Unit,
+    onPlayNextClick: (Track) -> Unit, // Mudou aqui
     modifier: Modifier = Modifier,
 ) {
     val isVideoMode = hits.all { it is SearchHit.VideoHit } && hits.isNotEmpty()
@@ -99,7 +74,7 @@ fun SearchResultsContent(
                         hit = hit,
                         onClick = { onHitClick(hit) },
                         onMoreClick = { },
-                        onTrackInfoClick = onTrackInfoClick,
+                        onPlayNextClick = onPlayNextClick,
                     )
                 }
             }
@@ -120,77 +95,49 @@ fun SearchResultCard(
     hit: SearchHit,
     onClick: () -> Unit,
     onMoreClick: () -> Unit,
-    onTrackInfoClick: (Track) -> Unit,
+    onPlayNextClick: (Track) -> Unit,
 ) {
     val nowPlaying = LocalNowPlaying.current
 
     when (hit) {
         is SearchHit.SongHit -> {
             val isCurrent = nowPlaying.isCurrent(hit.track.id, hit.track.source)
-            SwipeableRow(onInfoRequested = { onTrackInfoClick(hit.track) }) {
+            SwipeableRow(onPlayNext = { onPlayNextClick(hit.track) }) {
                 RowCard(
-                    imageUrl = hit.track.thumbnailUrl,
-                    shape = ThumbnailShape.SQUARE,
-                    title = hit.track.title,
-                    subtitle = {
-                        TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
-                    },
+                    imageUrl = hit.track.thumbnailUrl, shape = ThumbnailShape.SQUARE, title = hit.track.title,
+                    subtitle = { TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f)) },
                     durationLabel = formatDuration(hit.track.durationSeconds),
-                    isPlaying = isCurrent && nowPlaying.isPlaying,
-                    isPaused = isCurrent && !nowPlaying.isPlaying,
-                    onClick = onClick,
-                    onMoreClick = onMoreClick,
-                    showMoreButton = true,
+                    isPlaying = isCurrent && nowPlaying.isPlaying, isPaused = isCurrent && !nowPlaying.isPlaying,
+                    onClick = onClick, onMoreClick = onMoreClick, showMoreButton = true,
                 )
             }
         }
         is SearchHit.VideoHit -> {
             val isCurrent = nowPlaying.isCurrent(hit.track.id, hit.track.source)
-            SwipeableRow(onInfoRequested = { onTrackInfoClick(hit.track) }) {
+            SwipeableRow(onPlayNext = { onPlayNextClick(hit.track) }) {
                 RowCard(
-                    imageUrl = hit.track.thumbnailUrl,
-                    shape = ThumbnailShape.SQUARE,
-                    title = hit.track.title,
-                    subtitle = {
-                        TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
-                    },
+                    imageUrl = hit.track.thumbnailUrl, shape = ThumbnailShape.SQUARE, title = hit.track.title,
+                    subtitle = { TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f)) },
                     durationLabel = null,
-                    isPlaying = isCurrent && nowPlaying.isPlaying,
-                    isPaused = isCurrent && !nowPlaying.isPlaying,
-                    onClick = onClick,
-                    onMoreClick = onMoreClick,
-                    showMoreButton = true,
+                    isPlaying = isCurrent && nowPlaying.isPlaying, isPaused = isCurrent && !nowPlaying.isPlaying,
+                    onClick = onClick, onMoreClick = onMoreClick, showMoreButton = true,
                 )
             }
         }
         is SearchHit.PlaylistHit -> RowCard(
-            imageUrl = hit.playlist.thumbnailUrl,
-            mosaic = hit.playlist.mosaicThumbnails,
-            shape = ThumbnailShape.SQUARE,
-            title = hit.playlist.title,
-            subtitle = {
-                Text("Playlist · ${hit.playlist.owner ?: ""}", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            },
-            durationLabel = null, isPlaying = false, isPaused = false,
-            onClick = onClick, onMoreClick = onMoreClick, showMoreButton = false,
+            imageUrl = hit.playlist.thumbnailUrl, mosaic = hit.playlist.mosaicThumbnails, shape = ThumbnailShape.SQUARE, title = hit.playlist.title,
+            subtitle = { Text("Playlist · ${hit.playlist.owner ?: ""}", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            durationLabel = null, isPlaying = false, isPaused = false, onClick = onClick, onMoreClick = onMoreClick, showMoreButton = false,
         )
         is SearchHit.ArtistHit -> RowCard(
-            imageUrl = hit.artist.thumbnailUrl,
-            shape = ThumbnailShape.CIRCLE,
-            title = hit.artist.name,
+            imageUrl = hit.artist.thumbnailUrl, shape = ThumbnailShape.CIRCLE, title = hit.artist.name,
             subtitle = { Text("Artista", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f)) },
-            durationLabel = null, isPlaying = false, isPaused = false,
-            onClick = onClick, onMoreClick = onMoreClick, showMoreButton = false,
+            durationLabel = null, isPlaying = false, isPaused = false, onClick = onClick, onMoreClick = onMoreClick, showMoreButton = false,
         )
         is SearchHit.AlbumHit -> RowCard(
-            imageUrl = hit.album.thumbnailUrl,
-            shape = ThumbnailShape.SQUARE,
-            title = hit.album.title,
-            subtitle = {
-                Text("Álbum · ${hit.album.artist}", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            },
-            durationLabel = null, isPlaying = false, isPaused = false,
-            onClick = onClick, onMoreClick = onMoreClick, showMoreButton = false,
+            imageUrl = hit.album.thumbnailUrl, shape = ThumbnailShape.SQUARE, title = hit.album.title,
+            subtitle = { Text("Álbum · ${hit.album.artist}", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            durationLabel = null, isPlaying = false, isPaused = false, onClick = onClick, onMoreClick = onMoreClick, showMoreButton = false,
         )
     }
 }
@@ -202,11 +149,8 @@ fun VideoResultCard(hit: SearchHit.VideoHit, onClick: () -> Unit, onMoreClick: (
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onClick() }) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
             MediaThumbnail(
-                imageUrl = hit.track.thumbnailUrl,
-                shape = ThumbnailShape.WIDE,
-                cornerRadius = 12.dp,
-                isPlaying = isCurrent && nowPlaying.isPlaying,
-                isPaused = isCurrent && !nowPlaying.isPlaying,
+                imageUrl = hit.track.thumbnailUrl, shape = ThumbnailShape.WIDE, cornerRadius = 12.dp,
+                isPlaying = isCurrent && nowPlaying.isPlaying, isPaused = isCurrent && !nowPlaying.isPlaying,
             )
             IconButton(
                 onClick = onMoreClick,
@@ -224,45 +168,32 @@ fun VideoResultCard(hit: SearchHit.VideoHit, onClick: () -> Unit, onMoreClick: (
 
 @Composable
 private fun SwipeableRow(
-    onInfoRequested: () -> Unit,
+    onPlayNext: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     var dragOffset by remember { mutableFloatStateOf(0f) }
 
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min),
-    ) {
-        // Background reveal (info icon fica visível conforme arrastamos)
+    Box(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
         if (dragOffset > 0f) {
-            // Ícone clareia conforme arrastamos: 0.4f → 1f em ~100dp de deslocamento
             val iconAlpha = (dragOffset / 100f).coerceIn(0.4f, 1f)
             Box(
-                Modifier
-                    .fillMaxHeight()
-                    .width(dragOffset.dp.coerceAtMost(80.dp))
-                    .padding(start = 16.dp),
+                Modifier.fillMaxHeight().width(dragOffset.dp.coerceAtMost(80.dp)).padding(start = 16.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Info,
-                    contentDescription = "Informações",
+                    imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                    contentDescription = "Tocar em seguida",
                     tint = Color.White.copy(alpha = iconAlpha),
                     modifier = Modifier.size(24.dp),
                 )
             }
         }
-
         Box(
-            Modifier
-                .fillMaxWidth()
-                .graphicsLayer { translationX = dragOffset }
+            Modifier.fillMaxWidth().graphicsLayer { translationX = dragOffset }
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
-                            // Qualquer arraste > 30dp abre
-                            if (dragOffset > 30f) onInfoRequested()
+                            if (dragOffset > 30f) onPlayNext()
                             dragOffset = 0f
                         },
                         onDragCancel = { dragOffset = 0f },
@@ -273,42 +204,19 @@ private fun SwipeableRow(
                         }
                     }
                 },
-        ) {
-            content()
-        }
+        ) { content() }
     }
 }
 
 @Composable
 private fun RowCard(
-    imageUrl: String?,
-    shape: ThumbnailShape,
-    title: String,
-    subtitle: @Composable () -> Unit,
-    durationLabel: String?,
-    isPlaying: Boolean,
-    isPaused: Boolean,
-    onClick: () -> Unit,
-    onMoreClick: () -> Unit,
-    showMoreButton: Boolean,
-    mosaic: List<String> = emptyList(),
+    imageUrl: String?, shape: ThumbnailShape, title: String, subtitle: @Composable () -> Unit,
+    durationLabel: String?, isPlaying: Boolean, isPaused: Boolean, onClick: () -> Unit,
+    onMoreClick: () -> Unit, showMoreButton: Boolean, mosaic: List<String> = emptyList(),
 ) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onClick() }.padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (mosaic.size >= 4) {
-            PlaylistMosaic(mosaic)
-        } else {
-            MediaThumbnail(
-                imageUrl = imageUrl,
-                shape = shape,
-                size = 56.dp,
-                cornerRadius = 8.dp,
-                isPlaying = isPlaying,
-                isPaused = isPaused,
-            )
-        }
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onClick() }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (mosaic.size >= 4) PlaylistMosaic(mosaic)
+        else MediaThumbnail(imageUrl = imageUrl, shape = shape, size = 56.dp, cornerRadius = 8.dp, isPlaying = isPlaying, isPaused = isPaused)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleSmall, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -332,12 +240,12 @@ private fun PlaylistMosaic(thumbnails: List<String>) {
     Box(Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.06f))) {
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f)) {
-                AsyncImage(model = thumbnails.getOrNull(0), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
-                AsyncImage(model = thumbnails.getOrNull(2), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
+                AsyncImage(model = thumbnails.getOrNull(0), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
+                AsyncImage(model = thumbnails.getOrNull(2), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
             }
             Column(Modifier.weight(1f)) {
-                AsyncImage(model = thumbnails.getOrNull(1), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
-                AsyncImage(model = thumbnails.getOrNull(3), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
+                AsyncImage(model = thumbnails.getOrNull(1), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
+                AsyncImage(model = thumbnails.getOrNull(3), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
             }
         }
     }

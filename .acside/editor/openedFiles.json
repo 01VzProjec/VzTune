@@ -35,13 +35,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 9167,
-          "line": 265
+          "index": 9859,
+          "line": 290
         },
         "start": {
           "column": 1,
-          "index": 9167,
-          "line": 265
+          "index": 9859,
+          "line": 290
         }
       }
     },
@@ -50,13 +50,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 5757,
-          "line": 146
+          "index": 5725,
+          "line": 142
         },
         "start": {
           "column": 1,
-          "index": 5757,
-          "line": 146
+          "index": 5725,
+          "line": 142
         }
       }
     },
@@ -80,13 +80,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 10058,
-          "line": 269
+          "index": 8438,
+          "line": 210
         },
         "start": {
           "column": 1,
-          "index": 10058,
-          "line": 269
+          "index": 8438,
+          "line": 210
         }
       }
     },
@@ -319,14 +319,14 @@
       "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchScreen.kt",
       "selection": {
         "end": {
-          "column": 1,
-          "index": 3225,
-          "line": 81
+          "column": 50,
+          "index": 3190,
+          "line": 77
         },
         "start": {
-          "column": 1,
-          "index": 3225,
-          "line": 81
+          "column": 50,
+          "index": 3190,
+          "line": 77
         }
       }
     },
@@ -335,13 +335,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 8884,
-          "line": 205
+          "index": 6896,
+          "line": 121
         },
         "start": {
           "column": 1,
-          "index": 8884,
-          "line": 205
+          "index": 6896,
+          "line": 121
         }
       }
     },
@@ -365,13 +365,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 15082,
-          "line": 350
+          "index": 12677,
+          "line": 258
         },
         "start": {
           "column": 1,
-          "index": 15082,
-          "line": 350
+          "index": 12677,
+          "line": 258
         }
       }
     },
@@ -466,5 +466,5 @@
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/music/MusicRepository.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchScreen.kt"
 }

@@ -54,12 +54,10 @@ class MediaListViewModel @Inject constructor(
                     val album = ytMusicRepository.browseAlbum(route.id)
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
-                            title = album.title ?: it.title,
+                            isLoading = false, title = album.title ?: it.title,
                             subtitle = album.artist?.takeIf { a -> a != "Desconhecido" } ?: it.subtitle,
                             thumbnailUrl = album.coverUrl ?: it.thumbnailUrl,
-                            description = album.description,
-                            allTracks = album.tracks,
+                            description = album.description, allTracks = album.tracks,
                         )
                     }
                 } else {
@@ -70,12 +68,10 @@ class MediaListViewModel @Inject constructor(
                     }
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
-                            title = playlist.title ?: it.title,
+                            isLoading = false, title = playlist.title ?: it.title,
                             subtitle = playlist.owner ?: it.subtitle,
                             thumbnailUrl = playlist.coverUrl ?: it.thumbnailUrl,
-                            description = playlist.description,
-                            allTracks = playlist.tracks,
+                            description = playlist.description, allTracks = playlist.tracks,
                         )
                     }
                 }
@@ -100,20 +96,16 @@ class MediaListViewModel @Inject constructor(
         val currentTracks = _uiState.value.getDisplayTracks()
         if (fromIndex !in currentTracks.indices) return
         if (toIndex !in currentTracks.indices) return
-
         val newList = currentTracks.toMutableList()
         val item = newList.removeAt(fromIndex)
         newList.add(toIndex, item)
-
         val newOrderIds = newList.map { it.id }
         _uiState.update { it.copy(manualOrder = newOrderIds, sortOrder = SortOrder.MANUAL) }
         store.setManualOrder(route.id, newOrderIds)
         store.setSortOrder(route.id, SortOrder.MANUAL)
     }
 
-    fun startShuffle() {
-        _uiState.update { it.copy(isShuffling = true) }
-    }
+    fun startShuffle() { _uiState.update { it.copy(isShuffling = true) } }
 
     fun shuffleOnce() {
         val currentTracks = _uiState.value.allTracks
@@ -133,6 +125,10 @@ class MediaListViewModel @Inject constructor(
         val idx = sorted.indexOfFirst { it.id == track.id && it.source == track.source }
         if (idx >= 0) playerController.playQueue(sorted, idx)
         else playerController.playQueue(listOf(track), 0)
+    }
+
+    fun onPlayNextClick(track: Track) {
+        playerController.addToQueueNext(track)
     }
 
     fun onPlayAll() {

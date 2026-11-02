@@ -124,7 +124,6 @@ class PlayerController @Inject constructor(
     private var preloadedIndex: Int = -1
 
     init {
-        // Background loop: 10s before end, preload next URL.
         scope.launch {
             while (true) {
                 delay(1000)
@@ -149,6 +148,40 @@ class PlayerController @Inject constructor(
         playQueue(listOf(track), 0)
     }
 
+    /**
+     * Adiciona uma faixa na próxima posição da fila (fura a fila).
+     */
+    fun addToQueueNext(track: Track) {
+        if (queue.isEmpty()) {
+            playQueue(listOf(track), 0)
+            return
+        }
+
+        val mutableQueue = queue.toMutableList()
+        
+        // Se a música já estiver na fila, remove pra não duplicar
+        val existingIndex = mutableQueue.indexOfFirst { it.id == track.id && it.source == track.source }
+        if (existingIndex != -1) {
+            mutableQueue.removeAt(existingIndex)
+            // Se ela era antes do atual, o currentIndex diminui
+            if (existingIndex <= currentIndex && currentIndex > 0) {
+                currentIndex--
+            }
+        }
+
+        val insertIndex = (currentIndex + 1).coerceIn(0, mutableQueue.size)
+        mutableQueue.add(insertIndex, track)
+        
+        // Atualiza a fila
+        queue = mutableQueue
+        
+        // Se a música que tá tocando tinha sido removida (raro), garante que ela ainda toque
+        if (currentIndex == -1 && queue.isNotEmpty()) {
+            currentIndex = 0
+            playAtIndex(0)
+        }
+    }
+
     fun playNext(auto: Boolean = false) {
         val nextIdx = currentIndex + 1
         if (nextIdx >= queue.size) {
@@ -162,7 +195,6 @@ class PlayerController @Inject constructor(
     }
 
     fun playPrevious() {
-        // Conventional behavior: if >3s into track, restart current.
         if (player.currentPosition > 3000L) {
             player.seekTo(0)
             return
@@ -193,7 +225,6 @@ class PlayerController @Inject constructor(
     private fun playAtIndex(idx: Int) {
         val track = queue.getOrNull(idx) ?: return
 
-        // Reuse preloaded URL if it belongs to this index.
         val cachedUrl = if (preloadedIndex == idx) preloadedUrl else null
         preloadedUrl = null
         preloadedIndex = -1
@@ -233,12 +264,6 @@ class PlayerController @Inject constructor(
         }
     }
 
-    /**
-     * Runs every second while playing. If the current track is within
-     * PRELOAD_WINDOW_MS of the end and there's a next track, kicks off a
-     * background URL resolve so `playAtIndex` can use it instantly when
-     * `STATE_ENDED` fires.
-     */
     private fun maybePreloadNext() {
         val duration = player.duration
         if (duration <= 0) return

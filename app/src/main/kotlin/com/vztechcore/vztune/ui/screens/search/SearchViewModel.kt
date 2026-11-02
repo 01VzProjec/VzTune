@@ -64,8 +64,7 @@ class SearchViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             val saved = appSettingsStore.settings.first().lastSearchTab
-            val filter = runCatching { SearchFilter.valueOf(saved) }
-                .getOrDefault(SearchFilter.ALL)
+            val filter = runCatching { SearchFilter.valueOf(saved) }.getOrDefault(SearchFilter.ALL)
             _uiState.update { it.copy(selectedFilter = filter) }
         }
         viewModelScope.launch {
@@ -108,12 +107,7 @@ class SearchViewModel @Inject constructor(
         val cached = filterCache[filter]
         if (cached != null && cached.query == currentQuery) {
             _uiState.update {
-                it.copy(
-                    selectedFilter = filter,
-                    hits = cached.hits,
-                    hasMore = cached.hasMore,
-                    hasSearched = true,
-                )
+                it.copy(selectedFilter = filter, hits = cached.hits, hasMore = cached.hasMore, hasSearched = true)
             }
             return
         }
@@ -157,9 +151,7 @@ class SearchViewModel @Inject constructor(
                 is SearchResult.Success -> {
                     val merged = _uiState.value.hits + result.hits
                     filterCache[filter] = CachedTab(state.query, merged, result.hasMore)
-                    _uiState.update {
-                        it.copy(isLoadingMore = false, hits = merged, hasMore = result.hasMore)
-                    }
+                    _uiState.update { it.copy(isLoadingMore = false, hits = merged, hasMore = result.hasMore) }
                 }
                 is SearchResult.Failure -> {
                     _uiState.update { it.copy(isLoadingMore = false) }
@@ -168,101 +160,50 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Tap a hit:
-     *  - SongHit / VideoHit -> builds a "radio" queue via MusicRepository,
-     *    keeping only same-type tracks. Plays seed at its correct index.
-     *  - PlaylistHit / AlbumHit -> emits navigation event (unchanged).
-     *  - ArtistHit -> TODO
-     */
     fun onHitClick(hit: SearchHit) {
         when (hit) {
             is SearchHit.SongHit -> playRadio(hit.track)
             is SearchHit.VideoHit -> playRadio(hit.track)
             is SearchHit.PlaylistHit -> {
                 viewModelScope.launch {
-                    _navigationEvent.emit(
-                        NavigationEvent.OpenPlaylist(
-                            id = hit.playlist.id,
-                            title = hit.playlist.title,
-                            owner = hit.playlist.owner,
-                            thumbnailUrl = hit.playlist.thumbnailUrl,
-                            mosaic = hit.playlist.mosaicThumbnails,
-                        )
-                    )
+                    _navigationEvent.emit(NavigationEvent.OpenPlaylist(hit.playlist.id, hit.playlist.title, hit.playlist.owner, hit.playlist.thumbnailUrl, hit.playlist.mosaicThumbnails))
                 }
             }
             is SearchHit.AlbumHit -> {
                 viewModelScope.launch {
-                    _navigationEvent.emit(
-                        NavigationEvent.OpenAlbum(
-                            id = hit.album.id,
-                            title = hit.album.title,
-                            artist = hit.album.artist,
-                            thumbnailUrl = hit.album.thumbnailUrl,
-                        )
-                    )
+                    _navigationEvent.emit(NavigationEvent.OpenAlbum(hit.album.id, hit.album.title, hit.album.artist, hit.album.thumbnailUrl))
                 }
             }
-            is SearchHit.ArtistHit -> Unit // TODO: navigate to ArtistScreen
+            is SearchHit.ArtistHit -> Unit
         }
     }
 
-    /**
-     * Build a radio queue around a single track:
-     *  - Songs -> only YOUTUBE_MUSIC songs (via artist + title search)
-     *  - Videos -> only YOUTUBE videos (via title + channel search)
-     */
+    fun onPlayNextClick(track: Track) {
+        playerController.addToQueueNext(track)
+    }
+
     private fun playRadio(seed: Track) {
         if (_uiState.value.isBuildingQueue) return
         _uiState.update { it.copy(isBuildingQueue = true) }
         viewModelScope.launch {
-            val queue = runCatching { musicRepository.buildRadioQueue(seed) }
-                .getOrDefault(listOf(seed))
+            val queue = runCatching { musicRepository.buildRadioQueue(seed) }.getOrDefault(listOf(seed))
             _uiState.update { it.copy(isBuildingQueue = false) }
-            val idx = queue.indexOfFirst {
-                it.id == seed.id && it.source == seed.source
-            }
+            val idx = queue.indexOfFirst { it.id == seed.id && it.source == seed.source }
             playerController.playQueue(queue, if (idx >= 0) idx else 0)
         }
     }
 
-    private fun runSearch(
-        query: String,
-        filter: SearchFilter,
-        isRefresh: Boolean,
-        loadMore: Boolean,
-    ) {
+    private fun runSearch(query: String, filter: SearchFilter, isRefresh: Boolean, loadMore: Boolean) {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    isLoading = !isRefresh && !loadMore,
-                    isRefreshing = isRefresh,
-                    hasSearched = true,
-                    errorMessage = null,
-                )
-            }
+            _uiState.update { it.copy(isLoading = !isRefresh && !loadMore, isRefreshing = isRefresh, hasSearched = true, errorMessage = null) }
             when (val result = musicRepository.search(query, filter, loadMore)) {
                 is SearchResult.Success -> {
                     filterCache[filter] = CachedTab(query, result.hits, result.hasMore)
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            isRefreshing = false,
-                            hits = result.hits,
-                            hasMore = result.hasMore,
-                        )
-                    }
+                    _uiState.update { it.copy(isLoading = false, isRefreshing = false, hits = result.hits, hasMore = result.hasMore) }
                 }
                 is SearchResult.Failure -> {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            isRefreshing = false,
-                            errorMessage = result.message,
-                        )
-                    }
+                    _uiState.update { it.copy(isLoading = false, isRefreshing = false, errorMessage = result.message) }
                 }
             }
         }

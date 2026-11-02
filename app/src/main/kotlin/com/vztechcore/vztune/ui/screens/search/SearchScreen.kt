@@ -28,7 +28,7 @@ fun SearchScreen(
     onClearHistory: () -> Unit,
     onLoadMore: () -> Unit,
     onHitClick: (com.vztechcore.vztune.core.domain.search.SearchHit) -> Unit = {},
-    onTrackInfoClick: (Track) -> Unit = {},
+    onPlayNextClick: (Track) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -75,7 +75,7 @@ fun SearchScreen(
                 onRefresh = onRefresh,
                 onLoadMore = onLoadMore,
                 onHitClick = onHitClick,
-                onTrackInfoClick = onTrackInfoClick,
+                onPlayNextClick = onPlayNextClick,
             )
         }
     }

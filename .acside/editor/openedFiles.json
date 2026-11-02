@@ -170,13 +170,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 7415,
-          "line": 164
+          "index": 7530,
+          "line": 166
         },
         "start": {
           "column": 1,
-          "index": 7415,
-          "line": 164
+          "index": 7530,
+          "line": 166
         }
       }
     },
@@ -194,7 +194,22 @@
           "line": 315
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchScreenPreview.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 2103,
+          "line": 64
+        },
+        "start": {
+          "column": 1,
+          "index": 2103,
+          "line": 64
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreen.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchScreenPreview.kt"
 }

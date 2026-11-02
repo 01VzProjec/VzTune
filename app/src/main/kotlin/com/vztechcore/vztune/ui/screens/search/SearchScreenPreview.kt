@@ -1,136 +1,65 @@
-package com.vztechcore.vztune.ui.screens.search
+package com.vztechcore.vztune.ui.screens.medialist
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
-import com.vztechcore.vztune.core.domain.search.SearchFilter
-import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.ui.theme.VzTuneTheme
 
-private val sampleHits = listOf(
-    SearchHit.SongHit(
-        Track(
-            id = "1",
-            title = "Get Lucky",
-            artist = "Daft Punk",
-            durationSeconds = 369L,
-            source = Source.YOUTUBE_MUSIC,
-        ),
-    ),
-    SearchHit.VideoHit(
-        Track(
-            id = "2",
-            title = "Get Lucky (Official Video)",
-            artist = "Daft Punk",
-            durationSeconds = 248L,
-            source = Source.YOUTUBE,
-        ),
-    ),
-)
-
-@Preview(name = "Search - Idle", showBackground = true)
+@Preview(showBackground = true)
 @Composable
-private fun SearchIdlePreview() {
+private fun MediaListLoadingPreview() {
     VzTuneTheme {
-        SearchScreen(
-            state = SearchUiState(),
-            onQueryChange = {},
-            onFocusChanged = {},
-            onFilterSelect = {},
-            onSubmit = {},
-            onRefresh = {},
-            onRemoveHistory = {},
-            onClearHistory = {},
-            onLoadMore = {},
+        MediaListScreen(
+            state = MediaListUiState(isLoading = true),
+            onBackClick = {},
+            onTabSelected = {},
+            onTrackClick = {},
+            onPlayAllClick = {},
+            onShuffleClick = {},
         )
     }
 }
 
-@Preview(name = "Search - History", showBackground = true)
+@Preview(showBackground = true)
 @Composable
-private fun SearchHistoryPreview() {
+private fun MediaListContentPreview() {
     VzTuneTheme {
-        SearchScreen(
-            state = SearchUiState(
-                isFocused = true,
-                history = listOf("daft punk", "gorillaz", "the weeknd"),
+        MediaListScreen(
+            state = MediaListUiState(
+                isLoading = false,
+                title = "Daft Punk Essentials",
+                subtitle = "Vários Artistas",
+                isAlbum = false,
+                allTracks = listOf(
+                    Track(
+                        id = "1",
+                        title = "Get Lucky",
+                        artist = "Daft Punk, Pharrell Williams",
+                        durationSeconds = 369,
+                        source = Source.YOUTUBE_MUSIC,
+                    ),
+                    Track(
+                        id = "2",
+                        title = "One More Time",
+                        artist = "Daft Punk",
+                        durationSeconds = 320,
+                        source = Source.YOUTUBE_MUSIC,
+                    ),
+                    Track(
+                        id = "3",
+                        title = "Get Lucky (Official Video)",
+                        artist = "Daft Punk",
+                        durationSeconds = 248,
+                        source = Source.YOUTUBE,
+                    ),
+                ),
             ),
-            onQueryChange = {},
-            onFocusChanged = {},
-            onFilterSelect = {},
-            onSubmit = {},
-            onRefresh = {},
-            onRemoveHistory = {},
-            onClearHistory = {},
-            onLoadMore = {},
-        )
-    }
-}
-
-@Preview(name = "Search - Loading", showBackground = true)
-@Composable
-private fun SearchLoadingPreview() {
-    VzTuneTheme {
-        SearchScreen(
-            state = SearchUiState(
-                query = "daft punk",
-                isLoading = true,
-                hasSearched = true,
-            ),
-            onQueryChange = {},
-            onFocusChanged = {},
-            onFilterSelect = {},
-            onSubmit = {},
-            onRefresh = {},
-            onRemoveHistory = {},
-            onClearHistory = {},
-            onLoadMore = {},
-        )
-    }
-}
-
-@Preview(name = "Search - Results", showBackground = true)
-@Composable
-private fun SearchResultsPreview() {
-    VzTuneTheme {
-        SearchScreen(
-            state = SearchUiState(
-                query = "daft punk",
-                hasSearched = true,
-                selectedFilter = SearchFilter.ALL,
-                hits = sampleHits,
-            ),
-            onQueryChange = {},
-            onFocusChanged = {},
-            onFilterSelect = {},
-            onSubmit = {},
-            onRefresh = {},
-            onRemoveHistory = {},
-            onClearHistory = {},
-            onLoadMore = {},
-        )
-    }
-}
-
-@Preview(name = "Search - Error", showBackground = true)
-@Composable
-private fun SearchErrorPreview() {
-    VzTuneTheme {
-        SearchScreen(
-            state = SearchUiState(
-                query = "daft punk",
-                hasSearched = true,
-                errorMessage = "Sem conexão com a internet.",
-            ),
-            onQueryChange = {},
-            onFocusChanged = {},
-            onFilterSelect = {},
-            onSubmit = {},
-            onRefresh = {},
-            onRemoveHistory = {},
-            onClearHistory = {},
-            onLoadMore = {},
+            onBackClick = {},
+            onTabSelected = {},
+            onTrackClick = {},
+            onPlayAllClick = {},
+            onShuffleClick = {},
         )
     }
 }

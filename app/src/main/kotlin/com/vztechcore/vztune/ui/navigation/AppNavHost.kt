@@ -111,8 +111,10 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     MediaListScreen(
                         state = state,
                         onBackClick = { navController.popBackStack() },
+                        onTabSelected = vm::onTabSelected,
                         onTrackClick = vm::onTrackClick,
                         onPlayAllClick = vm::onPlayAll,
+                        onShuffleClick = vm::onShuffle,
                     )
                 }
             }

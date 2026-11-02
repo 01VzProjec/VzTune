@@ -9,9 +9,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -21,13 +18,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.ui.components.AppBottomBar
 import com.vztechcore.vztune.ui.components.EclipseBackground
 import com.vztechcore.vztune.ui.components.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.MiniPlayerBar
 import com.vztechcore.vztune.ui.components.rememberDominantColor
 import com.vztechcore.vztune.ui.screens.main.MiniPlayerViewModel
+import com.vztechcore.vztune.ui.screens.medialist.MediaListScreen
+import com.vztechcore.vztune.ui.screens.medialist.MediaListViewModel
 import com.vztechcore.vztune.ui.screens.search.SearchScreen
 import com.vztechcore.vztune.ui.screens.search.SearchViewModel
 import com.vztechcore.vztune.ui.theme.VzOnSurface
@@ -47,15 +45,12 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val playback = LocalNowPlaying.current
     val miniPlayerVm: MiniPlayerViewModel = hiltViewModel()
 
-    // Thumbnail of the first visible hit in the current Search tab.
-    // Used as a fallback color source when no track is playing.
-    var searchFirstHitThumb by remember { mutableStateOf<String?>(null) }
-
-    val colorSourceUrl = playback.currentTrack?.thumbnailUrl ?: searchFirstHitThumb
+    // Color source for the background gradient
+    val colorSourceUrl = playback.currentTrack?.thumbnailUrl
     val dominantColor = rememberDominantColor(colorSourceUrl)
 
     EclipseBackground(baseColor = dominantColor) {
-        Box(modifier = modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize()) {
             NavHost(
                 navController = navController,
                 startDestination = Routes.Home,
@@ -68,14 +63,34 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     val vm: SearchViewModel = hiltViewModel()
                     val state by vm.uiState.collectAsStateWithLifecycle()
 
-                    LaunchedEffect(state.hits.firstOrNull(), state.selectedFilter) {
-                        searchFirstHitThumb = when (val first = state.hits.firstOrNull()) {
-                            is SearchHit.SongHit -> first.track.thumbnailUrl
-                            is SearchHit.VideoHit -> first.track.thumbnailUrl
-                            is SearchHit.AlbumHit -> first.album.thumbnailUrl
-                            is SearchHit.ArtistHit -> first.artist.thumbnailUrl
-                            is SearchHit.PlaylistHit -> first.playlist.thumbnailUrl
-                            else -> null
+                    // Escuta eventos de navegação do Search
+                    LaunchedEffect(Unit) {
+                        vm.navigationEvent.collect { event ->
+                            when (event) {
+                                is SearchViewModel.NavigationEvent.OpenPlaylist -> {
+                                    navController.navigate(
+                                        Routes.MediaList(
+                                            id = event.id,
+                                            isAlbum = false,
+                                            title = event.title,
+                                            subtitle = event.owner,
+                                            thumbnailUrl = event.thumb
+                                            // Nota: mosaic pode ser passado via param extra se necessário
+                                        )
+                                    )
+                                }
+                                is SearchViewModel.NavigationEvent.OpenAlbum -> {
+                                    navController.navigate(
+                                        Routes.MediaList(
+                                            id = event.id,
+                                            isAlbum = true,
+                                            title = event.title,
+                                            subtitle = event.artist,
+                                            thumbnailUrl = event.thumb
+                                        )
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -90,6 +105,17 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onClearHistory = vm::onClearHistory,
                         onLoadMore = vm::onLoadMore,
                         onHitClick = vm::onHitClick,
+                    )
+                }
+
+                composable<Routes.MediaList> {
+                    val vm: MediaListViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    MediaListScreen(
+                        state = state,
+                        onBackClick = { navController.popBackStack() },
+                        onTrackClick = vm::onTrackClick,
+                        onPlayAllClick = vm::onPlayAll,
                     )
                 }
             }

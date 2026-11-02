@@ -13,8 +13,11 @@ import com.vztechcore.vztune.data.prefs.SearchHistoryStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
@@ -28,6 +31,30 @@ class SearchViewModel @Inject constructor(
     private val appSettingsStore: AppSettingsStore,
     private val playerController: PlayerController,
 ) : ViewModel() {
+
+    // ================= NAVIGATION EVENTS =================
+
+    sealed interface NavigationEvent {
+        data class OpenPlaylist(
+            val id: String,
+            val title: String,
+            val owner: String?,
+            val thumbnailUrl: String?,
+            val mosaic: List<String>,
+        ) : NavigationEvent
+
+        data class OpenAlbum(
+            val id: String,
+            val title: String,
+            val artist: String,
+            val thumbnailUrl: String?,
+        ) : NavigationEvent
+    }
+
+    private val _navigationEvent = MutableSharedFlow<NavigationEvent>()
+    val navigationEvent: SharedFlow<NavigationEvent> = _navigationEvent.asSharedFlow()
+
+    // ================= STATE =================
 
     private data class CachedTab(
         val query: String,
@@ -43,8 +70,9 @@ class SearchViewModel @Inject constructor(
     private var suggestJob: Job? = null
     private var searchJob: Job? = null
 
+    // ================= INIT =================
+
     init {
-        // Restore the last selected filter from persisted settings.
         viewModelScope.launch {
             val saved = appSettingsStore.settings.first().lastSearchTab
             val filter = runCatching { SearchFilter.valueOf(saved) }
@@ -52,13 +80,14 @@ class SearchViewModel @Inject constructor(
             _uiState.update { it.copy(selectedFilter = filter) }
         }
 
-        // Observe the persisted search history.
         viewModelScope.launch {
             historyStore.history.collect { list ->
                 _uiState.update { it.copy(history = list) }
             }
         }
     }
+
+    // ================= QUERY =================
 
     fun onQueryChange(value: String) {
         suggestJob?.cancel()
@@ -94,6 +123,8 @@ class SearchViewModel @Inject constructor(
         _uiState.update { it.copy(isFocused = focused) }
     }
 
+    // ================= FILTER =================
+
     fun onFilterSelect(filter: SearchFilter) {
         if (filter == _uiState.value.selectedFilter) return
 
@@ -120,6 +151,8 @@ class SearchViewModel @Inject constructor(
             runSearch(currentQuery, filter, isRefresh = false, loadMore = false)
         }
     }
+
+    // ================= SUBMIT / REFRESH =================
 
     fun onSubmit() {
         val query = _uiState.value.query.trim()
@@ -148,6 +181,8 @@ class SearchViewModel @Inject constructor(
         )
     }
 
+    // ================= HISTORY =================
+
     fun onRemoveHistory(query: String) {
         viewModelScope.launch { historyStore.remove(query) }
     }
@@ -155,6 +190,8 @@ class SearchViewModel @Inject constructor(
     fun onClearHistory() {
         viewModelScope.launch { historyStore.clear() }
     }
+
+    // ================= PAGINATION =================
 
     fun onLoadMore() {
         val state = _uiState.value
@@ -192,14 +229,44 @@ class SearchViewModel @Inject constructor(
         }
     }
 
+    // ================= HIT CLICK =================
+
     fun onHitClick(hit: SearchHit) {
         when (hit) {
             is SearchHit.SongHit -> playerController.play(hit.track)
             is SearchHit.VideoHit -> playerController.play(hit.track)
-            // TODO: navigate to artist / album / playlist detail screens.
-            else -> Unit
+            is SearchHit.PlaylistHit -> {
+                viewModelScope.launch {
+                    _navigationEvent.emit(
+                        NavigationEvent.OpenPlaylist(
+                            id = hit.playlist.id,
+                            title = hit.playlist.title,
+                            owner = hit.playlist.owner,
+                            thumbnailUrl = hit.playlist.thumbnailUrl,
+                            mosaic = hit.playlist.mosaicThumbnails,
+                        )
+                    )
+                }
+            }
+            is SearchHit.AlbumHit -> {
+                viewModelScope.launch {
+                    _navigationEvent.emit(
+                        NavigationEvent.OpenAlbum(
+                            id = hit.album.id,
+                            title = hit.album.title,
+                            artist = hit.album.artist,
+                            thumbnailUrl = hit.album.thumbnailUrl,
+                        )
+                    )
+                }
+            }
+            is SearchHit.ArtistHit -> {
+                // TODO: navigate to ArtistScreen
+            }
         }
     }
+
+    // ================= INTERNAL =================
 
     private fun runSearch(
         query: String,

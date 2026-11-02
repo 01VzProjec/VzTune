@@ -89,7 +89,112 @@
           "line": 344
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/Routes.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 526,
+          "line": 18
+        },
+        "start": {
+          "column": 1,
+          "index": 526,
+          "line": 18
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListUiState.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 466,
+          "line": 14
+        },
+        "start": {
+          "column": 1,
+          "index": 466,
+          "line": 14
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListViewModel.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 3001,
+          "line": 86
+        },
+        "start": {
+          "column": 1,
+          "index": 3001,
+          "line": 86
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreen.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 8717,
+          "line": 239
+        },
+        "start": {
+          "column": 1,
+          "index": 8717,
+          "line": 239
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreenPreview.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 1507,
+          "line": 41
+        },
+        "start": {
+          "column": 1,
+          "index": 1507,
+          "line": 41
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 7615,
+          "line": 167
+        },
+        "start": {
+          "column": 1,
+          "index": 7615,
+          "line": 167
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchViewModel.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 10282,
+          "line": 315
+        },
+        "start": {
+          "column": 1,
+          "index": 10282,
+          "line": 315
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/components/SearchResultCards.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchViewModel.kt"
 }

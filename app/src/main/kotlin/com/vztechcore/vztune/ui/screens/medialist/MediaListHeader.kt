@@ -2,30 +2,12 @@ package com.vztechcore.vztune.ui.screens.medialist
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,14 +24,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.search.SortOrder
-import com.vztechcore.vztune.ui.components.PlayingOverlayLarge
-import com.vztechcore.vztune.ui.components.PlayingOverlayPaused
 
 @Composable
 internal fun MediaListExpandedHeader(
     state: MediaListUiState,
-    isThisListPlaying: Boolean,
-    isThisListPaused: Boolean,
     onBackClick: () -> Unit,
     onTabSelected: (MediaListTab) -> Unit,
     onPlayAllClick: () -> Unit,
@@ -59,78 +37,101 @@ internal fun MediaListExpandedHeader(
     onShuffleToggle: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MediaListCircleButton(Icons.Filled.Close, "Fechar", onBackClick)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MediaListCircleButton(Icons.Filled.Search, "Pesquisar", onSearchClick)
-                MediaListCircleButton(Icons.Filled.MoreVert, "Mais", { })
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-
+        // ================= HERO COVER (FULL WIDTH) =================
         Box(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            contentAlignment = Alignment.Center,
+            Modifier
+                .fillMaxWidth()
+                .height(360.dp)
         ) {
+            // 1. A imagem/mosaico ocupando tudo
             if (state.mosaicThumbnails.size >= 4) {
-                PlaylistMosaicLarge(
-                    thumbnails = state.mosaicThumbnails,
-                    isPlaying = isThisListPlaying,
-                    isPaused = isThisListPaused,
-                )
+                PlaylistMosaicLarge(state.mosaicThumbnails)
             } else {
-                MediaListCover(
-                    imageUrl = state.thumbnailUrl,
-                    isPlaying = isThisListPlaying,
-                    isPaused = isThisListPaused,
+                AsyncImage(
+                    model = state.thumbnailUrl,
+                    contentDescription = state.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+
+            // 2. Gradiente preto por cima (camuflagem)
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.0f to Color.Black.copy(alpha = 0.4f), // Topo mais escuro para os ícones
+                                0.4f to Color.Transparent,              // Meio transparente
+                                0.8f to Color.Black.copy(alpha = 0.8f), // Começa a escurecer
+                                1.0f to Color.Black                     // Totalmente preto embaixo
+                            )
+                        )
+                    )
+            )
+
+            // 3. Botões no topo (X, Lupa, 3 pontinhos)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MediaListCircleButton(Icons.Filled.Close, "Fechar", onBackClick)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MediaListCircleButton(Icons.Filled.Search, "Pesquisar", onSearchClick)
+                    MediaListCircleButton(Icons.Filled.MoreVert, "Mais", { })
+                }
+            }
+        }
+
+        // ================= TITLE & METADATA =================
+        // Empurrando pra cima pra colar na imagem (margem negativa visual)
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .offset(y = (-24).dp) 
+        ) {
+            Text(
+                text = state.title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            if (!state.subtitle.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    state.subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.7f),
+                )
+            }
+
+            if (state.metadataLabel.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    state.metadataLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.5f),
                 )
             }
         }
 
-        Spacer(Modifier.height(16.dp))
-
-        Text(
-            text = state.title,
-            style = MaterialTheme.typography.headlineMedium,
-            color = Color.White,
-            fontWeight = FontWeight.ExtraBold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        )
-
-        if (!state.subtitle.isNullOrBlank()) {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                state.subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.7f),
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-        }
-
-        if (state.metadataLabel.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
-            Text(
-                state.metadataLabel,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-        }
+        Spacer(Modifier.height(4.dp))
 
         if (state.showTabs) {
-            Spacer(Modifier.height(16.dp))
             MediaListTabs(state.selectedTab, onTabSelected)
+            Spacer(Modifier.height(12.dp))
         }
 
-        Spacer(Modifier.height(12.dp))
-
+        // ================= ACTION BUTTONS =================
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -242,7 +243,7 @@ internal fun MediaListCollapsedHeader(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        // Only the search icon (open search overlay)
+        // Só a lupa como pedido
         IconButton(onClick = onSearchClick) {
             Icon(Icons.Filled.Search, contentDescription = "Pesquisar", tint = Color.White)
         }
@@ -250,81 +251,35 @@ internal fun MediaListCollapsedHeader(
 }
 
 @Composable
-private fun MediaListCover(
-    imageUrl: String?,
-    isPlaying: Boolean,
-    isPaused: Boolean,
-) {
-    val shape = RoundedCornerShape(12.dp)
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .clip(shape)
-            .background(Color.White.copy(alpha = 0.1f))
-    ) {
-        if (imageUrl != null) {
+internal fun PlaylistMosaicLarge(thumbnails: List<String>) {
+    Row(Modifier.fillMaxSize()) {
+        Column(Modifier.weight(1f)) {
             AsyncImage(
-                model = imageUrl,
+                model = thumbnails.getOrNull(0),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+            AsyncImage(
+                model = thumbnails.getOrNull(2),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
             )
         }
-        when {
-            isPlaying -> PlayingOverlayLarge(shape)
-            isPaused -> PlayingOverlayPaused(shape)
-        }
-    }
-}
-
-@Composable
-internal fun PlaylistMosaicLarge(
-    thumbnails: List<String>,
-    isPlaying: Boolean = false,
-    isPaused: Boolean = false,
-) {
-    val shape = RoundedCornerShape(12.dp)
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .clip(shape)
-            .background(Color.White.copy(alpha = 0.1f)),
-    ) {
-        Row(Modifier.fillMaxSize()) {
-            Column(Modifier.weight(1f)) {
-                AsyncImage(
-                    model = thumbnails.getOrNull(0),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                )
-                AsyncImage(
-                    model = thumbnails.getOrNull(2),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                AsyncImage(
-                    model = thumbnails.getOrNull(1),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                )
-                AsyncImage(
-                    model = thumbnails.getOrNull(3),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                )
-            }
-        }
-        when {
-            isPlaying -> PlayingOverlayLarge(shape)
-            isPaused -> PlayingOverlayPaused(shape)
+        Column(Modifier.weight(1f)) {
+            AsyncImage(
+                model = thumbnails.getOrNull(1),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+            AsyncImage(
+                model = thumbnails.getOrNull(3),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
         }
     }
 }

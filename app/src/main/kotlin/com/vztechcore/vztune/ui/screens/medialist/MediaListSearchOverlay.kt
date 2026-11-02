@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.ui.components.LocalNowPlaying
 
 @Composable
 internal fun MediaListSearchOverlay(
@@ -41,6 +42,7 @@ internal fun MediaListSearchOverlay(
     var query by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val nowPlaying = LocalNowPlaying.current // Pega o estado global do player
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -125,11 +127,16 @@ internal fun MediaListSearchOverlay(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     itemsIndexed(filtered, key = { _, t -> t.id }) { _, track ->
+                        // AQUI ESTÁ A CORREÇÃO: O equalizador aparecerá se a música pesquisada for a atual
+                        val isCurrent = nowPlaying.isCurrent(track.id, track.source)
+                        val isPlaying = isCurrent && nowPlaying.isPlaying
+                        val isPaused = isCurrent && !nowPlaying.isPlaying
+
                         MediaListTrackRow(
                             track = track,
                             index = null,
-                            isPlaying = false,
-                            isPaused = false,
+                            isPlaying = isPlaying,
+                            isPaused = isPaused,
                             onClick = { onTrackClick(track) },
                             showDragHandle = false,
                             dragHandleModifier = Modifier,

@@ -1,20 +1,21 @@
 package com.vztechcore.vztune.data.prefs
 
 import android.content.Context
-import com.vztechcore.vztune.ui.screens.medialist.SortOrder
+import com.vztechcore.vztune.core.domain.search.SortOrder
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class MediaListPreferencesStore @Inject constructor(
-    @ApplicationContext context: Context
+    @ApplicationContext context: Context,
 ) {
     private val prefs = context.getSharedPreferences("vztune_medialists", Context.MODE_PRIVATE)
 
     fun getSortOrder(id: String): SortOrder {
         val name = prefs.getString("sort_$id", SortOrder.OLD_TO_RECENT.name)
-        return runCatching { SortOrder.valueOf(name ?: "") }.getOrDefault(SortOrder.OLD_TO_RECENT)
+        return runCatching { SortOrder.valueOf(name ?: "") }
+            .getOrDefault(SortOrder.OLD_TO_RECENT)
     }
 
     fun setSortOrder(id: String, order: SortOrder) {

@@ -2,20 +2,12 @@ package com.vztechcore.vztune.ui.screens.medialist
 
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.core.domain.search.SortOrder
 
 enum class MediaListTab(val label: String) {
-    ALL("Tudo"), SONGS("Músicas"), VIDEOS("Vídeos"),
-}
-
-enum class SortOrder(val label: String) {
-    MANUAL("Manual"),
-    RECENT_TO_OLD("Recente → Antigas"),
-    OLD_TO_RECENT("Antigas → Recentes"),
-    TITLE_ASC("Título A → Z"),
-    TITLE_DESC("Título Z → A"),
-    ARTIST_ASC("Artista A → Z"),
-    ARTIST_DESC("Artista Z → A"),
-    SHUFFLE("Sortear"),
+    ALL("Tudo"),
+    SONGS("Músicas"),
+    VIDEOS("Vídeos"),
 }
 
 data class MediaListUiState(
@@ -29,8 +21,6 @@ data class MediaListUiState(
     val allTracks: List<Track> = emptyList(),
     val description: String? = null,
     val selectedTab: MediaListTab = MediaListTab.ALL,
-    
-    // Sort state
     val sortOrder: SortOrder = SortOrder.OLD_TO_RECENT,
     val manualOrder: List<String> = emptyList(),
     val isShuffling: Boolean = false,

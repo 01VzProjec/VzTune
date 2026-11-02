@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.core.domain.search.SortOrder
 import com.vztechcore.vztune.ui.components.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.MediaThumbnail
 import com.vztechcore.vztune.ui.components.ThumbnailShape

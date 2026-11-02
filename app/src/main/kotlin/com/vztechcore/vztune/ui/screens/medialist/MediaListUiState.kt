@@ -4,9 +4,7 @@ import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 
 enum class MediaListTab(val label: String) {
-    ALL("Tudo"),
-    SONGS("Músicas"),
-    VIDEOS("Vídeos"),
+    ALL("Tudo"), SONGS("Músicas"), VIDEOS("Vídeos"),
 }
 
 enum class SortOrder(val label: String) {
@@ -23,26 +21,22 @@ enum class SortOrder(val label: String) {
 data class MediaListUiState(
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
-
-    // Header
     val title: String = "",
     val subtitle: String? = null,
     val thumbnailUrl: String? = null,
     val mosaicThumbnails: List<String> = emptyList(),
     val isAlbum: Boolean = false,
-
-    // Content
     val allTracks: List<Track> = emptyList(),
     val description: String? = null,
     val selectedTab: MediaListTab = MediaListTab.ALL,
-    val sortOrder: SortOrder = SortOrder.MANUAL,
+    
+    // Sort state
+    val sortOrder: SortOrder = SortOrder.OLD_TO_RECENT,
+    val manualOrder: List<String> = emptyList(),
+    val isShuffling: Boolean = false,
 ) {
     val showTabs: Boolean get() = !isAlbum
 
-    /**
-     * Applies tab filter. SORT is applied in the screen composable
-     * (with `remember`) to avoid shuffling on every recomposition.
-     */
     val filteredTracks: List<Track>
         get() = when (selectedTab) {
             MediaListTab.ALL -> allTracks
@@ -50,20 +44,20 @@ data class MediaListUiState(
             MediaListTab.VIDEOS -> allTracks.filter { it.source == Source.YOUTUBE }
         }
 
-    /**
-     * Recomputed by the screen. The UI applies `sortOrder` on top of this
-     * list with a `remember(filteredTracks, sortOrder)` block so `SHUFFLE`
-     * produces a stable order until the user re-triggers it.
-     */
     fun applySort(tracks: List<Track>): List<Track> = when (sortOrder) {
-        SortOrder.MANUAL -> tracks
+        SortOrder.MANUAL, SortOrder.SHUFFLE -> {
+            if (manualOrder.isEmpty()) tracks
+            else {
+                val map = manualOrder.withIndex().associate { it.value to it.index }
+                tracks.sortedBy { map[it.id] ?: Int.MAX_VALUE }
+            }
+        }
         SortOrder.RECENT_TO_OLD -> tracks.reversed()
         SortOrder.OLD_TO_RECENT -> tracks
         SortOrder.TITLE_ASC -> tracks.sortedBy { it.title.lowercase() }
         SortOrder.TITLE_DESC -> tracks.sortedByDescending { it.title.lowercase() }
         SortOrder.ARTIST_ASC -> tracks.sortedBy { it.artist.lowercase() }
         SortOrder.ARTIST_DESC -> tracks.sortedByDescending { it.artist.lowercase() }
-        SortOrder.SHUFFLE -> tracks.shuffled()
     }
 
     val trackCountLabel: String

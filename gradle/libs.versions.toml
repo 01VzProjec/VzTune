@@ -72,6 +72,9 @@ espresso = "3.6.1"
 # ---- palette ----
 palette = "1.0.0"
 
+# ---- reordederable ---- 
+reorderable = "2.4.3"
+
 
 # ============================================================
 # LIBRARIES
@@ -142,6 +145,9 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 
 # ----palette ----
 androidx-palette = { group = "androidx.palette", name = "palette-ktx", version.ref = "palette" }
+
+# ---- reordederable ----
+reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
 
 # ============================================================
 # PLUGINS

@@ -123,6 +123,9 @@ dependencies {
     
     // palete
     implementation(libs.androidx.palette)
+    
+    // reordederable
+    implementation(libs.reorderable)
 
     // Core library desugaring — MUST be declared in :app too (depends on :data)
     coreLibraryDesugaring(libs.desugar.jdk.libs)

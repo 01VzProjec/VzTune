@@ -95,6 +95,10 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onPlayAllClick = vm::onPlayAll,
                         onShuffleClick = vm::onShuffle,
                         onSortSelected = vm::onSortOrderSelected,
+                        onReorder = vm::onReorder,                // NOVO
+                        onStartShuffle = vm::startShuffle,        // NOVO
+                        onShuffleOnce = vm::shuffleOnce,          // NOVO
+                        onStopShuffle = vm::stopShuffle,          // NOVO
                     )
                 }
             }

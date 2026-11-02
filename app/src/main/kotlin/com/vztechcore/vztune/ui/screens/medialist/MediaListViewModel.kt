@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.data.player.PlayerController
+import com.vztechcore.vztune.data.prefs.MediaListPreferencesStore
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,6 +23,7 @@ class MediaListViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val ytMusicRepository: YTMusicRepository,
     private val playerController: PlayerController,
+    private val store: MediaListPreferencesStore,
 ) : ViewModel() {
 
     private val route = savedStateHandle.toRoute<Routes.MediaList>()
@@ -37,6 +39,9 @@ class MediaListViewModel @Inject constructor(
     val uiState: StateFlow<MediaListUiState> = _uiState.asStateFlow()
 
     init {
+        val savedSort = store.getSortOrder(route.id)
+        val savedManual = store.getManualOrder(route.id)
+        _uiState.update { it.copy(sortOrder = savedSort, manualOrder = savedManual) }
         loadContent()
     }
 
@@ -50,26 +55,18 @@ class MediaListViewModel @Inject constructor(
                         it.copy(
                             isLoading = false,
                             title = album.title ?: it.title,
-                            subtitle = album.artist
-                                ?.takeIf { a -> a != "Desconhecido" }
-                                ?: it.subtitle,
+                            subtitle = album.artist?.takeIf { a -> a != "Desconhecido" } ?: it.subtitle,
                             thumbnailUrl = album.coverUrl ?: it.thumbnailUrl,
                             description = album.description,
                             allTracks = album.tracks,
                         )
                     }
                 } else {
-                    // First attempt
                     var playlist = ytMusicRepository.browsePlaylist(route.id)
-
-                    // Retry: if playlist came back empty, wait 1s and try again.
-                    // (User hypothesis: sometimes YT Music returns empty on
-                    // first call due to race condition — this gives it a second shot.)
                     if (playlist.tracks.isEmpty()) {
                         delay(1000)
                         playlist = ytMusicRepository.browsePlaylist(route.id)
                     }
-
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -94,19 +91,46 @@ class MediaListViewModel @Inject constructor(
 
     fun onSortOrderSelected(order: SortOrder) {
         if (order == _uiState.value.sortOrder) return
-        _uiState.update { it.copy(sortOrder = order) }
+        _uiState.update { it.copy(sortOrder = order, isShuffling = false) }
+        store.setSortOrder(route.id, order)
+    }
+
+    fun onReorder(fromIndex: Int, toIndex: Int) {
+        val currentTracks = _uiState.value.applySort(_uiState.value.filteredTracks)
+        if (fromIndex !in currentTracks.indices || toIndex !in currentTracks.indices) return
+
+        val newList = currentTracks.toMutableList()
+        val item = newList.removeAt(fromIndex)
+        newList.add(toIndex, item)
+
+        val newOrderIds = newList.map { it.id }
+        _uiState.update { it.copy(manualOrder = newOrderIds, sortOrder = SortOrder.MANUAL) }
+        store.setManualOrder(route.id, newOrderIds)
+        store.setSortOrder(route.id, SortOrder.MANUAL)
+    }
+
+    fun startShuffle() {
+        _uiState.update { it.copy(isShuffling = true) }
+    }
+
+    fun shuffleOnce() {
+        val currentTracks = _uiState.value.allTracks
+        if (currentTracks.isEmpty()) return
+        val newOrderIds = currentTracks.map { it.id }.shuffled()
+        _uiState.update { it.copy(manualOrder = newOrderIds, sortOrder = SortOrder.SHUFFLE) }
+    }
+
+    fun stopShuffle() {
+        _uiState.update { it.copy(isShuffling = false) }
+        store.setManualOrder(route.id, _uiState.value.manualOrder)
+        store.setSortOrder(route.id, SortOrder.SHUFFLE)
     }
 
     fun onTrackClick(track: Track) {
-        // When the user taps a track, we use the FULL list from the current tab
-        // (sorted) so the queue order matches what the user sees.
         val sorted = _uiState.value.applySort(_uiState.value.filteredTracks)
         val idx = sorted.indexOfFirst { it.id == track.id && it.source == track.source }
-        if (idx >= 0) {
-            playerController.playQueue(sorted, idx)
-        } else {
-            playerController.playQueue(listOf(track), 0)
-        }
+        if (idx >= 0) playerController.playQueue(sorted, idx)
+        else playerController.playQueue(listOf(track), 0)
     }
 
     fun onPlayAll() {

@@ -155,13 +155,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 2437,
-          "line": 74
+          "index": 2535,
+          "line": 76
         },
         "start": {
           "column": 1,
-          "index": 2437,
-          "line": 74
+          "index": 2535,
+          "line": 76
         }
       }
     },
@@ -451,5 +451,5 @@
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreen.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreenPreview.kt"
 }

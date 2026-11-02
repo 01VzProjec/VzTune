@@ -134,7 +134,22 @@
           "line": 202
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/NowPlayingThubnail.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 1350,
+          "line": 44
+        },
+        "start": {
+          "column": 1,
+          "index": 1350,
+          "line": 44
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreen.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/NowPlayingThubnail.kt"
 }

@@ -1,27 +1,20 @@
 package com.vztechcore.vztune.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 
 /**
- * Legacy thumbnail with an "is playing" overlay.
+ * Legacy wrapper kept for backward compatibility with older call sites.
  *
- * @Deprecated Use [MediaThumbnail] directly — it has the same behavior
- * with more shape/size options. Kept here so existing callers in
- * SearchAutocomplete.kt don't need to change on the same commit.
+ * Now delegates to [MediaThumbnail], which already handles:
+ *   - square / circle / wide shapes
+ *   - playing equalizer overlay
+ *   - paused state (pause icon + small equalizer)
+ *   - loading spinner
  *
- * The caller is expected to size this via `Modifier.size(...)` (like the old
- * version did). Do NOT pass a `.size()` AND rely on the default — pick one.
+ * New code should call [MediaThumbnail] directly.
  */
 @Deprecated(
     message = "Use MediaThumbnail instead",
@@ -40,24 +33,13 @@ fun NowPlayingThumbnail(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 8.dp,
 ) {
-    val shape = RoundedCornerShape(cornerRadius)
-
-    Box(
-        modifier = modifier
-            .clip(shape)
-            .background(Color.White.copy(alpha = 0.06f)),
-    ) {
-        if (model != null) {
-            AsyncImage(
-                model = model,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-
-        if (isPlaying) {
-            PlayingOverlay(clipShape = shape)
-        }
-    }
+    MediaThumbnail(
+        imageUrl = model as? String,
+        modifier = modifier,
+        shape = ThumbnailShape.SQUARE,
+        isPlaying = isPlaying,
+        isPaused = false,
+        isLoading = false,
+        cornerRadius = cornerRadius,
+    )
 }

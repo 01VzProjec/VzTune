@@ -55,7 +55,7 @@ fun MediaListScreen(
     onStartShuffle: () -> Unit,
     onShuffleOnce: () -> Unit,
     onStopShuffle: () -> Unit,
-    onTrackInfoClick: (Track) -> Unit,
+    onPlayNextClick: (Track) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -162,7 +162,7 @@ fun MediaListScreen(
                             isPlaying = isPlaying,
                             isPaused = isPaused,
                             onClick = { onTrackClick(track) },
-                            onMoreClick = { /* TODO */ },
+                            onMoreClick = { },
                         )
                     } else if (canReorder) {
                         ReorderableItem(reorderableState, key = track.id) { isDragging ->
@@ -172,8 +172,8 @@ fun MediaListScreen(
                                 isPlaying = isPlaying,
                                 isPaused = isPaused,
                                 onClick = { onTrackClick(track) },
-                                onMoreClick = { /* TODO */ },
-                                onInfoRequested = { onTrackInfoClick(track) },
+                                onMoreClick = { },
+                                onPlayNext = { onPlayNextClick(track) },
                                 showDragHandle = true,
                                 dragHandleModifier = Modifier.longPressDraggableHandle(),
                                 modifier = Modifier
@@ -190,8 +190,8 @@ fun MediaListScreen(
                             isPlaying = isPlaying,
                             isPaused = isPaused,
                             onClick = { onTrackClick(track) },
-                            onMoreClick = { /* TODO */ },
-                            onInfoRequested = { onTrackInfoClick(track) },
+                            onMoreClick = { },
+                            onPlayNext = { onPlayNextClick(track) },
                             showDragHandle = false,
                             dragHandleModifier = Modifier,
                             modifier = Modifier,
@@ -222,7 +222,7 @@ fun MediaListScreen(
                 allTracks = displayedTracks,
                 onClose = { showSearchOverlay = false },
                 onTrackClick = onTrackClick,
-                onTrackInfoClick = onTrackInfoClick,
+                onPlayNextClick = onPlayNextClick,
             )
         }
     }

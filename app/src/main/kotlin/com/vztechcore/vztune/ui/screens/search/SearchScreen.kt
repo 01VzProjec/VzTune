@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchFilter
+import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.ui.screens.search.components.SearchAutocomplete
 import com.vztechcore.vztune.ui.screens.search.components.SearchBar
 import com.vztechcore.vztune.ui.screens.search.components.SearchEmptyState
@@ -27,7 +28,7 @@ fun SearchScreen(
     onRemoveHistory: (String) -> Unit,
     onClearHistory: () -> Unit,
     onLoadMore: () -> Unit,
-    onHitClick: (com.vztechcore.vztune.core.domain.search.SearchHit) -> Unit = {},
+    onHitClick: (SearchHit) -> Unit = {},
     onPlayNextClick: (Track) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {

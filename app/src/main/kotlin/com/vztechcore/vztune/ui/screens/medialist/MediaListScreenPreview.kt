@@ -22,7 +22,7 @@ private fun MediaListLoadingPreview() {
             onStartShuffle = {},
             onShuffleOnce = {},
             onStopShuffle = {},
-            onTrackInfoClick = {}, // ADICIONADO
+            onPlayNextClick = {},
         )
     }
 }
@@ -71,7 +71,7 @@ private fun MediaListContentPreview() {
             onStartShuffle = {},
             onShuffleOnce = {},
             onStopShuffle = {},
-            onTrackInfoClick = {}, // ADICIONADO
+            onPlayNextClick = {},
         )
     }
 }

@@ -7,6 +7,7 @@ import com.vztechcore.vztune.core.domain.search.SearchFilter
 import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.core.domain.search.SearchResult
 import com.vztechcore.vztune.core.domain.search.SearchSuggestions
+import com.vztechcore.vztune.data.innertube.InnerTube
 import com.vztechcore.vztune.data.youtube.YouTubeMusicNewPipeRepository
 import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
@@ -18,7 +19,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import org.schabi.newpipe.extractor.ServiceList
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -222,38 +223,68 @@ class MusicRepository @Inject constructor(
         if (queue.isEmpty()) listOf(track) else queue
     }
 
-    // ================= TECHNICAL INFO =================
+    // ================= TECHNICAL INFO (InnerTube player) =================
 
     suspend fun getTechnicalInfo(track: Track): TechnicalInfo? = withContext(Dispatchers.IO) {
         runCatching {
-            val url = "https://www.youtube.com/watch?v=${track.id}"
-            val extractor = ServiceList.YouTube.getStreamExtractor(url)
-            extractor.fetchPage()
+            // Usa o player do InnerTube para ler o bitrate real
+            val playerJson = InnerTube.player(track.id)
+            val streamingData = playerJson.optJSONObject("streamingData")
+                ?: return@runCatching null
 
-            // Preferir áudio puro
-            val audio = extractor.audioStreams.maxByOrNull { it.averageBitrate }
-            if (audio != null) {
-                // averageBitrate é a única propriedade que o NewPipe expõe.
-                // Se for 0 (Opus às vezes vem zerado), escrevemos "Desconhecida".
-                val bitrate = audio.averageBitrate
-                return@runCatching TechnicalInfo(
-                    itag = audio.itag.takeIf { it > 0 }?.toString() ?: "Desconhecido",
-                    mimeType = audio.getFormat()?.mimeType ?: "Desconhecido",
-                    quality = if (bitrate > 0) "${bitrate / 1000} kbps" else "Desconhecida",
-                )
+            // Procura o melhor stream de áudio (adaptiveFormats)
+            val adaptiveFormats = streamingData.optJSONArray("adaptiveFormats")
+            if (adaptiveFormats != null) {
+                var bestBitrate = 0
+                var bestItag: String? = null
+                var bestMime: String? = null
+
+                for (i in 0 until adaptiveFormats.length()) {
+                    val fmt = adaptiveFormats.optJSONObject(i) ?: continue
+                    val mime = fmt.optString("mimeType")
+                    if (!mime.startsWith("audio/")) continue
+
+                    val bitrate = fmt.optInt("bitrate", 0)
+                    if (bitrate > bestBitrate) {
+                        bestBitrate = bitrate
+                        bestItag = fmt.optInt("itag").takeIf { it > 0 }?.toString()
+                        bestMime = mime
+                    }
+                }
+
+                if (bestBitrate > 0) {
+                    return@runCatching TechnicalInfo(
+                        itag = bestItag ?: "Desconhecido",
+                        mimeType = bestMime ?: "Desconhecido",
+                        quality = "${bestBitrate / 1000} kbps",
+                    )
+                }
             }
 
-            // Fallback para vídeo
-            val video = extractor.videoStreams
-                .filter { !it.isVideoOnly }
-                .minByOrNull { it.resolution.removeSuffix("p").toIntOrNull() ?: Int.MAX_VALUE }
+            // Fallback: formatos combinados (formats)
+            val formats = streamingData.optJSONArray("formats")
+            if (formats != null) {
+                var bestBitrate = 0
+                var bestItag: String? = null
+                var bestMime: String? = null
 
-            if (video != null) {
-                return@runCatching TechnicalInfo(
-                    itag = video.itag.takeIf { it > 0 }?.toString() ?: "Desconhecido",
-                    mimeType = video.getFormat()?.mimeType ?: "Desconhecido",
-                    quality = video.resolution.takeIf { it.isNotBlank() } ?: "Desconhecida",
-                )
+                for (i in 0 until formats.length()) {
+                    val fmt = formats.optJSONObject(i) ?: continue
+                    val bitrate = fmt.optInt("bitrate", 0)
+                    if (bitrate > bestBitrate) {
+                        bestBitrate = bitrate
+                        bestItag = fmt.optInt("itag").takeIf { it > 0 }?.toString()
+                        bestMime = fmt.optString("mimeType")
+                    }
+                }
+
+                if (bestBitrate > 0) {
+                    return@runCatching TechnicalInfo(
+                        itag = bestItag ?: "Desconhecido",
+                        mimeType = bestMime ?: "Desconhecido",
+                        quality = "${bestBitrate / 1000} kbps",
+                    )
+                }
             }
 
             null

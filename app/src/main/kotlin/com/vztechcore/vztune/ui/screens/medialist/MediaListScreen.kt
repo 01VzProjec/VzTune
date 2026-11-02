@@ -64,6 +64,9 @@ fun MediaListScreen(
     val scope = rememberCoroutineScope()
     var shuffleJob by remember { mutableStateOf<Job?>(null) }
 
+    // Controls single-item drag lock
+    var currentlyDraggingId by remember { mutableStateOf<String?>(null) }
+
     val isCollapsed by remember {
         derivedStateOf {
             listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 250
@@ -90,7 +93,8 @@ fun MediaListScreen(
                     delay(150)
                 }
             }
-            delay(1000)
+            // Delay 1.5s as requested
+            delay(1500)
             onStopShuffle()
         } else {
             shuffleJob?.cancel()
@@ -166,7 +170,6 @@ fun MediaListScreen(
 
                     if (canReorder) {
                         ReorderableItem(reorderableState, key = track.id) { isDragging ->
-                            val elevation = if (isDragging) 8.dp else 0.dp
                             TrackRow(
                                 track = track,
                                 index = if (state.isAlbum) index + 1 else null,
@@ -174,7 +177,11 @@ fun MediaListScreen(
                                 isPaused = isPaused,
                                 onClick = { onTrackClick(track) },
                                 showDragHandle = true,
-                                dragHandleModifier = Modifier.draggableHandle(),
+                                dragHandleModifier = Modifier.draggableHandle(
+                                    enabled = currentlyDraggingId == null || currentlyDraggingId == track.id,
+                                    onDragStarted = { currentlyDraggingId = track.id },
+                                    onDragStopped = { currentlyDraggingId = null }
+                                ),
                                 modifier = Modifier
                                     .animateItemPlacement(
                                         spring(
@@ -350,12 +357,16 @@ private fun MediaListExpandedHeader(
 
             Spacer(Modifier.weight(1f))
 
-            IconButton(onClick = onShuffleToggle) {
-                Icon(
-                    imageVector = if (state.isShuffling) Icons.Filled.Stop else Icons.Filled.Casino,
-                    contentDescription = "Sortear animado",
-                    tint = if (state.isShuffling) Color(0xFF1E40AF) else Color.White,
-                )
+            // 1. Shuffle toggle only shows when SHUFFLE is the selected sort
+            if (state.sortOrder == SortOrder.SHUFFLE) {
+                IconButton(onClick = onShuffleToggle) {
+                    Icon(
+                        // Changed icon to AutoAwesome (sparkles) for better look
+                        imageVector = if (state.isShuffling) Icons.Filled.Stop else Icons.Filled.AutoAwesome,
+                        contentDescription = "Sortear animado",
+                        tint = if (state.isShuffling) Color(0xFF1E40AF) else Color.White,
+                    )
+                }
             }
 
             IconButton(onClick = onSortClick) {

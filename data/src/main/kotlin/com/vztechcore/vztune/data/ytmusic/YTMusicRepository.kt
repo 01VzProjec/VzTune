@@ -222,8 +222,18 @@ class YTMusicRepository @Inject constructor(
                     .takeIf { it.isNotBlank() && it != "null" }
                     ?.toLongOrNull()
 
-                val description = videoDetails.optString("shortDescription")
+                // Tenta pegar a descrição do videoDetails
+                var description = videoDetails.optString("shortDescription")
                     .takeIf { it.isNotBlank() && it != "null" }
+
+                // Se não achou, tenta no microformat
+                if (description == null) {
+                    description = json.optJSONObject("microformat")
+                        ?.optJSONObject("playerMicroformatRenderer")
+                        ?.optJSONObject("description")
+                        ?.optString("simpleText")
+                        ?.takeIf { it.isNotBlank() && it != "null" }
+                }
 
                 VideoDetails(
                     viewCount = viewCountRaw?.let { formatNumber(it) },

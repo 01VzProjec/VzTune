@@ -182,7 +182,7 @@ class MusicRepository @Inject constructor(
                     }.getOrNull()
 
                     when {
-                        hasTracks == null -> hit // fail-open em caso de erro
+                        hasTracks == null -> hit
                         hasTracks == false -> {
                             Log.d(TAG, "skip empty playlist: ${hit.playlist.id} '${hit.playlist.title}'")
                             null
@@ -233,12 +233,13 @@ class MusicRepository @Inject constructor(
             // Preferir áudio puro
             val audio = extractor.audioStreams.maxByOrNull { it.averageBitrate }
             if (audio != null) {
+                // Se averageBitrate falhar, tenta pegar o bitrate do formato, senão fica 0
+                val bitrate = if (audio.averageBitrate > 0) audio.averageBitrate else audio.getFormat()?.bitrate ?: 0
+                
                 return@runCatching TechnicalInfo(
-                    itag = audio.itag.takeIf { it > 0 }?.toString(),
-                    mimeType = audio.getFormat()?.mimeType,
-                    quality = if (audio.averageBitrate > 0) {
-                        "${audio.averageBitrate / 1000} kbps"
-                    } else null,
+                    itag = audio.itag.takeIf { it > 0 }?.toString() ?: "Desconhecido",
+                    mimeType = audio.getFormat()?.mimeType ?: "Desconhecido",
+                    quality = if (bitrate > 0) "${bitrate / 1000} kbps" else "Desconhecida",
                 )
             }
 
@@ -246,11 +247,12 @@ class MusicRepository @Inject constructor(
             val video = extractor.videoStreams
                 .filter { !it.isVideoOnly }
                 .minByOrNull { it.resolution.removeSuffix("p").toIntOrNull() ?: Int.MAX_VALUE }
+            
             if (video != null) {
                 return@runCatching TechnicalInfo(
-                    itag = video.itag.takeIf { it > 0 }?.toString(),
-                    mimeType = video.getFormat()?.mimeType,
-                    quality = video.resolution.takeIf { it.isNotBlank() },
+                    itag = video.itag.takeIf { it > 0 }?.toString() ?: "Desconhecido",
+                    mimeType = video.getFormat()?.mimeType ?: "Desconhecido",
+                    quality = video.resolution.takeIf { it.isNotBlank() } ?: "Desconhecida",
                 )
             }
 

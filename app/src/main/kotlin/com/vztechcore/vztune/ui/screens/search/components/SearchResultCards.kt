@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,9 +18,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -70,21 +76,41 @@ fun SearchResultsContent(
     ) {
         LazyColumn(
             state = lazyListState,
-            contentPadding = PaddingValues(bottom = 160.dp, top = 8.dp, start = 12.dp, end = 12.dp),
+            contentPadding = PaddingValues(
+                bottom = 160.dp,
+                top = 8.dp,
+                start = 12.dp,
+                end = 12.dp,
+            ),
             verticalArrangement = Arrangement.spacedBy(if (isVideoMode) 20.dp else 4.dp),
         ) {
             itemsIndexed(hits, key = { _, item -> item.stableKey }) { _, hit ->
                 if (isVideoMode && hit is SearchHit.VideoHit) {
-                    VideoResultCard(hit = hit, onClick = { onHitClick(hit) })
+                    VideoResultCard(
+                        hit = hit,
+                        onClick = { onHitClick(hit) },
+                        onMoreClick = { /* TODO: menu de 3 pontinhos */ }
+                    )
                 } else {
-                    SearchResultCard(hit = hit, onClick = { onHitClick(hit) })
+                    SearchResultCard(
+                        hit = hit,
+                        onClick = { onHitClick(hit) },
+                        onMoreClick = { /* TODO: menu de 3 pontinhos */ }
+                    )
                 }
             }
 
             if (isLoadingMore) {
                 item {
-                    Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                    Box(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(22.dp),
+                        )
                     }
                 }
             }
@@ -93,7 +119,11 @@ fun SearchResultsContent(
 }
 
 @Composable
-fun SearchResultCard(hit: SearchHit, onClick: () -> Unit) {
+fun SearchResultCard(
+    hit: SearchHit,
+    onClick: () -> Unit,
+    onMoreClick: () -> Unit,
+) {
     val nowPlaying = LocalNowPlaying.current
 
     when (hit) {
@@ -101,18 +131,23 @@ fun SearchResultCard(hit: SearchHit, onClick: () -> Unit) {
             val isCurrent = nowPlaying.isCurrent(hit.track.id, hit.track.source)
             val isPlaying = isCurrent && nowPlaying.isPlaying
             val isPaused = isCurrent && !nowPlaying.isPlaying
-
             RowCard(
                 imageUrl = hit.track.thumbnailUrl,
                 shape = ThumbnailShape.SQUARE,
                 title = hit.track.title,
                 subtitle = {
-                    TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
+                    TrackSubtitle(
+                        track = hit.track,
+                        style = MaterialTheme.typography.bodySmall,
+                        prefixColor = Color.White.copy(alpha = 0.55f),
+                        artistColor = Color.White.copy(alpha = 0.6f),
+                    )
                 },
                 durationLabel = formatDuration(hit.track.durationSeconds),
                 isPlaying = isPlaying,
                 isPaused = isPaused,
                 onClick = onClick,
+                onMoreClick = onMoreClick,
             )
         }
 
@@ -120,18 +155,23 @@ fun SearchResultCard(hit: SearchHit, onClick: () -> Unit) {
             val isCurrent = nowPlaying.isCurrent(hit.track.id, hit.track.source)
             val isPlaying = isCurrent && nowPlaying.isPlaying
             val isPaused = isCurrent && !nowPlaying.isPlaying
-
             RowCard(
                 imageUrl = hit.track.thumbnailUrl,
                 shape = ThumbnailShape.SQUARE,
                 title = hit.track.title,
                 subtitle = {
-                    TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
+                    TrackSubtitle(
+                        track = hit.track,
+                        style = MaterialTheme.typography.bodySmall,
+                        prefixColor = Color.White.copy(alpha = 0.55f),
+                        artistColor = Color.White.copy(alpha = 0.6f),
+                    )
                 },
                 durationLabel = formatDuration(hit.track.durationSeconds),
                 isPlaying = isPlaying,
                 isPaused = isPaused,
                 onClick = onClick,
+                onMoreClick = onMoreClick,
             )
         }
 
@@ -140,47 +180,124 @@ fun SearchResultCard(hit: SearchHit, onClick: () -> Unit) {
             mosaic = hit.playlist.mosaicThumbnails,
             shape = ThumbnailShape.SQUARE,
             title = hit.playlist.title,
-            subtitle = { Text("Playlist · ${hit.playlist.owner ?: ""}", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            durationLabel = null, isPlaying = false, isPaused = false, onClick = onClick,
+            subtitle = {
+                Text(
+                    text = "Playlist · ${hit.playlist.owner ?: ""}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+            durationLabel = null,
+            isPlaying = false,
+            isPaused = false,
+            onClick = onClick,
+            onMoreClick = onMoreClick,
         )
 
         is SearchHit.ArtistHit -> RowCard(
             imageUrl = hit.artist.thumbnailUrl,
             shape = ThumbnailShape.CIRCLE,
             title = hit.artist.name,
-            subtitle = { Text("Artista", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1) },
-            durationLabel = null, isPlaying = false, isPaused = false, onClick = onClick,
+            subtitle = {
+                Text(
+                    text = "Artista",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.6f),
+                    maxLines = 1,
+                )
+            },
+            durationLabel = null,
+            isPlaying = false,
+            isPaused = false,
+            onClick = onClick,
+            onMoreClick = onMoreClick,
         )
 
         is SearchHit.AlbumHit -> RowCard(
             imageUrl = hit.album.thumbnailUrl,
             shape = ThumbnailShape.SQUARE,
             title = hit.album.title,
-            subtitle = { Text("Álbum · ${hit.album.artist}", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            durationLabel = null, isPlaying = false, isPaused = false, onClick = onClick,
+            subtitle = {
+                Text(
+                    text = "Álbum · ${hit.album.artist}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+            durationLabel = null,
+            isPlaying = false,
+            isPaused = false,
+            onClick = onClick,
+            onMoreClick = onMoreClick,
         )
     }
 }
 
 @Composable
-fun VideoResultCard(hit: SearchHit.VideoHit, onClick: () -> Unit) {
+fun VideoResultCard(
+    hit: SearchHit.VideoHit,
+    onClick: () -> Unit,
+    onMoreClick: () -> Unit,
+) {
     val nowPlaying = LocalNowPlaying.current
     val isCurrent = nowPlaying.isCurrent(hit.track.id, hit.track.source)
     val isPlaying = isCurrent && nowPlaying.isPlaying
     val isPaused = isCurrent && !nowPlaying.isPlaying
 
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onClick() }) {
-        MediaThumbnail(
-            imageUrl = hit.track.thumbnailUrl,
-            shape = ThumbnailShape.WIDE,
-            cornerRadius = 12.dp,
-            isPlaying = isPlaying,
-            isPaused = isPaused,
-        )
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() },
+    ) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+            MediaThumbnail(
+                imageUrl = hit.track.thumbnailUrl,
+                shape = ThumbnailShape.WIDE,
+                cornerRadius = 12.dp,
+                isPlaying = isPlaying,
+                isPaused = isPaused,
+            )
+
+            // 3 pontinhos no canto superior direito da thumb 16:9
+            IconButton(
+                onClick = onMoreClick,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.55f))
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = "Mais opções",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
         Spacer(Modifier.height(8.dp))
-        Text(hit.track.title, style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(
+            text = hit.track.title,
+            style = MaterialTheme.typography.titleSmall,
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
         Spacer(Modifier.height(2.dp))
-        TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
+        TrackSubtitle(
+            track = hit.track,
+            style = MaterialTheme.typography.bodySmall,
+            prefixColor = Color.White.copy(alpha = 0.55f),
+            artistColor = Color.White.copy(alpha = 0.6f),
+        )
     }
 }
 
@@ -194,9 +311,17 @@ private fun RowCard(
     isPlaying: Boolean,
     isPaused: Boolean,
     onClick: () -> Unit,
+    onMoreClick: () -> Unit,
     mosaic: List<String> = emptyList(),
 ) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onClick() }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         if (mosaic.size >= 4) {
             PlaylistMosaic(mosaic)
         } else {
@@ -211,28 +336,76 @@ private fun RowCard(
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Spacer(Modifier.height(2.dp))
             subtitle()
         }
+        
         if (durationLabel != null) {
             Spacer(Modifier.width(8.dp))
-            Text(durationLabel, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
+            Text(
+                text = durationLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.5f),
+            )
+        }
+        
+        // 3 pontinhos na lista comum (songs/playlists/albums)
+        IconButton(
+            onClick = onMoreClick,
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.MoreVert,
+                contentDescription = "Mais opções",
+                tint = Color.White.copy(alpha = 0.7f)
+            )
         }
     }
 }
 
 @Composable
 private fun PlaylistMosaic(thumbnails: List<String>) {
-    Box(Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.06f))) {
+    Box(
+        Modifier
+            .size(56.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.White.copy(alpha = 0.06f)),
+    ) {
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f)) {
-                AsyncImage(model = thumbnails.getOrNull(0), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
-                AsyncImage(model = thumbnails.getOrNull(2), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
+                AsyncImage(
+                    model = thumbnails.getOrNull(0),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+                AsyncImage(
+                    model = thumbnails.getOrNull(2),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
             }
             Column(Modifier.weight(1f)) {
-                AsyncImage(model = thumbnails.getOrNull(1), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
-                AsyncImage(model = thumbnails.getOrNull(3), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
+                AsyncImage(
+                    model = thumbnails.getOrNull(1),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+                AsyncImage(
+                    model = thumbnails.getOrNull(3),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
             }
         }
     }

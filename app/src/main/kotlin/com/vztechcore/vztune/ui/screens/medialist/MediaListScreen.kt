@@ -153,7 +153,17 @@ fun MediaListScreen(
                     val isPlaying = isCurrent && nowPlaying.isPlaying
                     val isPaused = isCurrent && !nowPlaying.isPlaying
 
-                    if (canReorder) {
+                    val useVideoLayout = state.selectedTab == MediaListTab.VIDEOS
+
+                    if (useVideoLayout) {
+                        MediaListVideoCard(
+                            track = track,
+                            isPlaying = isPlaying,
+                            isPaused = isPaused,
+                            onClick = { onTrackClick(track) },
+                            onMoreClick = { /* TODO */ },
+                        )
+                    } else if (canReorder) {
                         ReorderableItem(reorderableState, key = track.id) { isDragging ->
                             MediaListTrackRow(
                                 track = track,
@@ -161,6 +171,7 @@ fun MediaListScreen(
                                 isPlaying = isPlaying,
                                 isPaused = isPaused,
                                 onClick = { onTrackClick(track) },
+                                onMoreClick = { /* TODO */ },
                                 showDragHandle = true,
                                 dragHandleModifier = Modifier.longPressDraggableHandle(),
                                 modifier = Modifier
@@ -177,6 +188,7 @@ fun MediaListScreen(
                             isPlaying = isPlaying,
                             isPaused = isPaused,
                             onClick = { onTrackClick(track) },
+                            onMoreClick = { /* TODO */ },
                             showDragHandle = false,
                             dragHandleModifier = Modifier,
                             modifier = Modifier,

@@ -2,16 +2,8 @@ package com.vztechcore.vztune.ui.screens.medialist
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DragHandle
@@ -40,6 +32,7 @@ internal fun MediaListTrackRow(
     isPlaying: Boolean,
     isPaused: Boolean,
     onClick: () -> Unit,
+    onMoreClick: () -> Unit,
     showDragHandle: Boolean,
     dragHandleModifier: Modifier,
     modifier: Modifier = Modifier,
@@ -98,7 +91,7 @@ internal fun MediaListTrackRow(
             )
         }
 
-        IconButton(onClick = { /* TODO */ }) {
+        IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
             Icon(
                 Icons.Filled.MoreVert,
                 contentDescription = "Mais opções",
@@ -116,6 +109,68 @@ internal fun MediaListTrackRow(
                     .padding(4.dp)
                     .then(dragHandleModifier),
             )
+        }
+    }
+}
+
+@Composable
+internal fun MediaListVideoCard(
+    track: Track,
+    isPlaying: Boolean,
+    isPaused: Boolean,
+    onClick: () -> Unit,
+    onMoreClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+            MediaThumbnail(
+                imageUrl = track.thumbnailUrl,
+                shape = ThumbnailShape.WIDE,
+                cornerRadius = 10.dp,
+                isPlaying = isPlaying,
+                isPaused = isPaused,
+            )
+            
+            // 3 pontinhos no canto superior direito
+            IconButton(
+                onClick = onMoreClick,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.55f))
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = "Mais opções",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    track.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(2.dp))
+                TrackSubtitle(
+                    track = track,
+                    style = MaterialTheme.typography.bodySmall,
+                    prefixColor = Color.White.copy(alpha = 0.55f),
+                    artistColor = Color.White.copy(alpha = 0.6f),
+                )
+            }
         }
     }
 }

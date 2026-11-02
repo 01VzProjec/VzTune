@@ -40,7 +40,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.longPressDraggableHandle
 import sh.calvin.reorderable.rememberReorderableLazyListState
+
+private const val HEADER_OFFSET = 1
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -61,11 +64,7 @@ fun MediaListScreen(
     val listState = rememberLazyListState()
     val nowPlaying = LocalNowPlaying.current
     var showSortSheet by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     var shuffleJob by remember { mutableStateOf<Job?>(null) }
-
-    // Controls single-item drag lock
-    var currentlyDraggingId by remember { mutableStateOf<String?>(null) }
 
     val isCollapsed by remember {
         derivedStateOf {
@@ -77,13 +76,26 @@ fun MediaListScreen(
         state.applySort(state.filteredTracks)
     }
 
-    val canReorder = state.sortOrder == SortOrder.MANUAL
+    // Same restriction as VzMusic: only allow manual reorder in the ALL tab
+    // (reordering a filtered subset would scramble the full list).
+    val canReorder = state.sortOrder == SortOrder.MANUAL &&
+        state.selectedTab == MediaListTab.ALL
 
     val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
-        if (canReorder) onReorder(from.index, to.index)
+        if (!canReorder) return@rememberReorderableLazyListState
+
+        // Subtract header offset so the indices match the tracks list,
+        // not the raw LazyColumn indices (which include the header at 0).
+        val fromTrack = from.index - HEADER_OFFSET
+        val toTrack = to.index - HEADER_OFFSET
+
+        if (fromTrack !in displayedTracks.indices) return@rememberReorderableLazyListState
+        if (toTrack !in displayedTracks.indices) return@rememberReorderableLazyListState
+
+        onReorder(fromTrack, toTrack)
     }
 
-    // Shuffle Animation Loop
+    // Shuffle Animation Loop (1.5s as requested)
     LaunchedEffect(state.isShuffling) {
         if (state.isShuffling) {
             shuffleJob?.cancel()
@@ -93,7 +105,6 @@ fun MediaListScreen(
                     delay(150)
                 }
             }
-            // Delay 1.5s as requested
             delay(1500)
             onStopShuffle()
         } else {
@@ -177,11 +188,7 @@ fun MediaListScreen(
                                 isPaused = isPaused,
                                 onClick = { onTrackClick(track) },
                                 showDragHandle = true,
-                                dragHandleModifier = Modifier.draggableHandle(
-                                    enabled = currentlyDraggingId == null || currentlyDraggingId == track.id,
-                                    onDragStarted = { currentlyDraggingId = track.id },
-                                    onDragStopped = { currentlyDraggingId = null }
-                                ),
+                                dragHandleModifier = Modifier.longPressDraggableHandle(),
                                 modifier = Modifier
                                     .animateItemPlacement(
                                         spring(
@@ -189,7 +196,9 @@ fun MediaListScreen(
                                             stiffness = Spring.StiffnessMedium,
                                         )
                                     )
-                                    .background(Color.Black.copy(alpha = if (isDragging) 0.5f else 0f)),
+                                    .background(
+                                        Color.Black.copy(alpha = if (isDragging) 0.5f else 0f)
+                                    ),
                             )
                         }
                     } else {
@@ -357,12 +366,12 @@ private fun MediaListExpandedHeader(
 
             Spacer(Modifier.weight(1f))
 
-            // 1. Shuffle toggle only shows when SHUFFLE is the selected sort
+            // Shuffle-animation toggle: only visible when SHUFFLE is active
             if (state.sortOrder == SortOrder.SHUFFLE) {
                 IconButton(onClick = onShuffleToggle) {
                     Icon(
-                        // Changed icon to AutoAwesome (sparkles) for better look
-                        imageVector = if (state.isShuffling) Icons.Filled.Stop else Icons.Filled.AutoAwesome,
+                        // Sync (circular arrows) = continuous shuffle loop
+                        imageVector = if (state.isShuffling) Icons.Filled.Stop else Icons.Filled.Sync,
                         contentDescription = "Sortear animado",
                         tint = if (state.isShuffling) Color(0xFF1E40AF) else Color.White,
                     )

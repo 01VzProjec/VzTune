@@ -10,7 +10,15 @@ class MiniPlayerViewModel @Inject constructor(
     private val playerController: PlayerController,
 ) : ViewModel() {
 
-    fun togglePlayPause() = playerController.togglePlayPause()
-    fun next() = playerController.next()
-    fun previous() = playerController.previous()
+    fun togglePlayPause() {
+        playerController.togglePlayPause()
+    }
+
+    fun next() {
+        playerController.playNext()
+    }
+
+    fun previous() {
+        playerController.playPrevious()
+    }
 }

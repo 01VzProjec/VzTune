@@ -49,8 +49,9 @@ class MediaListViewModel @Inject constructor(
                         it.copy(
                             isLoading = false,
                             title = album.title ?: it.title,
-                            // Fallback: se o artista do álbum vier nulo, usa o da route
-                            subtitle = album.artist?.takeIf { a -> a != "Desconhecido" } ?: it.subtitle,
+                            subtitle = album.artist
+                                ?.takeIf { a -> a != "Desconhecido" }
+                                ?: it.subtitle,
                             thumbnailUrl = album.coverUrl ?: it.thumbnailUrl,
                             description = album.description,
                             allTracks = album.tracks,
@@ -80,17 +81,31 @@ class MediaListViewModel @Inject constructor(
         _uiState.update { it.copy(selectedTab = tab) }
     }
 
+    /**
+     * Tap a track -> build a queue starting at THAT position, using the
+     * *filtered* tracks of the current tab. So:
+     *   - Tudo     -> mixed songs + videos, from tapped index to the end
+     *   - Músicas  -> only songs, from tapped index
+     *   - Vídeos   -> only videos, from tapped index
+     *   - Album    -> album tracks in order (no tabs, so filteredTracks == all)
+     */
     fun onTrackClick(track: Track) {
-        playerController.play(track)
+        val tracks = _uiState.value.filteredTracks
+        val idx = tracks.indexOfFirst { it.id == track.id && it.source == track.source }
+        if (idx >= 0) {
+            playerController.playQueue(tracks, idx)
+        } else {
+            playerController.playQueue(listOf(track), 0)
+        }
     }
 
     fun onPlayAll() {
         val tracks = _uiState.value.filteredTracks
-        if (tracks.isNotEmpty()) playerController.play(tracks.first())
+        if (tracks.isNotEmpty()) playerController.playQueue(tracks, 0)
     }
 
     fun onShuffle() {
         val shuffled = _uiState.value.filteredTracks.shuffled()
-        if (shuffled.isNotEmpty()) playerController.play(shuffled.first())
+        if (shuffled.isNotEmpty()) playerController.playQueue(shuffled, 0)
     }
 }

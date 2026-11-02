@@ -2,6 +2,7 @@ package com.vztechcore.vztune.ui.screens.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchFilter
 import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.core.domain.search.SearchResult
@@ -32,29 +33,20 @@ class SearchViewModel @Inject constructor(
     private val playerController: PlayerController,
 ) : ViewModel() {
 
-    // ================= NAVIGATION EVENTS =================
-
     sealed interface NavigationEvent {
         data class OpenPlaylist(
-            val id: String,
-            val title: String,
-            val owner: String?,
-            val thumbnailUrl: String?,
-            val mosaic: List<String>,
+            val id: String, val title: String, val owner: String?,
+            val thumbnailUrl: String?, val mosaic: List<String>,
         ) : NavigationEvent
 
         data class OpenAlbum(
-            val id: String,
-            val title: String,
-            val artist: String,
+            val id: String, val title: String, val artist: String,
             val thumbnailUrl: String?,
         ) : NavigationEvent
     }
 
     private val _navigationEvent = MutableSharedFlow<NavigationEvent>()
     val navigationEvent: SharedFlow<NavigationEvent> = _navigationEvent.asSharedFlow()
-
-    // ================= STATE =================
 
     private data class CachedTab(
         val query: String,
@@ -66,11 +58,8 @@ class SearchViewModel @Inject constructor(
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
     private val filterCache = mutableMapOf<SearchFilter, CachedTab>()
-
     private var suggestJob: Job? = null
     private var searchJob: Job? = null
-
-    // ================= INIT =================
 
     init {
         viewModelScope.launch {
@@ -79,7 +68,6 @@ class SearchViewModel @Inject constructor(
                 .getOrDefault(SearchFilter.ALL)
             _uiState.update { it.copy(selectedFilter = filter) }
         }
-
         viewModelScope.launch {
             historyStore.history.collect { list ->
                 _uiState.update { it.copy(history = list) }
@@ -87,35 +75,25 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    // ================= QUERY =================
-
     fun onQueryChange(value: String) {
         suggestJob?.cancel()
         searchJob?.cancel()
         filterCache.clear()
-
         _uiState.update {
             it.copy(
-                query = value,
-                errorMessage = null,
-                hasSearched = false,
-                hits = emptyList(),
-                hasMore = false,
-                isLoading = false,
-                isLoadingMore = false,
-                isRefreshing = false,
+                query = value, errorMessage = null, hasSearched = false,
+                hits = emptyList(), hasMore = false, isLoading = false,
+                isLoadingMore = false, isRefreshing = false,
             )
         }
-
         if (value.isBlank()) {
             _uiState.update { it.copy(suggestions = SearchSuggestions()) }
             return
         }
-
         suggestJob = viewModelScope.launch {
             delay(250)
-            val suggestions = musicRepository.suggestions(value)
-            _uiState.update { it.copy(suggestions = suggestions) }
+            val s = musicRepository.suggestions(value)
+            _uiState.update { it.copy(suggestions = s) }
         }
     }
 
@@ -123,15 +101,10 @@ class SearchViewModel @Inject constructor(
         _uiState.update { it.copy(isFocused = focused) }
     }
 
-    // ================= FILTER =================
-
     fun onFilterSelect(filter: SearchFilter) {
         if (filter == _uiState.value.selectedFilter) return
-
         val currentQuery = _uiState.value.query
-
         viewModelScope.launch { appSettingsStore.setLastSearchTab(filter.name) }
-
         val cached = filterCache[filter]
         if (cached != null && cached.query == currentQuery) {
             _uiState.update {
@@ -144,44 +117,26 @@ class SearchViewModel @Inject constructor(
             }
             return
         }
-
         _uiState.update { it.copy(selectedFilter = filter) }
-
         if (currentQuery.isNotBlank()) {
             runSearch(currentQuery, filter, isRefresh = false, loadMore = false)
         }
     }
 
-    // ================= SUBMIT / REFRESH =================
-
     fun onSubmit() {
         val query = _uiState.value.query.trim()
         if (query.isEmpty()) return
-
         _uiState.update { it.copy(isFocused = false) }
         viewModelScope.launch { historyStore.add(query) }
-
         filterCache.clear()
-        runSearch(
-            query = query,
-            filter = _uiState.value.selectedFilter,
-            isRefresh = false,
-            loadMore = false,
-        )
+        runSearch(query, _uiState.value.selectedFilter, isRefresh = false, loadMore = false)
     }
 
     fun onRefresh() {
         if (_uiState.value.query.isBlank()) return
         filterCache.clear()
-        runSearch(
-            query = _uiState.value.query,
-            filter = _uiState.value.selectedFilter,
-            isRefresh = true,
-            loadMore = false,
-        )
+        runSearch(_uiState.value.query, _uiState.value.selectedFilter, isRefresh = true, loadMore = false)
     }
-
-    // ================= HISTORY =================
 
     fun onRemoveHistory(query: String) {
         viewModelScope.launch { historyStore.remove(query) }
@@ -191,35 +146,19 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch { historyStore.clear() }
     }
 
-    // ================= PAGINATION =================
-
     fun onLoadMore() {
         val state = _uiState.value
         if (state.isLoadingMore || state.isLoading || !state.hasMore) return
         if (state.query.isBlank()) return
-
         _uiState.update { it.copy(isLoadingMore = true) }
-
         viewModelScope.launch {
             val filter = state.selectedFilter
-            when (val result = musicRepository.search(
-                query = state.query,
-                filter = filter,
-                loadMore = true,
-            )) {
+            when (val result = musicRepository.search(state.query, filter, loadMore = true)) {
                 is SearchResult.Success -> {
                     val merged = _uiState.value.hits + result.hits
-                    filterCache[filter] = CachedTab(
-                        query = state.query,
-                        hits = merged,
-                        hasMore = result.hasMore,
-                    )
+                    filterCache[filter] = CachedTab(state.query, merged, result.hasMore)
                     _uiState.update {
-                        it.copy(
-                            isLoadingMore = false,
-                            hits = merged,
-                            hasMore = result.hasMore,
-                        )
+                        it.copy(isLoadingMore = false, hits = merged, hasMore = result.hasMore)
                     }
                 }
                 is SearchResult.Failure -> {
@@ -229,12 +168,17 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    // ================= HIT CLICK =================
-
+    /**
+     * Tap a hit:
+     *  - SongHit / VideoHit -> builds a "radio" queue via MusicRepository,
+     *    keeping only same-type tracks. Plays seed at its correct index.
+     *  - PlaylistHit / AlbumHit -> emits navigation event (unchanged).
+     *  - ArtistHit -> TODO
+     */
     fun onHitClick(hit: SearchHit) {
         when (hit) {
-            is SearchHit.SongHit -> playerController.play(hit.track)
-            is SearchHit.VideoHit -> playerController.play(hit.track)
+            is SearchHit.SongHit -> playRadio(hit.track)
+            is SearchHit.VideoHit -> playRadio(hit.track)
             is SearchHit.PlaylistHit -> {
                 viewModelScope.launch {
                     _navigationEvent.emit(
@@ -260,13 +204,28 @@ class SearchViewModel @Inject constructor(
                     )
                 }
             }
-            is SearchHit.ArtistHit -> {
-                // TODO: navigate to ArtistScreen
-            }
+            is SearchHit.ArtistHit -> Unit // TODO: navigate to ArtistScreen
         }
     }
 
-    // ================= INTERNAL =================
+    /**
+     * Build a radio queue around a single track:
+     *  - Songs -> only YOUTUBE_MUSIC songs (via artist + title search)
+     *  - Videos -> only YOUTUBE videos (via title + channel search)
+     */
+    private fun playRadio(seed: Track) {
+        if (_uiState.value.isBuildingQueue) return
+        _uiState.update { it.copy(isBuildingQueue = true) }
+        viewModelScope.launch {
+            val queue = runCatching { musicRepository.buildRadioQueue(seed) }
+                .getOrDefault(listOf(seed))
+            _uiState.update { it.copy(isBuildingQueue = false) }
+            val idx = queue.indexOfFirst {
+                it.id == seed.id && it.source == seed.source
+            }
+            playerController.playQueue(queue, if (idx >= 0) idx else 0)
+        }
+    }
 
     private fun runSearch(
         query: String,
@@ -284,14 +243,9 @@ class SearchViewModel @Inject constructor(
                     errorMessage = null,
                 )
             }
-
             when (val result = musicRepository.search(query, filter, loadMore)) {
                 is SearchResult.Success -> {
-                    filterCache[filter] = CachedTab(
-                        query = query,
-                        hits = result.hits,
-                        hasMore = result.hasMore,
-                    )
+                    filterCache[filter] = CachedTab(query, result.hits, result.hasMore)
                     _uiState.update {
                         it.copy(
                             isLoading = false,

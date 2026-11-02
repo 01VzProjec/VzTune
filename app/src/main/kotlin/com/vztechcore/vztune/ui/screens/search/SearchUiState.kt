@@ -16,6 +16,7 @@ data class SearchUiState(
     val isRefreshing: Boolean = false,
     val hasSearched: Boolean = false,
     val hasMore: Boolean = false,
+    val isBuildingQueue: Boolean = false,
     val errorMessage: String? = null,
 ) {
     val isEmptyResult: Boolean

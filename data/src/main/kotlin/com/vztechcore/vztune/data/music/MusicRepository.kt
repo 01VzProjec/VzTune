@@ -68,8 +68,6 @@ class MusicRepository @Inject constructor(
         }
     }
 
-    // ================= ALL =================
-
     private suspend fun searchAll(
         query: String,
         loadMore: Boolean,
@@ -80,8 +78,7 @@ class MusicRepository @Inject constructor(
         val topArtistsDeferred = if (!state.topArtistsLoaded && !loadMore) {
             async {
                 runCatching { ytMusicRepository.searchArtists(query) }
-                    .getOrDefault(emptyList())
-                    .take(3)
+                    .getOrDefault(emptyList()).take(3)
             }
         } else null
 
@@ -101,21 +98,17 @@ class MusicRepository @Inject constructor(
         state.ytmHasMore = ytmPage.continuation != null
 
         val merged = mutableListOf<SearchHit>()
-
         if (topArtists.isNotEmpty()) {
             topArtists.forEach { merged += SearchHit.ArtistHit(it) }
             state.topArtistsLoaded = true
         }
 
         val ytmTracksOnly = ytmPage.items.filterIsInstance<SearchHit.SongHit>()
-        val interleaved = interleave(ytPage.items, ytmTracksOnly.take(pageSize))
-        merged += interleaved
+        merged += interleave(ytPage.items, ytmTracksOnly.take(pageSize))
 
         val newHits = merged.filter { state.seenKeys.add(it.stableKey) }
         SearchResult.Success(newHits, state.ytHasMore || state.ytmHasMore)
     }
-
-    // ================= VIDEOS =================
 
     private suspend fun searchVideos(
         query: String,
@@ -128,21 +121,19 @@ class MusicRepository @Inject constructor(
         return SearchResult.Success(newHits, state.ytHasMore)
     }
 
-    // ================= SONGS =================
-
     private suspend fun searchSongs(
         query: String,
         loadMore: Boolean,
         state: SearchState,
     ): SearchResult {
-        val ytmPage = ytMusicRepository.search(query, SearchFilter.SONGS, state.ytmContinuation)
+        val ytmPage = ytMusicRepository.search(
+            query, SearchFilter.SONGS, state.ytmContinuation,
+        )
         state.ytmContinuation = ytmPage.continuation
         state.ytmHasMore = ytmPage.continuation != null
         val newHits = ytmPage.items.take(30).filter { state.seenKeys.add(it.stableKey) }
         return SearchResult.Success(newHits, state.ytmHasMore)
     }
-
-    // ================= PLAYLISTS =================
 
     private suspend fun searchPlaylists(
         query: String,
@@ -163,8 +154,6 @@ class MusicRepository @Inject constructor(
         state.ytmHasMore = ytmPage.continuation != null
 
         val ytmPlaylists = ytmPage.items.filterIsInstance<SearchHit.PlaylistHit>()
-
-        // Filtro robusto: só mantém playlists que REALMENTE têm faixas.
         val ytmValidated = validatePlaylists(ytmPlaylists)
 
         val merged = ytHits + ytmValidated
@@ -173,9 +162,14 @@ class MusicRepository @Inject constructor(
     }
 
     /**
-     * For each playlist, browse it and keep only if `tracks.isNotEmpty()`.
-     * Any timeout / error is treated as "empty" (removed) to guarantee the
-     * user never sees a broken/empty playlist. Logs every skip for debugging.
+     * Two-stage validation:
+     *  1. If `trackCount != null && > 0` -> trust the search (fast path).
+     *     The YT Music search already tells us how many tracks it has.
+     *  2. If `trackCount == null` OR `== 0` -> do a real browse to double-check.
+     *     Playlists whose browse comes back empty are removed.
+     *
+     * This avoids the previous bug where playlists with videos were being
+     * dropped because `browsePlaylist` didn't parse their tracks.
      */
     private suspend fun validatePlaylists(
         playlists: List<SearchHit.PlaylistHit>,
@@ -184,15 +178,21 @@ class MusicRepository @Inject constructor(
         playlists.map { hit ->
             async {
                 semaphore.withPermit {
+                    val count = hit.playlist.trackCount
+
+                    // Fast path: trust the count from search.
+                    if (count != null && count > 0) return@withPermit hit
+
+                    // Slow path: verify with browse.
                     val hasTracks = runCatching {
                         withTimeoutOrNull(4000L) {
                             ytMusicRepository.browsePlaylist(hit.playlist.id)
                                 .tracks.isNotEmpty()
                         }
-                    }.getOrNull() ?: false // timeout/erro => remove
+                    }.getOrNull() ?: false
 
                     if (!hasTracks) {
-                        Log.d(TAG, "skip empty playlist: ${hit.playlist.id} '${hit.playlist.title}'")
+                        Log.d(TAG, "skip empty playlist: ${hit.playlist.id} '${hit.playlist.title}' (count=$count)")
                         null
                     } else {
                         hit
@@ -201,8 +201,6 @@ class MusicRepository @Inject constructor(
             }
         }.awaitAll().filterNotNull()
     }
-
-    // ================= OTHERS =================
 
     private suspend fun searchOther(
         query: String,
@@ -215,6 +213,26 @@ class MusicRepository @Inject constructor(
         state.ytmHasMore = ytmPage.continuation != null
         val newHits = ytmPage.items.filter { state.seenKeys.add(it.stableKey) }
         return SearchResult.Success(newHits, state.ytmHasMore)
+    }
+
+    // ================= RADIO QUEUE =================
+
+    /**
+     * Builds a "radio" queue for the tapped track.
+     * - Song  -> only YOUTUBE_MUSIC songs, seed first, then similar
+     * - Video -> only YOUTUBE videos, seed first, then similar
+     */
+    suspend fun buildRadioQueue(track: Track): List<Track> = withContext(Dispatchers.IO) {
+        val queue = when (track.source) {
+            Source.YOUTUBE_MUSIC -> runCatching {
+                ytMusicRepository.buildSongQueue(track)
+            }.getOrDefault(listOf(track))
+
+            Source.YOUTUBE -> runCatching {
+                youTubeRepository.buildVideoQueue(track)
+            }.getOrDefault(listOf(track))
+        }
+        if (queue.isEmpty()) listOf(track) else queue
     }
 
     // ================= SUGGESTIONS =================

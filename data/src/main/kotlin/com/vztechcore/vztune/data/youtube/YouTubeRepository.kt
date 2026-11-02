@@ -449,6 +449,28 @@ class YouTubeRepository @Inject constructor(
     } catch (e: Exception) {
         null
     }
+    
+    suspend fun buildVideoQueue(seed: Track): List<Track> = withContext(Dispatchers.IO) {
+        val query = buildString {
+            if (seed.title.isNotBlank()) append(seed.title)
+            if (seed.artist.isNotBlank()) {
+                if (isNotEmpty()) append(" ")
+                append(seed.artist)
+            }
+        }.trim()
+
+        if (query.isBlank()) return@withContext listOf(seed)
+
+        val page = searchVideos(query, loadMore = false, pageSize = 30)
+        val tracks = page.items.map { it.track }
+
+        val list = if (tracks.any { it.id == seed.id }) {
+            listOf(seed) + tracks.filter { it.id != seed.id }
+        } else {
+            listOf(seed) + tracks
+        }
+        list.distinctBy { it.id }.take(50)
+    }
 
     private companion object {
         const val TAG = "VzTuneYT"

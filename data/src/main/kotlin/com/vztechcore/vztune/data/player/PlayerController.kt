@@ -23,6 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,13 +49,6 @@ class PlayerController @Inject constructor(
         )
     }
 
-    /**
-     * Exactly like VzMusic's AudioPlayerManager:
-     *   - CacheDataSource with FLAG_IGNORE_CACHE_ON_ERROR
-     *   - DefaultDataSource.Factory (NO custom User-Agent, NO Referer)
-     *   - AudioAttributes USAGE_MEDIA / AUDIO_CONTENT_TYPE_MUSIC
-     *   - Handle audio becoming noisy
-     */
     val player: ExoPlayer = run {
         val dataSourceFactory = CacheDataSource.Factory()
             .setCache(mediaCache)
@@ -63,8 +57,7 @@ class PlayerController @Inject constructor(
 
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(
-                DefaultMediaSourceFactory(context)
-                    .setDataSourceFactory(dataSourceFactory)
+                DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory)
             )
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -82,17 +75,31 @@ class PlayerController @Inject constructor(
                     }
 
                     override fun onPlaybackStateChanged(playbackState: Int) {
-                        Log.d("VzTunePlayer", "state=$playbackState")
                         if (playbackState == Player.STATE_READY) {
                             val d = duration.coerceAtLeast(0L)
-                            _state.update {
-                                it.copy(isLoading = false, durationMs = d)
-                            }
+                            _state.update { it.copy(isLoading = false, durationMs = d) }
+                        }
+                        if (playbackState == Player.STATE_ENDED) {
+                            playNext(auto = true)
+                        }
+                        Log.d(TAG, "state=$playbackState")
+                    }
+
+                    override fun onPositionDiscontinuity(
+                        oldPosition: Player.PositionInfo,
+                        newPosition: Player.PositionInfo,
+                        reason: Int,
+                    ) {
+                        _state.update {
+                            it.copy(
+                                positionMs = newPosition.positionMs,
+                                durationMs = player.duration.coerceAtLeast(0L),
+                            )
                         }
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
-                        Log.e("VzTunePlayer", "error=${error.errorCodeName}: ${error.message}", error)
+                        Log.e(TAG, "error=${error.errorCodeName}: ${error.message}", error)
                         _state.update {
                             it.copy(
                                 isPlaying = false,
@@ -109,9 +116,89 @@ class PlayerController @Inject constructor(
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
     private var loadJob: Job? = null
+    private var preloadJob: Job? = null
+
+    private var queue: List<Track> = emptyList()
+    private var currentIndex: Int = -1
+    private var preloadedUrl: String? = null
+    private var preloadedIndex: Int = -1
+
+    init {
+        // Background loop: 10s before end, preload next URL.
+        scope.launch {
+            while (true) {
+                delay(1000)
+                if (player.isPlaying) maybePreloadNext()
+            }
+        }
+    }
+
+    // ================= PUBLIC API =================
+
+    fun playQueue(tracks: List<Track>, startIndex: Int) {
+        if (tracks.isEmpty()) return
+        val safeIndex = startIndex.coerceIn(0, tracks.lastIndex)
+        queue = tracks
+        currentIndex = safeIndex
+        preloadedUrl = null
+        preloadedIndex = -1
+        playAtIndex(safeIndex)
+    }
 
     fun play(track: Track) {
-        Log.d("VzTunePlayer", "play track=${track.id} source=${track.source}")
+        playQueue(listOf(track), 0)
+    }
+
+    fun playNext(auto: Boolean = false) {
+        val nextIdx = currentIndex + 1
+        if (nextIdx >= queue.size) {
+            if (auto) {
+                player.pause()
+                _state.update { it.copy(isPlaying = false) }
+            }
+            return
+        }
+        playAtIndex(nextIdx)
+    }
+
+    fun playPrevious() {
+        // Conventional behavior: if >3s into track, restart current.
+        if (player.currentPosition > 3000L) {
+            player.seekTo(0)
+            return
+        }
+        val prevIdx = currentIndex - 1
+        if (prevIdx < 0) {
+            player.seekTo(0)
+            return
+        }
+        playAtIndex(prevIdx)
+    }
+
+    fun pause() = player.pause()
+
+    fun togglePlayPause() {
+        if (player.isPlaying) player.pause() else player.play()
+    }
+
+    fun seekTo(positionMs: Long) = player.seekTo(positionMs)
+
+    fun release() {
+        player.release()
+        mediaCache.release()
+    }
+
+    // ================= INTERNAL =================
+
+    private fun playAtIndex(idx: Int) {
+        val track = queue.getOrNull(idx) ?: return
+
+        // Reuse preloaded URL if it belongs to this index.
+        val cachedUrl = if (preloadedIndex == idx) preloadedUrl else null
+        preloadedUrl = null
+        preloadedIndex = -1
+        currentIndex = idx
+
         _state.update {
             it.copy(
                 currentTrack = track,
@@ -125,11 +212,11 @@ class PlayerController @Inject constructor(
 
         loadJob?.cancel()
         loadJob = scope.launch {
-            val url = musicRepository.getStreamUrl(track)
-            Log.d("VzTunePlayer", "resolved url=$url")
+            val url = cachedUrl ?: musicRepository.getStreamUrl(track)
+            Log.d(TAG, "play[$idx] track=${track.id} url=${url?.take(60)}...")
             if (url.isNullOrBlank()) {
                 _state.update {
-                    it.copy(isLoading = false, error = "URL de áudio vazia")
+                    it.copy(isLoading = false, error = "Falha ao carregar áudio.")
                 }
                 return@launch
             }
@@ -140,31 +227,40 @@ class PlayerController @Inject constructor(
                 player.prepare()
                 player.playWhenReady = true
             } catch (e: Exception) {
-                Log.e("VzTunePlayer", "prepare error", e)
-                _state.update {
-                    it.copy(isLoading = false, error = e.message)
-                }
+                Log.e(TAG, "prepare error", e)
+                _state.update { it.copy(isLoading = false, error = e.message) }
             }
         }
     }
 
-    fun pause() = player.pause()
+    /**
+     * Runs every second while playing. If the current track is within
+     * PRELOAD_WINDOW_MS of the end and there's a next track, kicks off a
+     * background URL resolve so `playAtIndex` can use it instantly when
+     * `STATE_ENDED` fires.
+     */
+    private fun maybePreloadNext() {
+        val duration = player.duration
+        if (duration <= 0) return
+        val remaining = duration - player.currentPosition
+        if (remaining <= 0 || remaining > PRELOAD_WINDOW_MS) return
 
-    fun togglePlayPause() {
-        if (player.isPlaying) player.pause() else player.play()
-    }
+        val nextIdx = currentIndex + 1
+        if (nextIdx >= queue.size) return
+        if (preloadedIndex == nextIdx) return
 
-    fun seekTo(positionMs: Long) = player.seekTo(positionMs)
-
-    fun next() { /* queue não implementada ainda */ }
-    fun previous() { /* queue não implementada ainda */ }
-
-    fun release() {
-        player.release()
-        mediaCache.release()
+        preloadedIndex = nextIdx
+        preloadedUrl = null
+        preloadJob?.cancel()
+        preloadJob = scope.launch {
+            preloadedUrl = musicRepository.getStreamUrl(queue[nextIdx])
+            Log.d(TAG, "preloaded[$nextIdx] url=${preloadedUrl?.take(60)}...")
+        }
     }
 
     private companion object {
+        const val TAG = "VzTunePlayer"
         const val CACHE_SIZE_BYTES = 200L * 1024 * 1024
+        const val PRELOAD_WINDOW_MS = 10_000L
     }
 }

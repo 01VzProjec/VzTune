@@ -9,6 +9,7 @@ import com.vztechcore.vztune.core.domain.search.SearchSuggestions
 import com.vztechcore.vztune.data.innertube.InnerTube
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -99,13 +100,16 @@ class YTMusicRepository @Inject constructor(
         val owner = header?.let { extractHeaderArtist(it) }
         val desc = extractDescription(json)
 
+        // IMPORTANTE: collectMusicItems agora pega também musicTwoRowItemRenderer,
+        // que é o renderer usado por playlists com vídeos. Sem isso, o browse
+        // retornava lista vazia e validatePlaylists removia a playlist por engano.
         val rawTracks = collectMusicItems(json).distinctBy { it.id }
         val finalTracks = enricher.enrichTracks(rawTracks, null)
 
         PlaylistResult(cover, owner, title, desc, finalTracks)
     }
 
-    // ================= ARTISTS (Restaurado) =================
+    // ================= ARTISTS =================
 
     suspend fun searchArtists(query: String): List<Artist> = withContext(Dispatchers.IO) {
         val out = mutableListOf<Artist>()
@@ -113,9 +117,7 @@ class YTMusicRepository @Inject constructor(
             val json = InnerTube.search(query, SearchFilter.ARTISTS.params)
             YTMusicArtistParser.extractArtistsFromSearch(json, out)
         }
-        out.distinctBy { it.id }
-            .filter { !it.thumbnailUrl.isNullOrBlank() }
-            .take(30)
+        out.distinctBy { it.id }.filter { !it.thumbnailUrl.isNullOrBlank() }.take(30)
     }
 
     suspend fun featuredArtists(): List<Artist> = withContext(Dispatchers.IO) {
@@ -131,29 +133,18 @@ class YTMusicRepository @Inject constructor(
                 YTMusicArtistParser.extractArtistsFromSearch(json, out)
             }
         }
-
-        out.distinctBy { it.id }
-            .filter { !it.thumbnailUrl.isNullOrBlank() }
-            .shuffled()
-            .take(30)
+        out.distinctBy { it.id }.filter { !it.thumbnailUrl.isNullOrBlank() }.shuffled().take(30)
     }
 
     suspend fun browseArtist(browseId: String): ArtistResult =
         withContext(Dispatchers.IO) {
             val json = runCatching { InnerTube.browse(browseId) }.getOrNull()
                 ?: return@withContext ArtistResult(
-                    browseId = browseId,
-                    name = "Artista",
-                    thumbnailUrl = null,
-                    subscribers = null,
-                    description = null,
-                    topSongs = emptyList(),
-                    allSongs = emptyList(),
-                    allVideos = emptyList(),
-                    allAlbums = emptyList(),
-                    allSingles = emptyList(),
-                    featured = emptyList(),
-                    relatedArtists = emptyList(),
+                    browseId = browseId, name = "Artista",
+                    thumbnailUrl = null, subscribers = null, description = null,
+                    topSongs = emptyList(), allSongs = emptyList(), allVideos = emptyList(),
+                    allAlbums = emptyList(), allSingles = emptyList(),
+                    featured = emptyList(), relatedArtists = emptyList(),
                 )
             YTMusicArtistParser.parseArtistPage(browseId, json)
         }
@@ -162,24 +153,18 @@ class YTMusicRepository @Inject constructor(
         withContext(Dispatchers.IO) {
             val playerJson = runCatching { InnerTube.player(videoId) }.getOrNull()
                 ?: return@withContext null
-
             val videoDetails = playerJson.optJSONObject("videoDetails")
                 ?: return@withContext null
-
             val channelId = videoDetails.optString("channelId")
                 .takeIf { it.isNotBlank() && it != "null" }
             val author = videoDetails.optString("author")
                 .takeIf { it.isNotBlank() && it != "null" }
             if (channelId == null || author == null) return@withContext null
-
             val cleanName = YTMusicTextUtils.cleanArtistName(author)
             if (cleanName.isBlank()) return@withContext null
-
             val detail = runCatching { browseArtist(channelId) }.getOrNull()
-
             Artist(
-                id = channelId,
-                name = cleanName,
+                id = channelId, name = cleanName,
                 thumbnailUrl = detail?.thumbnailUrl,
                 source = Source.YOUTUBE_MUSIC,
             )
@@ -187,30 +172,47 @@ class YTMusicRepository @Inject constructor(
 
     // ================= QUEUE =================
 
-    suspend fun buildSongQueue(seed: Track): List<Track> =
-        withContext(Dispatchers.IO) {
-            val query = seed.artist.ifBlank { seed.title }.trim()
-            if (query.isBlank()) return@withContext listOf(seed)
-
-            val json = runCatching {
-                InnerTube.search(query, SearchFilter.SONGS.params)
-            }.getOrNull() ?: return@withContext listOf(seed)
-
-            val found = collectMusicItems(json).distinctBy { it.id }
-            val normalized = found.map { item ->
-                val uploader = item.artist.takeIf {
-                    it.isNotBlank() && !it.equals("Unknown", true)
-                } ?: seed.artist
-                item.copy(artist = uploader)
+    /**
+     * Builds a "radio" queue for a song: searches for artist + title in YT Music
+     * and returns only YOUTUBE_MUSIC songs. Seed is first, then similar tracks.
+     *
+     * The "genre aspect" the user asked for is implicit: YT Music already
+     * returns same-genre results when we search by artist (MC X = funk,
+     * Jorge & Mateus = sertanejo, etc). That's how the algorithm works.
+     */
+    suspend fun buildSongQueue(seed: Track): List<Track> = withContext(Dispatchers.IO) {
+        val query = buildString {
+            if (seed.artist.isNotBlank()) append(seed.artist)
+            if (seed.title.isNotBlank()) {
+                if (isNotEmpty()) append(" ")
+                append(seed.title)
             }
+        }.trim()
 
-            val list = if (normalized.any { it.id == seed.id }) {
-                listOf(seed) + normalized.filter { it.id != seed.id }
-            } else {
-                listOf(seed) + normalized
-            }
-            list.take(50)
+        if (query.isBlank()) return@withContext listOf(seed)
+
+        val json = runCatching {
+            InnerTube.search(query, SearchFilter.SONGS.params)
+        }.getOrNull() ?: return@withContext listOf(seed)
+
+        val found = collectMusicItems(json)
+            .distinctBy { it.id }
+            .filter { it.source == Source.YOUTUBE_MUSIC }
+
+        val normalized = found.map { item ->
+            val uploader = item.artist.takeIf {
+                it.isNotBlank() && !it.equals("Unknown", true)
+            } ?: seed.artist
+            item.copy(artist = uploader)
         }
+
+        val list = if (normalized.any { it.id == seed.id }) {
+            listOf(seed) + normalized.filter { it.id != seed.id }
+        } else {
+            listOf(seed) + normalized
+        }
+        list.take(50)
+    }
 
     // ================= INTERNAL HELPERS =================
 
@@ -222,6 +224,11 @@ class YTMusicRepository @Inject constructor(
         return text.takeIf { it.isNotBlank() }
     }
 
+    /**
+     * Walks the browse JSON collecting BOTH renderers.
+     * musicResponsiveListItemRenderer = songs
+     * musicTwoRowItemRenderer          = videos / playlist items (with watchEndpoint)
+     */
     private fun collectMusicItems(
         node: Any?,
         out: MutableList<Track> = mutableListOf(),
@@ -237,21 +244,44 @@ class YTMusicRepository @Inject constructor(
                             ?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
                         val source = YTMusicSearchParser.detectSource(videoId, r)
                         val uploader = YTMusicTextUtils.runsText(subtitleCol)
-                            .substringBefore("•")
-                            .trim()
-                            .ifBlank { "Desconhecido" }
+                            .substringBefore("•").trim().ifBlank { "Desconhecido" }
                         out += Track(
                             id = videoId, title = title, artist = uploader,
-                            thumbnailUrl = YTMusicThumbnailUtils.thumbnailOf(r.optJSONObject("thumbnail")),
-                            durationSeconds = YTMusicTextUtils.parseDuration(YTMusicTextUtils.fixedText(r)),
+                            thumbnailUrl = YTMusicThumbnailUtils
+                                .thumbnailOf(r.optJSONObject("thumbnail")),
+                            durationSeconds = YTMusicTextUtils
+                                .parseDuration(YTMusicTextUtils.fixedText(r)),
                             source = source,
                         )
                     }
                 }
+
+                // Videos / items rendered as musicTwoRowItemRenderer
+                node.optJSONObject("musicTwoRowItemRenderer")?.let { r ->
+                    val videoId = r.optJSONObject("navigationEndpoint")
+                        ?.optJSONObject("watchEndpoint")?.optString("videoId")
+                    val title = r.optJSONObject("title")?.optJSONArray("runs")
+                        ?.optJSONObject(0)?.optString("text")
+                    if (!videoId.isNullOrBlank() && !title.isNullOrBlank()) {
+                        val subtitle = YTMusicTextUtils.runsText(r.optJSONObject("subtitle"))
+                        out += Track(
+                            id = videoId, title = title,
+                            artist = subtitle.substringBefore("•").trim()
+                                .ifBlank { "Desconhecido" },
+                            thumbnailUrl = YTMusicThumbnailUtils
+                                .thumbnailOf(r.optJSONObject("thumbnailRenderer")),
+                            durationSeconds = 0L,
+                            source = Source.YOUTUBE,
+                        )
+                    }
+                }
+
                 val keys = node.keys()
                 while (keys.hasNext()) collectMusicItems(node.opt(keys.next()), out)
             }
-            is org.json.JSONArray -> for (i in 0 until node.length()) collectMusicItems(node.opt(i), out)
+            is JSONArray -> for (i in 0 until node.length()) {
+                collectMusicItems(node.opt(i), out)
+            }
         }
         return out
     }

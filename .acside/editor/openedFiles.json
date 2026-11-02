@@ -110,13 +110,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 466,
-          "line": 14
+          "index": 1844,
+          "line": 57
         },
         "start": {
           "column": 1,
-          "index": 466,
-          "line": 14
+          "index": 1844,
+          "line": 57
         }
       }
     },
@@ -125,13 +125,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 3001,
-          "line": 86
+          "index": 3201,
+          "line": 95
         },
         "start": {
           "column": 1,
-          "index": 3001,
-          "line": 86
+          "index": 3201,
+          "line": 95
         }
       }
     },
@@ -140,13 +140,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 8717,
-          "line": 239
+          "index": 17989,
+          "line": 525
         },
         "start": {
           "column": 1,
-          "index": 8717,
-          "line": 239
+          "index": 17989,
+          "line": 525
         }
       }
     },
@@ -196,5 +196,5 @@
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreen.kt"
 }

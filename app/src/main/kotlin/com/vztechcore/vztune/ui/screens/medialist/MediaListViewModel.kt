@@ -30,6 +30,7 @@ class MediaListViewModel @Inject constructor(
             title = route.title,
             subtitle = route.subtitle,
             thumbnailUrl = route.thumbnailUrl,
+            isAlbum = route.isAlbum,
         )
     )
     val uiState: StateFlow<MediaListUiState> = _uiState.asStateFlow()
@@ -41,16 +42,16 @@ class MediaListViewModel @Inject constructor(
     private fun loadContent() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            try {
+            runCatching {
                 if (route.isAlbum) {
-                    val albumResult = ytMusicRepository.browseAlbum(route.id)
+                    val album = ytMusicRepository.browseAlbum(route.id)
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            title = albumResult.title ?: it.title,
-                            subtitle = albumResult.artist ?: it.subtitle,
-                            thumbnailUrl = albumResult.coverUrl ?: it.thumbnailUrl,
-                            tracks = albumResult.tracks,
+                            title = album.title ?: it.title,
+                            subtitle = album.artist ?: it.subtitle,
+                            thumbnailUrl = album.coverUrl ?: it.thumbnailUrl,
+                            allTracks = album.tracks,
                         )
                     }
                 } else {
@@ -58,20 +59,21 @@ class MediaListViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            tracks = tracks,
-                            // O mosaico já veio no route ou pode ser buscado se necessário
+                            allTracks = tracks,
                         )
                     }
                 }
-            } catch (e: Exception) {
+            }.onFailure { e ->
                 _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = "Erro ao carregar: ${e.message}"
-                    )
+                    it.copy(isLoading = false, errorMessage = "Erro: ${e.message}")
                 }
             }
         }
+    }
+
+    fun onTabSelected(tab: MediaListTab) {
+        if (tab == _uiState.value.selectedTab) return
+        _uiState.update { it.copy(selectedTab = tab) }
     }
 
     fun onTrackClick(track: Track) {
@@ -79,9 +81,16 @@ class MediaListViewModel @Inject constructor(
     }
 
     fun onPlayAll() {
-        val tracks = _uiState.value.tracks
+        val tracks = _uiState.value.filteredTracks
         if (tracks.isNotEmpty()) {
             playerController.play(tracks.first())
+        }
+    }
+
+    fun onShuffle() {
+        val shuffled = _uiState.value.filteredTracks.shuffled()
+        if (shuffled.isNotEmpty()) {
+            playerController.play(shuffled.first())
         }
     }
 }

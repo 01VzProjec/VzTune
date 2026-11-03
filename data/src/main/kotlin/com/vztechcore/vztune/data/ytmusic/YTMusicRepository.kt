@@ -39,6 +39,13 @@ class YTMusicRepository @Inject constructor(
         val tracks: List<Track>,
     )
 
+    // RESTORED VideoDetails data class
+    data class VideoDetails(
+        val viewCount: String?,
+        val likeCount: String?,
+        val description: String?,
+    )
+
     // ================= SEARCH =================
 
     suspend fun search(
@@ -58,7 +65,7 @@ class YTMusicRepository @Inject constructor(
         SearchPage(enriched, next)
     }
 
-    // ================= SUGGESTIONS (UPDATED) =================
+    // ================= SUGGESTIONS =================
 
     suspend fun suggestions(query: String): SearchSuggestions =
         withContext(Dispatchers.IO) {
@@ -236,7 +243,7 @@ class YTMusicRepository @Inject constructor(
         list.take(50)
     }
 
-    // ================= VIDEO DETAILS (for TrackInfo screen) =================
+    // ================= VIDEO DETAILS =================
 
     suspend fun getVideoDetails(videoId: String): VideoDetails? =
         withContext(Dispatchers.IO) {

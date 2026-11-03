@@ -10,12 +10,26 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,7 +75,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
 
     val playback = LocalNowPlaying.current
     val track = playback.currentTrack
-    
+
     val miniPlayerVm: MiniPlayerViewModel = hiltViewModel()
     val dominantColor = rememberDominantColor(track?.thumbnailUrl)
 
@@ -176,7 +190,6 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             ) {
                 if (track != null) {
                     if (isMediaListScreen) {
-                        // Normal MiniPlayer on playlist screens
                         MiniPlayerBar(
                             track = track,
                             isPlaying = playback.isPlaying,
@@ -190,7 +203,6 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                     } else {
-                        // Minimized / Expanded animations
                         AnimatedVisibility(
                             visible = isMinimized,
                             enter = slideInVertically(
@@ -208,7 +220,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                                     Modifier
                                         .size(48.dp)
                                         .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.8f))
+                                        .background(Color.Black.copy(alpha = 0.75f))
                                         .clickable { isMinimized = false },
                                     contentAlignment = Alignment.Center
                                 ) {

@@ -37,9 +37,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vztechcore.vztune.ui.navigation.AppTab
 
-private val BarFill = Color.White.copy(alpha = 0.18f)
-private val BarBorder = Color.White.copy(alpha = 0.22f)
-private val SelectedFill = Color.White.copy(alpha = 0.28f)
+private val BarFill = Color.Black.copy(alpha = 0.75f) // Same as MiniPlayerBar
+private val BarBorder = Color.White.copy(alpha = 0.15f) // Same as MiniPlayerBar
+private val SelectedFill = Color.White.copy(alpha = 0.15f)
 
 @Composable
 fun AppBottomBar(

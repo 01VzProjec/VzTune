@@ -35,13 +35,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 3818,
-          "line": 107
+          "index": 6092,
+          "line": 166
         },
         "start": {
           "column": 1,
-          "index": 3818,
-          "line": 107
+          "index": 6092,
+          "line": 166
         }
       }
     },
@@ -50,13 +50,28 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 14841,
-          "line": 306
+          "index": 15404,
+          "line": 318
         },
         "start": {
           "column": 1,
-          "index": 14841,
-          "line": 306
+          "index": 15404,
+          "line": 318
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/AppBottomBar.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 6588,
+          "line": 161
+        },
+        "start": {
+          "column": 1,
+          "index": 6588,
+          "line": 161
         }
       }
     }

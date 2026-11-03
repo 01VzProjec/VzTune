@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -57,7 +58,7 @@ fun CompactMiniPlayerBar(
     val isVideo = track.source == Source.YOUTUBE
 
     val discRotation = remember { Animatable(0f) }
-    
+
     // Spin the disc if it's a song and is playing
     LaunchedEffect(isPlaying, isVideo) {
         if (isPlaying && !isVideo) {

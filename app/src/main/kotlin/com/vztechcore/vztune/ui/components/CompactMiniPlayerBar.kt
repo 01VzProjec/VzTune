@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +51,7 @@ private val GlassBorder = Color.White.copy(alpha = 0.15f)
 fun CompactMiniPlayerBar(
     track: Track,
     isPlaying: Boolean,
+    isLoading: Boolean = false,
     onPlayPauseClick: () -> Unit,
     onNextClick: () -> Unit,
     onClick: () -> Unit,
@@ -59,9 +62,9 @@ fun CompactMiniPlayerBar(
 
     val discRotation = remember { Animatable(0f) }
 
-    // Spin the disc if it's a song and is playing
-    LaunchedEffect(isPlaying, isVideo) {
-        if (isPlaying && !isVideo) {
+    // Spin the disc if it's a song and is playing or loading
+    LaunchedEffect(isPlaying, isVideo, isLoading) {
+        if ((isPlaying || isLoading) && !isVideo) {
             while (true) {
                 discRotation.animateTo(
                     targetValue = discRotation.value + 360f,
@@ -123,6 +126,21 @@ fun CompactMiniPlayerBar(
                     )
                 }
             }
+
+            if (isLoading) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.45f), if (isVideo) RoundedCornerShape(6.dp) else CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
 
         Spacer(Modifier.width(10.dp))
@@ -148,12 +166,20 @@ fun CompactMiniPlayerBar(
         Spacer(Modifier.width(4.dp))
 
         IconButton(onClick = onPlayPauseClick, modifier = Modifier.size(36.dp)) {
-            Icon(
-                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                contentDescription = if (isPlaying) "Pausar" else "Tocar",
-                tint = Color.White,
-                modifier = Modifier.size(24.dp),
-            )
+            if (isLoading) {
+                CircularProgressIndicator(
+                    color = Color.White,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(20.dp)
+                )
+            } else {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = if (isPlaying) "Pausar" else "Tocar",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
         }
 
         IconButton(onClick = onNextClick, modifier = Modifier.size(36.dp)) {

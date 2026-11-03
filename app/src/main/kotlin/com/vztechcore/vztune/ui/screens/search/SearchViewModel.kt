@@ -9,7 +9,6 @@ import com.vztechcore.vztune.core.domain.search.SearchResult
 import com.vztechcore.vztune.core.domain.search.SearchSuggestions
 import com.vztechcore.vztune.data.music.MusicRepository
 import com.vztechcore.vztune.data.player.PlayerController
-import com.vztechcore.vztune.data.prefs.AppSettingsStore
 import com.vztechcore.vztune.data.prefs.SearchHistoryStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -20,7 +19,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -29,7 +27,6 @@ import javax.inject.Inject
 class SearchViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
     private val historyStore: SearchHistoryStore,
-    private val appSettingsStore: AppSettingsStore,
     private val playerController: PlayerController,
 ) : ViewModel() {
 
@@ -58,11 +55,6 @@ class SearchViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val saved = appSettingsStore.settings.first().lastSearchTab
-            val filter = runCatching { SearchFilter.valueOf(saved) }.getOrDefault(SearchFilter.ALL)
-            _uiState.update { it.copy(selectedFilter = filter) }
-        }
-        viewModelScope.launch {
             historyStore.history.collect { list ->
                 _uiState.update { it.copy(history = list) }
             }
@@ -76,15 +68,11 @@ class SearchViewModel @Inject constructor(
         _uiState.update {
             it.copy(query = value, errorMessage = null, hasSearched = false, hits = emptyList(), hasMore = false, isLoading = false, isLoadingMore = false, isRefreshing = false)
         }
-
-        // MINIMUM 2 CHARACTERS FOR SUGGESTIONS
         if (value.isBlank() || value.trim().length < 2) {
             _uiState.update { it.copy(suggestions = SearchSuggestions()) }
             return
         }
-
         suggestJob = viewModelScope.launch {
-            // DEBOUNCE 400ms (Same as YouTube)
             delay(400)
             val s = musicRepository.suggestions(value)
             _uiState.update { it.copy(suggestions = s) }
@@ -98,7 +86,6 @@ class SearchViewModel @Inject constructor(
     fun onFilterSelect(filter: SearchFilter) {
         if (filter == _uiState.value.selectedFilter) return
         val currentQuery = _uiState.value.query
-        viewModelScope.launch { appSettingsStore.setLastSearchTab(filter.name) }
         val cached = filterCache[filter]
         if (cached != null && cached.query == currentQuery) {
             _uiState.update { it.copy(selectedFilter = filter, hits = cached.hits, hasMore = cached.hasMore, hasSearched = true) }
@@ -125,13 +112,8 @@ class SearchViewModel @Inject constructor(
         runSearch(_uiState.value.query, _uiState.value.selectedFilter, isRefresh = true, loadMore = false)
     }
 
-    fun onRemoveHistory(query: String) {
-        viewModelScope.launch { historyStore.remove(query) }
-    }
-
-    fun onClearHistory() {
-        viewModelScope.launch { historyStore.clear() }
-    }
+    fun onRemoveHistory(query: String) { viewModelScope.launch { historyStore.remove(query) } }
+    fun onClearHistory() { viewModelScope.launch { historyStore.clear() } }
 
     fun onLoadMore() {
         val state = _uiState.value
@@ -171,9 +153,7 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    fun onPlayNextClick(track: Track) {
-        playerController.addToQueueNext(track)
-    }
+    fun onPlayNextClick(track: Track) { playerController.addToQueueNext(track) }
 
     private fun playRadio(seed: Track) {
         if (_uiState.value.isBuildingQueue) return

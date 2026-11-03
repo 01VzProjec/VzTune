@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -187,6 +188,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .navigationBarsPadding()
+                    .imePadding()
             ) {
                 if (track != null) {
                     if (isMediaListScreen) {
@@ -235,6 +237,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                                 CompactMiniPlayerBar(
                                     track = track,
                                     isPlaying = playback.isPlaying,
+                                    isLoading = playback.isLoading,
                                     onPlayPauseClick = miniPlayerVm::togglePlayPause,
                                     onNextClick = miniPlayerVm::next,
                                     onClick = { },

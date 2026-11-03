@@ -85,19 +85,6 @@ class PlayerController @Inject constructor(
                         Log.d(TAG, "state=$playbackState")
                     }
 
-                    override fun onPositionDiscontinuity(
-                        oldPosition: Player.PositionInfo,
-                        newPosition: Player.PositionInfo,
-                        reason: Int,
-                    ) {
-                        _state.update {
-                            it.copy(
-                                positionMs = newPosition.positionMs,
-                                durationMs = player.duration.coerceAtLeast(0L),
-                            )
-                        }
-                    }
-
                     override fun onPlayerError(error: PlaybackException) {
                         Log.e(TAG, "error=${error.errorCodeName}: ${error.message}", error)
                         _state.update {
@@ -127,12 +114,18 @@ class PlayerController @Inject constructor(
         scope.launch {
             while (true) {
                 delay(1000)
-                if (player.isPlaying) maybePreloadNext()
+                if (player.isPlaying) {
+                    _state.update {
+                        it.copy(
+                            positionMs = player.currentPosition,
+                            durationMs = player.duration.coerceAtLeast(0L)
+                        )
+                    }
+                    maybePreloadNext()
+                }
             }
         }
     }
-
-    // ================= PUBLIC API =================
 
     fun playQueue(tracks: List<Track>, startIndex: Int) {
         if (tracks.isEmpty()) return
@@ -148,34 +141,22 @@ class PlayerController @Inject constructor(
         playQueue(listOf(track), 0)
     }
 
-    /**
-     * Adiciona uma faixa na próxima posição da fila (fura a fila).
-     */
     fun addToQueueNext(track: Track) {
         if (queue.isEmpty()) {
             playQueue(listOf(track), 0)
             return
         }
-
         val mutableQueue = queue.toMutableList()
-        
-        // Se a música já estiver na fila, remove pra não duplicar
         val existingIndex = mutableQueue.indexOfFirst { it.id == track.id && it.source == track.source }
         if (existingIndex != -1) {
             mutableQueue.removeAt(existingIndex)
-            // Se ela era antes do atual, o currentIndex diminui
             if (existingIndex <= currentIndex && currentIndex > 0) {
                 currentIndex--
             }
         }
-
         val insertIndex = (currentIndex + 1).coerceIn(0, mutableQueue.size)
         mutableQueue.add(insertIndex, track)
-        
-        // Atualiza a fila
         queue = mutableQueue
-        
-        // Se a música que tá tocando tinha sido removida (raro), garante que ela ainda toque
         if (currentIndex == -1 && queue.isNotEmpty()) {
             currentIndex = 0
             playAtIndex(0)
@@ -208,23 +189,17 @@ class PlayerController @Inject constructor(
     }
 
     fun pause() = player.pause()
-
     fun togglePlayPause() {
         if (player.isPlaying) player.pause() else player.play()
     }
-
     fun seekTo(positionMs: Long) = player.seekTo(positionMs)
-
     fun release() {
         player.release()
         mediaCache.release()
     }
 
-    // ================= INTERNAL =================
-
     private fun playAtIndex(idx: Int) {
         val track = queue.getOrNull(idx) ?: return
-
         val cachedUrl = if (preloadedIndex == idx) preloadedUrl else null
         preloadedUrl = null
         preloadedIndex = -1
@@ -244,11 +219,8 @@ class PlayerController @Inject constructor(
         loadJob?.cancel()
         loadJob = scope.launch {
             val url = cachedUrl ?: musicRepository.getStreamUrl(track)
-            Log.d(TAG, "play[$idx] track=${track.id} url=${url?.take(60)}...")
             if (url.isNullOrBlank()) {
-                _state.update {
-                    it.copy(isLoading = false, error = "Falha ao carregar áudio.")
-                }
+                _state.update { it.copy(isLoading = false, error = "Falha ao carregar áudio.") }
                 return@launch
             }
             try {
@@ -258,7 +230,6 @@ class PlayerController @Inject constructor(
                 player.prepare()
                 player.playWhenReady = true
             } catch (e: Exception) {
-                Log.e(TAG, "prepare error", e)
                 _state.update { it.copy(isLoading = false, error = e.message) }
             }
         }
@@ -269,7 +240,6 @@ class PlayerController @Inject constructor(
         if (duration <= 0) return
         val remaining = duration - player.currentPosition
         if (remaining <= 0 || remaining > PRELOAD_WINDOW_MS) return
-
         val nextIdx = currentIndex + 1
         if (nextIdx >= queue.size) return
         if (preloadedIndex == nextIdx) return
@@ -279,7 +249,6 @@ class PlayerController @Inject constructor(
         preloadJob?.cancel()
         preloadJob = scope.launch {
             preloadedUrl = musicRepository.getStreamUrl(queue[nextIdx])
-            Log.d(TAG, "preloaded[$nextIdx] url=${preloadedUrl?.take(60)}...")
         }
     }
 

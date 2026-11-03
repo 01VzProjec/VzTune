@@ -3,20 +3,13 @@ package com.vztechcore.vztune.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,30 +25,32 @@ import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 
+private val GlassFill = Color.Black.copy(alpha = 0.75f)
+private val GlassBorder = Color.White.copy(alpha = 0.15f)
+
 @Composable
 fun CompactMiniPlayerBar(
     track: Track,
     isPlaying: Boolean,
     onPlayPauseClick: () -> Unit,
+    onNextClick: () -> Unit, // Added next button
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(50) // Fully rounded
+    val shape = RoundedCornerShape(50)
     val isVideo = track.source == Source.YOUTUBE
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
-            .padding(horizontal = 8.dp)
-            .clip(shape)
-            .background(Color.White.copy(alpha = 0.18f))
-            .border(1.dp, Color.White.copy(alpha = 0.22f), shape)
+            .clip(shape) // Clip the whole row to prevent thumbnail overflow
+            .background(GlassFill)
+            .border(1.dp, GlassBorder, shape)
             .clickable { onClick() }
             .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Small thumbnail
         Box(
             Modifier
                 .size(40.dp)
@@ -72,7 +67,6 @@ fun CompactMiniPlayerBar(
 
         Spacer(Modifier.width(10.dp))
 
-        // Title and Artist
         Column(Modifier.weight(1f)) {
             Text(
                 text = track.title,
@@ -93,11 +87,19 @@ fun CompactMiniPlayerBar(
 
         Spacer(Modifier.width(4.dp))
 
-        // Only Play/Pause
         IconButton(onClick = onPlayPauseClick, modifier = Modifier.size(36.dp)) {
             Icon(
                 imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                 contentDescription = if (isPlaying) "Pausar" else "Tocar",
+                tint = Color.White,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+
+        IconButton(onClick = onNextClick, modifier = Modifier.size(36.dp)) {
+            Icon(
+                imageVector = Icons.Filled.SkipNext,
+                contentDescription = "Próxima",
                 tint = Color.White,
                 modifier = Modifier.size(24.dp),
             )

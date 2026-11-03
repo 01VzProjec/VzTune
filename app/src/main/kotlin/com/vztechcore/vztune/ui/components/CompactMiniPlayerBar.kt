@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Source
@@ -39,7 +40,7 @@ fun CompactMiniPlayerBar(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(50) // Bem redondo
+    val shape = RoundedCornerShape(50) // Fully rounded
     val isVideo = track.source == Source.YOUTUBE
 
     Row(
@@ -54,14 +55,13 @@ fun CompactMiniPlayerBar(
             .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Thumbnail minúscula
+        // Small thumbnail
         Box(
             Modifier
                 .size(40.dp)
                 .clip(if (isVideo) RoundedCornerShape(6.dp) else CircleShape)
                 .background(Color.White.copy(alpha = 0.1f))
         ) {
-            // Usando o MediaThumbnail que já temos
             MediaThumbnail(
                 imageUrl = track.thumbnailUrl,
                 shape = if (isVideo) ThumbnailShape.SQUARE else ThumbnailShape.CIRCLE,
@@ -72,7 +72,7 @@ fun CompactMiniPlayerBar(
 
         Spacer(Modifier.width(10.dp))
 
-        // Título e Artista
+        // Title and Artist
         Column(Modifier.weight(1f)) {
             Text(
                 text = track.title,
@@ -80,7 +80,7 @@ fun CompactMiniPlayerBar(
                 color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold
             )
             Text(
                 text = track.artist,
@@ -93,7 +93,7 @@ fun CompactMiniPlayerBar(
 
         Spacer(Modifier.width(4.dp))
 
-        // Só o Play/Pause
+        // Only Play/Pause
         IconButton(onClick = onPlayPauseClick, modifier = Modifier.size(36.dp)) {
             Icon(
                 imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,

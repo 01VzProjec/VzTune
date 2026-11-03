@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -68,29 +67,30 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val isMediaListScreen = backStackEntry?.destination?.hasRoute<Routes.MediaList>() == true
 
     val playback = LocalNowPlaying.current
+    val track = playback.currentTrack // Fix for Smart Cast
+    
     val miniPlayerVm: MiniPlayerViewModel = hiltViewModel()
-    val dominantColor = rememberDominantColor(playback.currentTrack?.thumbnailUrl)
+    val dominantColor = rememberDominantColor(track?.thumbnailUrl)
 
-    // ===== ESTADO DE MINIMIZAÇÃO =====
+    // Minimization state
     var isMinimized by rememberSaveable { mutableStateOf(false) }
 
-    // Se entrar na tela Search, já entra minimizado
+    // If entering Search screen, start minimized
     LaunchedEffect(backStackEntry?.destination?.route) {
         if (backStackEntry?.destination?.hasRoute<Routes.Search>() == true) {
             isMinimized = true
         }
     }
 
-    // ===== DETECTOR DE SCROLL GLOBAL =====
-    // Escuta o scroll de qualquer LazyColumn dentro das telas
+    // Global scroll detector
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                // Se rolou para baixo mais de 30px, minimiza
+                // Scrolled down > 30px -> minimize
                 if (available.y < -30f && !isMinimized) {
                     isMinimized = true
                 }
-                // Se rolou para cima mais de 30px, expande (opcional, mas boa UX)
+                // Scrolled up > 30px -> expand (optional, good UX)
                 else if (available.y > 30f && isMinimized) {
                     isMinimized = false
                 }
@@ -103,7 +103,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .nestedScroll(nestedScrollConnection) // Aplica o detector globalmente
+                .nestedScroll(nestedScrollConnection)
         ) {
             NavHost(
                 navController = navController,
@@ -181,18 +181,18 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 }
             }
 
-            // ===== BARRA INFERIOR =====
+            // Bottom bar area
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .navigationBarsPadding()
             ) {
-                if (playback.currentTrack != null) {
+                if (track != null) {
                     if (isMediaListScreen) {
-                        // Em playlists, só o MiniPlayer normal
+                        // On playlists, only show normal MiniPlayer
                         MiniPlayerBar(
-                            track = playback.currentTrack,
+                            track = track,
                             isPlaying = playback.isPlaying,
                             isLoading = playback.isLoading,
                             progress = playback.progress,
@@ -203,7 +203,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                     } else {
-                        // Fora de playlists, sistema de minimizar
+                        // Outside playlists, minimized system
                         AnimatedVisibility(
                             visible = isMinimized,
                             enter = fadeIn(),
@@ -211,7 +211,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 16.dp, start = 16.dp, end = 16.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                // Círculo da aba
+                                // Tab Circle
                                 Box(
                                     Modifier
                                         .size(48.dp)
@@ -227,9 +227,9 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
-                                // Barrinha Compacta
+                                // Compact Bar
                                 CompactMiniPlayerBar(
-                                    track = playback.currentTrack,
+                                    track = track,
                                     isPlaying = playback.isPlaying,
                                     onPlayPauseClick = miniPlayerVm::togglePlayPause,
                                     onClick = { },
@@ -246,7 +246,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         ) {
                             Column {
                                 MiniPlayerBar(
-                                    track = playback.currentTrack,
+                                    track = track,
                                     isPlaying = playback.isPlaying,
                                     isLoading = playback.isLoading,
                                     progress = playback.progress,
@@ -275,7 +275,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         }
                     }
                 } else {
-                    // Se não tem música tocando, mostra só a BottomBar
+                    // If nothing is playing, show only BottomBar
                     if (!isMediaListScreen) {
                         AppBottomBar(
                             selected = currentTab,

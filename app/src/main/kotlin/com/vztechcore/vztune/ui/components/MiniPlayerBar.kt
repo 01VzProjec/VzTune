@@ -40,7 +40,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
@@ -49,7 +48,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.music.Source
@@ -85,7 +83,7 @@ fun MiniPlayerBar(
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Thumbnail com anel de progresso e disco giratório
+        // Thumbnail with progress ring and spinning disc
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
             if (isVideo) {
                 SquareThumbWithProgress(
@@ -155,7 +153,7 @@ fun MiniPlayerBar(
     }
 }
 
-// ================= VÍDEO (QUADRADO + ANEL) =================
+// ================= VIDEO (SQUARE + RING) =================
 
 @Composable
 private fun SquareThumbWithProgress(
@@ -164,7 +162,7 @@ private fun SquareThumbWithProgress(
     isLoading: Boolean
 ) {
     Box(Modifier.fillMaxSize()) {
-        // Anel de Progresso Quadrado
+        // Square Progress Ring
         Canvas(Modifier.fillMaxSize()) {
             val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
             val inset = 1.dp.toPx()
@@ -174,10 +172,10 @@ private fun SquareThumbWithProgress(
                 addRoundRect(RoundRect(rect, CornerRadius(cornerRadius)))
             }
             
-            // Fundo do anel
+            // Ring background
             drawPath(path, color = Color.White.copy(alpha = 0.2f), style = stroke)
             
-            // Progresso
+            // Progress
             if (progress > 0f) {
                 val measure = PathMeasure().apply { setPath(path, false) }
                 val partial = Path()
@@ -186,7 +184,7 @@ private fun SquareThumbWithProgress(
             }
         }
 
-        // Imagem
+        // Image
         AsyncImage(
             model = imageUrl,
             contentDescription = null,
@@ -210,7 +208,7 @@ private fun SquareThumbWithProgress(
     }
 }
 
-// ================= MÚSICA (CÍRCULO + ANEL + DISCO) =================
+// ================= MUSIC (CIRCLE + RING + DISC) =================
 
 @Composable
 private fun DiscThumbWithProgress(
@@ -221,7 +219,7 @@ private fun DiscThumbWithProgress(
 ) {
     val discRotation = remember { Animatable(0f) }
 
-    // Lógica do disco giratório
+    // Spinning disc logic
     LaunchedEffect(isPlaying, isLoading) {
         if (isPlaying || isLoading) {
             while (true) {
@@ -234,15 +232,15 @@ private fun DiscThumbWithProgress(
     }
 
     Box(Modifier.fillMaxSize()) {
-        // Anel de Progresso Circular
+        // Circular Progress Ring
         Canvas(Modifier.fillMaxSize()) {
             val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
             val inset = 1.dp.toPx()
 
-            // Fundo do anel
+            // Ring background
             drawCircle(color = Color.White.copy(alpha = 0.2f), radius = size.minDimension / 2 - inset, style = stroke)
 
-            // Progresso
+            // Progress
             if (progress > 0f) {
                 drawArc(
                     color = RingColor,
@@ -256,7 +254,7 @@ private fun DiscThumbWithProgress(
             }
         }
 
-        // Disco Girando
+        // Spinning Disc
         Box(
             Modifier
                 .fillMaxSize()
@@ -271,7 +269,7 @@ private fun DiscThumbWithProgress(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
-            // Furo central do disco
+            // Center hole
             Box(
                 Modifier
                     .align(Alignment.Center)

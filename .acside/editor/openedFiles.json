@@ -74,7 +74,52 @@
           "line": 161
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicRepository.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 15800,
+          "line": 363
+        },
+        "start": {
+          "column": 1,
+          "index": 15800,
+          "line": 363
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/components/SearchAutocomplete.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 8944,
+          "line": 262
+        },
+        "start": {
+          "column": 1,
+          "index": 8944,
+          "line": 262
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchScreen.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 3364,
+          "line": 84
+        },
+        "start": {
+          "column": 1,
+          "index": 3364,
+          "line": 84
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/CompactMiniPlayerBar.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchScreen.kt"
 }

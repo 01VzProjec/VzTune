@@ -31,6 +31,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,12 +44,14 @@ import com.vztechcore.vztune.ui.components.NowPlayingThumbnail
 
 @Composable
 fun SearchAutocomplete(
+    query: String,
     history: List<String>,
     suggestions: SearchSuggestions,
     showHistory: Boolean,
     onPickQuery: (String) -> Unit,
     onRemoveHistory: (String) -> Unit,
     onClearHistory: () -> Unit,
+    onPickSong: (Track) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -56,7 +60,7 @@ fun SearchAutocomplete(
             start = 12.dp,
             end = 12.dp,
             top = 8.dp,
-            bottom = 140.dp,
+            bottom = 200.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -74,16 +78,23 @@ fun SearchAutocomplete(
                 }
             }
         } else {
-            if (!suggestions.isEmpty) {
-                items(suggestions.songs, key = { "sg_${it.id}" }) { track ->
-                    SuggestSongRow(track = track, onPick = { onPickQuery(track.title) })
-                }
-                if (suggestions.queries.isNotEmpty() && suggestions.songs.isNotEmpty()) {
-                    item { Spacer(Modifier.height(8.dp)) }
-                }
-                items(suggestions.queries, key = { "q_$it" }) { q ->
-                    SuggestQueryRow(query = q, onPick = { onPickQuery(q) })
-                }
+            // 1. Songs (up to 3-5 based on query length)
+            items(suggestions.songs, key = { "sg_${it.id}" }) { track ->
+                SuggestSongRow(track = track, onClick = { onPickSong(track) })
+            }
+
+            // Spacer between songs and queries
+            if (suggestions.songs.isNotEmpty() && suggestions.queries.isNotEmpty()) {
+                item { Spacer(Modifier.height(12.dp)) }
+            }
+
+            // 2. Text Queries (with highlighting)
+            items(suggestions.queries, key = { "q_$it" }) { q ->
+                SuggestQueryRow(
+                    query = q,
+                    currentInput = query,
+                    onPick = { onPickQuery(q) },
+                )
             }
         }
     }
@@ -173,20 +184,20 @@ private fun HistoryRow(
 }
 
 @Composable
-private fun SuggestSongRow(track: Track, onPick: () -> Unit) {
+private fun SuggestSongRow(track: Track, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .clickable { onPick() }
+            .clickable { onClick() }
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         NowPlayingThumbnail(
             model = track.thumbnailUrl,
             isPlaying = false,
-            modifier = Modifier.size(48.dp),
-            cornerRadius = 8.dp,
+            modifier = Modifier.size(44.dp),
+            cornerRadius = 6.dp,
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -210,7 +221,7 @@ private fun SuggestSongRow(track: Track, onPick: () -> Unit) {
 }
 
 @Composable
-private fun SuggestQueryRow(query: String, onPick: () -> Unit) {
+private fun SuggestQueryRow(query: String, currentInput: String, onPick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -226,8 +237,23 @@ private fun SuggestQueryRow(query: String, onPick: () -> Unit) {
             modifier = Modifier.size(18.dp),
         )
         Spacer(Modifier.width(12.dp))
+
+        // Highlight matching text (bold)
+        val annotated = buildAnnotatedString {
+            val start = query.indexOf(currentInput, ignoreCase = true)
+            if (start != -1 && currentInput.isNotBlank()) {
+                append(query.substring(0, start))
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                    append(query.substring(start, start + currentInput.length))
+                }
+                append(query.substring(start + currentInput.length))
+            } else {
+                append(query)
+            }
+        }
+
         Text(
-            text = query,
+            text = annotated,
             style = MaterialTheme.typography.bodyMedium,
             color = Color.White.copy(alpha = 0.85f),
             maxLines = 1,

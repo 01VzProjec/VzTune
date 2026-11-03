@@ -51,6 +51,7 @@ fun SearchScreen(
         when {
             state.showHistoryState || state.showSuggestionsState -> {
                 SearchAutocomplete(
+                    query = state.query,
                     history = state.history,
                     suggestions = state.suggestions,
                     showHistory = state.showHistoryState,
@@ -60,6 +61,7 @@ fun SearchScreen(
                     },
                     onRemoveHistory = onRemoveHistory,
                     onClearHistory = onClearHistory,
+                    onPickSong = { track -> onHitClick(SearchHit.SongHit(track)) },
                 )
             }
             state.showIdleState -> SearchEmptyState()

@@ -8,6 +8,8 @@ import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.core.domain.search.SearchSuggestions
 import com.vztechcore.vztune.data.innertube.InnerTube
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -37,12 +39,6 @@ class YTMusicRepository @Inject constructor(
         val tracks: List<Track>,
     )
 
-    data class VideoDetails(
-        val viewCount: String?,
-        val likeCount: String?,
-        val description: String?,
-    )
-
     // ================= SEARCH =================
 
     suspend fun search(
@@ -62,14 +58,45 @@ class YTMusicRepository @Inject constructor(
         SearchPage(enriched, next)
     }
 
+    // ================= SUGGESTIONS (UPDATED) =================
+
     suspend fun suggestions(query: String): SearchSuggestions =
         withContext(Dispatchers.IO) {
             if (query.isBlank()) return@withContext SearchSuggestions()
-            val json = runCatching { InnerTube.searchSuggestions(query) }.getOrNull()
-                ?: return@withContext SearchSuggestions()
-            val queries = runCatching { YTMusicSearchParser.parseSuggestions(json) }
-                .getOrDefault(emptyList())
-            SearchSuggestions(queries = queries)
+
+            coroutineScope {
+                // 1. Fetch text suggestions (queries)
+                val queriesDeferred = async {
+                    runCatching {
+                        val json = InnerTube.searchSuggestions(query)
+                        YTMusicSearchParser.parseSuggestions(json)
+                    }.getOrDefault(emptyList())
+                }
+
+                // 2. Fetch songs (lightweight, no enrichment for speed)
+                val songsDeferred = async {
+                    runCatching {
+                        // Determine how many songs to fetch based on query length
+                        val limit = when {
+                            query.length <= 2 -> 3
+                            query.length == 3 -> 4
+                            else -> 5
+                        }
+                        
+                        val json = InnerTube.search(query, SearchFilter.SONGS.params)
+                        val parsed = YTMusicSearchParser.parseSearchResults(json)
+                        parsed.mapNotNull { YTMusicSearchParser.toHit(it, SearchFilter.SONGS) }
+                            .filterIsInstance<SearchHit.SongHit>()
+                            .take(limit)
+                            .map { it.track }
+                    }.getOrDefault(emptyList())
+                }
+
+                SearchSuggestions(
+                    songs = songsDeferred.await(),
+                    queries = queriesDeferred.await()
+                )
+            }
         }
 
     // ================= BROWSE =================
@@ -222,11 +249,9 @@ class YTMusicRepository @Inject constructor(
                     .takeIf { it.isNotBlank() && it != "null" }
                     ?.toLongOrNull()
 
-                // Tenta pegar a descrição do videoDetails
                 var description = videoDetails.optString("shortDescription")
                     .takeIf { it.isNotBlank() && it != "null" }
 
-                // Se não achou, tenta no microformat
                 if (description == null) {
                     description = json.optJSONObject("microformat")
                         ?.optJSONObject("playerMicroformatRenderer")
@@ -237,7 +262,7 @@ class YTMusicRepository @Inject constructor(
 
                 VideoDetails(
                     viewCount = viewCountRaw?.let { formatNumber(it) },
-                    likeCount = null, // Player não expõe likeCount direto
+                    likeCount = null,
                     description = description,
                 )
             }.getOrNull()

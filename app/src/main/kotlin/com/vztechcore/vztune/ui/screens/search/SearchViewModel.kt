@@ -38,7 +38,6 @@ class SearchViewModel @Inject constructor(
             val id: String, val title: String, val owner: String?,
             val thumbnailUrl: String?, val mosaic: List<String>,
         ) : NavigationEvent
-
         data class OpenAlbum(
             val id: String, val title: String, val artist: String,
             val thumbnailUrl: String?,
@@ -48,11 +47,7 @@ class SearchViewModel @Inject constructor(
     private val _navigationEvent = MutableSharedFlow<NavigationEvent>()
     val navigationEvent: SharedFlow<NavigationEvent> = _navigationEvent.asSharedFlow()
 
-    private data class CachedTab(
-        val query: String,
-        val hits: List<SearchHit>,
-        val hasMore: Boolean,
-    )
+    private data class CachedTab(val query: String, val hits: List<SearchHit>, val hasMore: Boolean)
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
@@ -79,18 +74,18 @@ class SearchViewModel @Inject constructor(
         searchJob?.cancel()
         filterCache.clear()
         _uiState.update {
-            it.copy(
-                query = value, errorMessage = null, hasSearched = false,
-                hits = emptyList(), hasMore = false, isLoading = false,
-                isLoadingMore = false, isRefreshing = false,
-            )
+            it.copy(query = value, errorMessage = null, hasSearched = false, hits = emptyList(), hasMore = false, isLoading = false, isLoadingMore = false, isRefreshing = false)
         }
-        if (value.isBlank()) {
+
+        // MINIMUM 2 CHARACTERS FOR SUGGESTIONS
+        if (value.isBlank() || value.trim().length < 2) {
             _uiState.update { it.copy(suggestions = SearchSuggestions()) }
             return
         }
+
         suggestJob = viewModelScope.launch {
-            delay(250)
+            // DEBOUNCE 400ms (Same as YouTube)
+            delay(400)
             val s = musicRepository.suggestions(value)
             _uiState.update { it.copy(suggestions = s) }
         }
@@ -106,9 +101,7 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch { appSettingsStore.setLastSearchTab(filter.name) }
         val cached = filterCache[filter]
         if (cached != null && cached.query == currentQuery) {
-            _uiState.update {
-                it.copy(selectedFilter = filter, hits = cached.hits, hasMore = cached.hasMore, hasSearched = true)
-            }
+            _uiState.update { it.copy(selectedFilter = filter, hits = cached.hits, hasMore = cached.hasMore, hasSearched = true) }
             return
         }
         _uiState.update { it.copy(selectedFilter = filter) }

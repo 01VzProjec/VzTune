@@ -30,6 +30,13 @@ data class VideoMetadata(
     val thumbnailUrl: String?,
 )
 
+/** Info técnica do stream de áudio resolvido pelo NewPipe (usada na tela TrackInfo). */
+data class AudioStreamInfo(
+    val itag: String?,
+    val mimeType: String?,
+    val quality: String?,
+)
+
 @Singleton
 class YouTubeRepository @Inject constructor(
     private val downloader: NewPipeDownloader,
@@ -298,6 +305,39 @@ class YouTubeRepository @Inject constructor(
         null
     }
 
+    /**
+     * Retorna info técnica (itag / mime / bitrate) do melhor stream de áudio.
+     * Usado pela tela TrackInfo pra exibir detalhes técnicos.
+     */
+    suspend fun getAudioStreamInfo(videoId: String): AudioStreamInfo? = withContext(Dispatchers.IO) {
+        if (!NewPipeInitializer.ensureInitialized(downloader)) {
+            Log.e(TAG, "getAudioStreamInfo: NewPipe not initialized")
+            return@withContext null
+        }
+        runCatching {
+            val url = "https://www.youtube.com/watch?v=$videoId"
+            val extractor = ServiceList.YouTube.getStreamExtractor(url)
+            extractor.fetchPage()
+
+            val audio = extractor.audioStreams
+                .filter { it.averageBitrate > 0 }
+                .maxByOrNull { it.averageBitrate }
+                ?: extractor.audioStreams.firstOrNull()
+                ?: return@runCatching null
+
+            AudioStreamInfo(
+                itag = runCatching { audio.itag.toString() }.getOrNull(),
+                mimeType = runCatching { audio.format?.mimeType }.getOrNull(),
+                quality = audio.averageBitrate
+                    .takeIf { it > 0 }
+                    ?.let { "${it / 1000} kbps" },
+            )
+        }.getOrElse { e ->
+            Log.w(TAG, "getAudioStreamInfo failed for $videoId: ${e.message}")
+            null
+        }
+    }
+
     private fun extractFromUrl(url: String): String {
         val extractor = ServiceList.YouTube.getStreamExtractor(url)
         extractor.fetchPage()
@@ -449,7 +489,7 @@ class YouTubeRepository @Inject constructor(
     } catch (e: Exception) {
         null
     }
-    
+
     suspend fun buildVideoQueue(seed: Track): List<Track> = withContext(Dispatchers.IO) {
         val query = buildString {
             if (seed.title.isNotBlank()) append(seed.title)

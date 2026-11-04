@@ -1,10 +1,12 @@
 package com.vztechcore.vztune.data.music
 
 import android.util.Log
+import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchFilter
 import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.core.domain.search.SearchResult
+import com.vztechcore.vztune.core.domain.search.SearchSuggestions
 import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import kotlinx.coroutines.async
@@ -23,15 +25,16 @@ class MusicRepository @Inject constructor(
 ) {
 
     // =====================================================================
-    //  STREAM URL — delega pro YouTubeRepository (NewPipe)
+    //  Fachada — API que os ViewModels esperam do MusicRepository
     // =====================================================================
-    // YTMusicRepository só resolve metadata; a extração de áudio real está
-    // em YouTubeRepository.getStreamUrl(videoId, titleHint, artistHint).
-    //
-    // Passamos title/artist como hints pra ativar o fallback interno
-    // (findBestMatchVideoId) quando o videoId do YT Music não tem stream
-    // disponível (vídeo removido, região, etc).
-    // =====================================================================
+
+    data class TechnicalInfo(
+        val itag: String?,
+        val mimeType: String?,
+        val quality: String?,
+    )
+
+    /** Extração de áudio via NewPipe (delegado pro YouTubeRepository). */
     suspend fun getStreamUrl(track: Track): String? {
         val artistHint = track.artist
             .takeIf { it.isNotBlank() && !it.equals("Desconhecido", ignoreCase = true) }
@@ -50,6 +53,36 @@ class MusicRepository @Inject constructor(
         }
         return url
     }
+
+    /** Info técnica (itag / mime / bitrate) — usada pela tela TrackInfo. */
+    suspend fun getTechnicalInfo(track: Track): TechnicalInfo? = runCatching {
+        val info = youTubeRepository.getAudioStreamInfo(track.id) ?: return@runCatching null
+        TechnicalInfo(itag = info.itag, mimeType = info.mimeType, quality = info.quality)
+    }.getOrNull()
+
+    /** Sugestões de busca — delegate direto pro YTMusic. */
+    suspend fun suggestions(query: String): SearchSuggestions =
+        ytMusicRepository.suggestions(query)
+
+    /**
+     * Fila "rádio" — escolhe o repositório certo pelo `seed.source`.
+     *   YOUTUBE_MUSIC → ytMusic.buildSongQueue
+     *   YOUTUBE       → youtube.buildVideoQueue
+     */
+    suspend fun buildRadioQueue(seed: Track): List<Track> = runCatching {
+        when (seed.source) {
+            Source.YOUTUBE_MUSIC -> ytMusicRepository.buildSongQueue(seed)
+            Source.YOUTUBE -> youTubeRepository.buildVideoQueue(seed)
+            else -> listOf(seed)
+        }
+    }.getOrElse { e ->
+        Log.w(TAG, "buildRadioQueue failed for ${seed.id}: ${e.message}")
+        listOf(seed)
+    }
+
+    // =====================================================================
+    //  SEARCH
+    // =====================================================================
 
     private data class SearchState(
         val seenKeys: MutableSet<String> = mutableSetOf(),
@@ -148,7 +181,6 @@ class MusicRepository @Inject constructor(
         SearchResult.Success(newHits, state.ytmHasMore)
     }
 
-    // FIX ALBUM VAZIO - SAFE
     private suspend fun validateAlbums(albums: List<SearchHit.AlbumHit>): List<SearchHit.AlbumHit> = coroutineScope {
         if (albums.isEmpty()) return@coroutineScope emptyList()
         val semaphore = Semaphore(6)
@@ -191,8 +223,7 @@ class MusicRepository @Inject constructor(
         deferred.awaitAll().filterNotNull()
     }
 
-    // YouTubeRepository NÃO tem browseYouTubePlaylist() — só filtro client-side.
-    // Descarta auto-playlists (Mix/RD) que o NewPipe devolve.
+    // YouTubeRepository NÃO tem browse de playlist — só filtro client-side (RD/Mix).
     private fun validateYouTubePlaylists(
         playlists: List<SearchHit.PlaylistHit>
     ): List<SearchHit.PlaylistHit> = playlists.filter { hit ->

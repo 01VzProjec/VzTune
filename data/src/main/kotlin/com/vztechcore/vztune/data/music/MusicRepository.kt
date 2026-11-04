@@ -142,8 +142,21 @@ class MusicRepository @Inject constructor(
             topArtists.forEach { merged += SearchHit.ArtistHit(it) }
             state.topArtistsLoaded = true
         }
+        
         val ytmTracksOnly = ytmPage.items.filterIsInstance<SearchHit.SongHit>()
+        val ytmAlbums = ytmPage.items.filterIsInstance<SearchHit.AlbumHit>()
+        val ytmPlaylists = ytmPage.items.filterIsInstance<SearchHit.PlaylistHit>()
+
+        val validAlbumsDeferred = async { validateAlbums(ytmAlbums.take(3)) }
+        val validPlaylistsDeferred = async { validatePlaylists(ytmPlaylists.take(3)) }
+
         merged += interleave(ytPage.items, ytmTracksOnly.take(pageSize))
+        
+        if (!loadMore) {
+            merged += validAlbumsDeferred.await()
+            merged += validPlaylistsDeferred.await()
+        }
+
         val newHits = merged.filter { state.seenKeys.add(it.stableKey) }
         SearchResult.Success(newHits, state.ytHasMore || state.ytmHasMore)
     }
@@ -190,13 +203,9 @@ class MusicRepository @Inject constructor(
             async<SearchHit.AlbumHit?> {
                 semaphore.withPermit {
                     val hasTracks = runCatching {
-                        withTimeoutOrNull(6000L) { ytMusicRepository.browseAlbum(hit.album.id).tracks.isNotEmpty() }
+                        withTimeoutOrNull(10000L) { ytMusicRepository.browseAlbum(hit.album.id).tracks.isNotEmpty() }
                     }.getOrNull()
-                    when {
-                        hasTracks == null -> hit
-                        hasTracks == false -> null
-                        else -> hit
-                    }
+                    if (hasTracks == false) null else hit
                 }
             }
         }
@@ -212,9 +221,9 @@ class MusicRepository @Inject constructor(
                     val count = hit.playlist.trackCount
                     if (count != null && count > 0) return@withPermit hit
                     val hasTracks = runCatching {
-                        withTimeoutOrNull(5000L) { ytMusicRepository.browsePlaylist(hit.playlist.id).tracks.isNotEmpty() }
-                    }.getOrDefault(false)
-                    if (hasTracks == true) hit else null
+                        withTimeoutOrNull(10000L) { ytMusicRepository.browsePlaylist(hit.playlist.id).tracks.isNotEmpty() }
+                    }.getOrNull()
+                    if (hasTracks == false) null else hit
                 }
             }
         }

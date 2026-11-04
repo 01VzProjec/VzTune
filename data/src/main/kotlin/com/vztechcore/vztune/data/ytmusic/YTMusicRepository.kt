@@ -291,13 +291,24 @@ class YTMusicRepository @Inject constructor(
                 node.optJSONObject("musicResponsiveListItemRenderer")?.let { r ->
                     val columns = r.optJSONArray("flexColumns")
                     val title = columns?.let { YTMusicTextUtils.flexText(it, 0) }
-                    val videoId = r.optJSONObject("playlistItemData")?.optString("videoId")
+                    
+                    var videoId = r.optJSONObject("playlistItemData")?.optString("videoId")
+                    if (videoId.isNullOrBlank() || videoId == "null") {
+                        videoId = r.optJSONObject("navigationEndpoint")?.optJSONObject("watchEndpoint")?.optString("videoId")
+                    }
+                    if (videoId.isNullOrBlank() || videoId == "null") {
+                        val nav = columns?.optJSONObject(0)?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
+                            ?.optJSONObject("text")?.optJSONArray("runs")?.optJSONObject(0)?.optJSONObject("navigationEndpoint")
+                        videoId = nav?.optJSONObject("watchEndpoint")?.optString("videoId")
+                    }
+
                     if (title != null && !videoId.isNullOrBlank() && videoId != "null") {
                         val subtitleCol = columns.optJSONObject(1)
                             ?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
+                        val subtitle = YTMusicTextUtils.runsText(subtitleCol)
                         val source = YTMusicSearchParser.detectSource(videoId, r)
-                        val uploader = YTMusicTextUtils.runsText(subtitleCol)
-                            .substringBefore("•").trim().ifBlank { "Desconhecido" }
+                        val uploader = YTMusicSearchParser.extractArtistFromSubtitle(subtitleCol, subtitle)
+                            ?: subtitle.substringBefore("•").trim().ifBlank { "Desconhecido" }
                         out += Track(
                             id = videoId, title = title, artist = uploader,
                             thumbnailUrl = YTMusicThumbnailUtils

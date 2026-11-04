@@ -202,10 +202,7 @@ internal object YTMusicSearchParser {
         val videoId = r.optJSONObject("playlistItemData")?.optString("videoId")
         if (!videoId.isNullOrBlank() && videoId != "null") {
             val source = detectSource(videoId, r)
-            val uploader = when (source) {
-                Source.YOUTUBE -> extractChannelName(subtitleCol) ?: "Unknown"
-                else -> extractArtistFromSubtitle(subtitleCol, subtitle) ?: "Unknown"
-            }
+            val uploader = extractArtistFromSubtitle(subtitleCol, subtitle) ?: extractChannelName(subtitleCol) ?: "Unknown"
             out += ParsedItem.Song(videoId, title, uploader, thumb, YTMusicTextUtils.parseDuration(YTMusicTextUtils.fixedText(r)), source)
             return
         }
@@ -288,7 +285,7 @@ internal object YTMusicSearchParser {
         return if (owners.isNotEmpty()) owners.joinToString(", ") else null
     }
 
-    private fun extractArtistFromSubtitle(subtitleCol: JSONObject?, subtitleText: String): String? {
+    internal fun extractArtistFromSubtitle(subtitleCol: JSONObject?, subtitleText: String): String? {
         val runs = subtitleCol?.optJSONObject("text")?.optJSONArray("runs") ?: subtitleCol?.optJSONArray("runs")
         if (runs != null) {
             val artists = mutableListOf<String>()
@@ -380,7 +377,7 @@ internal object YTMusicSearchParser {
         return null
     }
 
-    private fun splitArtists(input: String): List<String> {
+    internal fun splitArtists(input: String): List<String> {
         val regex = Regex("\\s*,\\s*|\\s*&\\s*|\\s+ e \\s+|\\s+ and \\s+|\\s+ x \\s+|\\s+ feat\\.? \\s+|\\s+ ft\\.? \\s+|\\s+ com \\s+|\\s+ with \\s+|\\s*\\|\\s*|\\s*/\\s*|\\s*;\\s*", RegexOption.IGNORE_CASE)
         return input.split(regex).map { it.trim().trim(',', '&', '·', '•', '-', '/', ';', ' ') }.filter { it.isNotBlank() }
     }

@@ -64,6 +64,9 @@ class YTMusicEnricher @Inject constructor(
         // If track already has a valid artist string (not metadata), keep it!
         if (!isLikelyMetadata(track.artist)) {
             val cached = YTMusicCaches.authorCache[track.id]
+            if (!cached.isNullOrBlank() && countArtists(cached) > currentCount) {
+                return SearchHit.SongHit(track.copy(artist = cached))
+            }
             if (cached.isNullOrBlank() || currentCount > countArtists(cached)) {
                 YTMusicCaches.authorCache[track.id] = track.artist
             }

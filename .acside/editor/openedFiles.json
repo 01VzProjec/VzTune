@@ -34,14 +34,14 @@
       "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicSearchParser.kt",
       "selection": {
         "end": {
-          "column": 0,
-          "index": 0,
-          "line": 0
+          "column": 1,
+          "index": 19326,
+          "line": 406
         },
         "start": {
-          "column": 0,
-          "index": 0,
-          "line": 0
+          "column": 1,
+          "index": 19326,
+          "line": 406
         }
       }
     },
@@ -49,14 +49,14 @@
       "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicEnricher.kt",
       "selection": {
         "end": {
-          "column": 0,
-          "index": 0,
-          "line": 0
+          "column": 1,
+          "index": 12649,
+          "line": 338
         },
         "start": {
-          "column": 0,
-          "index": 0,
-          "line": 0
+          "column": 1,
+          "index": 12649,
+          "line": 338
         }
       }
     },
@@ -65,13 +65,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 15764,
-          "line": 367
+          "index": 16560,
+          "line": 378
         },
         "start": {
           "column": 1,
-          "index": 15764,
-          "line": 367
+          "index": 16560,
+          "line": 378
         }
       }
     },
@@ -80,13 +80,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 11143,
-          "line": 248
+          "index": 11495,
+          "line": 257
         },
         "start": {
           "column": 1,
-          "index": 11143,
-          "line": 248
+          "index": 11495,
+          "line": 257
         }
       }
     }

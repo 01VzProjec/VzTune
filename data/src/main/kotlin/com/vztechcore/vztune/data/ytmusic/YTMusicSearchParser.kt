@@ -1,3 +1,4 @@
+
 package com.vztechcore.vztune.data.ytmusic
 
 import com.vztechcore.vztune.core.domain.music.Album
@@ -53,8 +54,6 @@ internal object YTMusicSearchParser {
         }
     }
 
-    // ================= PUBLIC ENTRY =================
-
     fun parseSearchResults(json: JSONObject): List<ParsedItem> {
         val out = mutableListOf<ParsedItem>()
         YTMusicTextUtils.walk(json) { renderer ->
@@ -68,20 +67,16 @@ internal object YTMusicSearchParser {
         return out.distinctBy { it.stableKey }
     }
 
-    // CORRECTED SUGGESTIONS PARSER
     fun parseSuggestions(json: JSONObject): List<String> {
         val out = mutableListOf<String>()
         YTMusicTextUtils.walk(json) { node ->
             val s = node.optJSONObject("searchSuggestionRenderer") ?: return@walk
             val runs = s.optJSONObject("suggestion")?.optJSONArray("runs") ?: return@walk
-            
-            // Concatenate all runs to get the full text
             val text = buildString {
                 for (i in 0 until runs.length()) {
                     append(runs.optJSONObject(i)?.optString("text") ?: "")
                 }
             }.takeIf { it.isNotBlank() }
-            
             if (text != null && text !in out) out += text
         }
         return out
@@ -141,11 +136,8 @@ internal object YTMusicSearchParser {
         }
     }
 
-    // ================= SOURCE DETECTION =================
-
     fun detectSource(videoId: String, renderer: JSONObject): Source {
         YTMusicCaches.sourceCache[videoId]?.let { return it }
-
         val type = findFirstMusicVideoType(renderer)
         if (type != null) {
             val resolved: Source? = when {
@@ -158,12 +150,10 @@ internal object YTMusicSearchParser {
                 return resolved
             }
         }
-
         detectSourceFromThumbnailUrl(YTMusicThumbnailUtils.thumbnailOf(renderer.optJSONObject("thumbnail")))?.let {
             YTMusicCaches.sourceCache[videoId] = it
             return it
         }
-
         val fallback = Source.YOUTUBE_MUSIC
         YTMusicCaches.sourceCache[videoId] = fallback
         return fallback
@@ -202,8 +192,6 @@ internal object YTMusicSearchParser {
         }
         return null
     }
-
-    // ================= RESPONSIVE ITEM =================
 
     private fun parseResponsiveListItem(r: JSONObject, out: MutableList<ParsedItem>) {
         val columns = r.optJSONArray("flexColumns") ?: return
@@ -259,18 +247,29 @@ internal object YTMusicSearchParser {
         }
     }
 
-    // ================= AUTHOR EXTRACTION =================
+    // ================= AUTHOR EXTRACTION - FIXED MULTI-ARTIST =================
 
     private fun extractAlbumArtist(subtitleCol: JSONObject?): String? {
         val runs = subtitleCol?.optJSONObject("text")?.optJSONArray("runs") ?: subtitleCol?.optJSONArray("runs") ?: return null
         val artists = mutableListOf<String>()
         for (i in 0 until runs.length()) {
             val run = runs.optJSONObject(i) ?: continue
-            val text = run.optString("text").trim().trim(' ', ',', '&', '·', '•', '-', '/', ';', '\n', '\t')
+            val raw = run.optString("text")
+            val text = raw.trim()
             if (text.isBlank() || text == "•" || text == "·") continue
             val browseId = run.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")?.optString("browseId")
+            if (browseId?.startsWith("MPREb_") == true || browseId?.startsWith("VL") == true) break
             if (browseId?.startsWith("UC") == true || browseId?.startsWith("MPAD") == true) {
-                if (text !in artists) artists += text
+                val clean = YTMusicTextUtils.cleanArtistName(text).trim()
+                if (clean.isNotBlank() && clean !in artists) artists += clean
+            }
+        }
+        // Fallback: if no UC found, try to split plain text before bullet
+        if (artists.isEmpty()) {
+            val full = YTMusicTextUtils.runsText(subtitleCol)
+            val beforeBullet = full.substringBefore("•").trim()
+            if (beforeBullet.isNotBlank()) {
+                return splitArtists(beforeBullet).joinToString(", ").takeIf { it.isNotBlank() }
             }
         }
         return if (artists.isNotEmpty()) artists.joinToString(", ") else null
@@ -281,7 +280,7 @@ internal object YTMusicSearchParser {
         val owners = mutableListOf<String>()
         for (i in 0 until runs.length()) {
             val run = runs.optJSONObject(i) ?: continue
-            val text = run.optString("text").trim().trim(' ', ',', '&', '·', '•', '-', '/', ';', '\n', '\t')
+            val text = run.optString("text").trim()
             if (text.isBlank() || text == "•" || text == "·") continue
             val browseId = run.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")?.optString("browseId")
             if (browseId?.startsWith("UC") == true) {
@@ -291,36 +290,123 @@ internal object YTMusicSearchParser {
         return if (owners.isNotEmpty()) owners.joinToString(", ") else null
     }
 
+    /**
+     * FIX PRINCIPAL: Coleta TODOS os artistas (UC / MPAD) até encontrar álbum/playlist.
+     * Também quebra strings que contenham ", ", " & ", " e ", " feat. " etc.
+     * Evita sobrescrever multi-artistas com apenas 1.
+     */
     private fun extractArtistFromSubtitle(subtitleCol: JSONObject?, subtitleText: String): String? {
         val runs = subtitleCol?.optJSONObject("text")?.optJSONArray("runs") ?: subtitleCol?.optJSONArray("runs")
         if (runs != null) {
             val artists = mutableListOf<String>()
             for (i in 0 until runs.length()) {
                 val run = runs.optJSONObject(i) ?: continue
-                val text = run.optString("text").trim().trim(' ', ',', '&', '·', '•', '-', '/', ';', '\n', '\t')
-                if (text.isBlank() || text == "•" || text == "·") continue
-                if (YTMusicTextUtils.isDuration(text)) break
-                val nav = run.optJSONObject("navigationEndpoint")
-                val browseId = nav?.optJSONObject("browseEndpoint")?.optString("browseId")
-                when {
-                    browseId?.startsWith("MPREb_") == true -> break
-                    browseId?.startsWith("VL") == true -> break
+                val rawText = run.optString("text")
+                val textTrimmed = rawText.trim()
+                if (textTrimmed.isBlank()) continue
+
+                // Bullet separator
+                if (textTrimmed == "•" || textTrimmed == "·") {
+                    // Se já temos artistas, verifica se o próximo é álbum/playlist -> break
+                    var hasAlbumAhead = false
+                    for (j in i+1 until runs.length()) {
+                        val r2 = runs.optJSONObject(j) ?: continue
+                        val b2 = r2.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")?.optString("browseId")
+                        if (b2?.startsWith("MPREb_") == true || b2?.startsWith("VL") == true) {
+                            hasAlbumAhead = true
+                            break
+                        }
+                    }
+                    if (hasAlbumAhead && artists.isNotEmpty()) break
+                    continue
                 }
-                if (YTMusicTextUtils.isTypeWord(text)) continue
-                if (YTMusicTextUtils.isYear(text)) continue
-                if (YTMusicTextUtils.isDate(text)) continue
-                if (YTMusicTextUtils.isEpisode(text)) continue
-                if (YTMusicTextUtils.isViewCount(text)) continue
-                if (text.length > 80) continue
-                if (text !in artists) artists += text
+
+                val browseId = run.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")?.optString("browseId")
+                // Stop conditions
+                if (browseId?.startsWith("MPREb_") == true) break
+                if (browseId?.startsWith("VL") == true) break
+
+                // Skip metadata
+                if (YTMusicTextUtils.isDuration(textTrimmed)) break
+                if (YTMusicTextUtils.isYear(textTrimmed)) continue
+                if (YTMusicTextUtils.isDate(textTrimmed)) continue
+                if (YTMusicTextUtils.isEpisode(textTrimmed)) continue
+                if (YTMusicTextUtils.isViewCount(textTrimmed)) continue
+                if (YTMusicTextUtils.isTypeWord(textTrimmed)) continue
+                if (textTrimmed.length > 80) continue
+
+                // Se é UC/MPAD, é artista com certeza
+                if (browseId?.startsWith("UC") == true || browseId?.startsWith("MPAD") == true) {
+                    val clean = YTMusicTextUtils.cleanArtistName(textTrimmed)
+                    if (clean.isNotBlank() && clean !in artists) {
+                        // Pode vir "Artist1, Artist2" dentro de um mesmo run
+                        splitArtists(clean).forEach { part ->
+                            if (part !in artists) artists.add(part)
+                        }
+                    }
+                } else {
+                    // Run sem browseId: pode ser separador ", " ou "&" ou segundo artista sem ID
+                    // Ignora separadores puros
+                    val lower = textTrimmed.lowercase()
+                    if (lower in setOf(",", "&", "e", "and", "x", "feat.", "feat", "ft.", "ft", "com", "with", "/", ";")) continue
+                    // Se já temos pelo menos 1 artista, esse texto sem ID pode ser segundo artista
+                    // Ex: "Artist1, Artist2" vem como ["Artist1", ", ", "Artist2"] onde segundo não tem browseId em alguns casos
+                    if (textTrimmed.contains(",") || textTrimmed.contains("&")) {
+                        splitArtists(textTrimmed).forEach { part ->
+                            val c = YTMusicTextUtils.cleanArtistName(part)
+                            if (c.isNotBlank() && c !in artists && !YTMusicTextUtils.isTypeWord(c)) {
+                                artists.add(c)
+                            }
+                        }
+                    } else {
+                        // Texto solto que não é bullet, pode ser artista sem browseId (fallback)
+                        // Só adiciona se ainda não vimos bullet de álbum
+                        if (artists.size < 5) { // limite para não pegar álbum
+                            val clean = YTMusicTextUtils.cleanArtistName(textTrimmed)
+                            if (clean.isNotBlank() && clean.length in 2..60 && clean !in artists) {
+                                // Evita adicionar palavras tipo "Single", "Album"
+                                if (!YTMusicTextUtils.isTypeWord(clean)) {
+                                    // Se contém separadores, split
+                                    if (clean.contains(",") || clean.contains("&")) {
+                                        splitArtists(clean).forEach { p ->
+                                            if (p !in artists) artists.add(p)
+                                        }
+                                    } else {
+                                        artists.add(clean)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            if (artists.isNotEmpty()) return artists.joinToString(", ")
+            if (artists.isNotEmpty()) {
+                return artists.distinct().joinToString(", ")
+            }
         }
-        val segments = subtitleText.split("•").map { it.trim().trim(',', '&', '·', '•', '-', '/', ';', ' ') }.filter { it.isNotBlank() }
-        val valid = segments.filter { seg ->
-            !YTMusicTextUtils.isTypeWord(seg) && !YTMusicTextUtils.isDuration(seg) && !YTMusicTextUtils.isYear(seg) && !YTMusicTextUtils.isDate(seg) && !YTMusicTextUtils.isEpisode(seg) && !YTMusicTextUtils.isViewCount(seg) && seg.length <= 80
+
+        // Fallback: parse subtitleText "Artist1, Artist2 • Album • Year"
+        // Pega apenas o primeiro bloco antes do primeiro bullet, e quebra por separadores
+        val firstBlock = subtitleText.split("•").firstOrNull()?.trim().orEmpty()
+        if (firstBlock.isNotBlank()) {
+            val splitted = splitArtists(firstBlock)
+            val valid = splitted.filter { seg ->
+                seg.isNotBlank() &&
+                !YTMusicTextUtils.isTypeWord(seg) &&
+                !YTMusicTextUtils.isDuration(seg) &&
+                !YTMusicTextUtils.isYear(seg) &&
+                !YTMusicTextUtils.isDate(seg) &&
+                seg.length <= 80
+            }
+            if (valid.isNotEmpty()) return valid.joinToString(", ")
         }
-        return valid.takeIf { it.isNotEmpty() }?.joinToString(", ")
+        return null
+    }
+
+    private fun splitArtists(input: String): List<String> {
+        // Quebra por ", ", " & ", " e ", " and ", " x ", " feat. ", " ft. ", " com ", " with "
+        val regex = Regex("\\s*,\\s*|\\s*&\\s*|\\s+ e \\s+|\\s+ and \\s+|\\s+ x \\s+|\\s+ feat\\.? \\s+|\\s+ ft\\.? \\s+|\\s+ com \\s+|\\s+ with \\s+|\\s*\\|\\s*|\\s*/\\s*|\\s*;\\s*", RegexOption.IGNORE_CASE)
+        return input.split(regex).map { it.trim().trim(',', '&', '·', '•', '-', '/', ';', ' ') }.filter { it.isNotBlank() }
     }
 
     private fun extractChannelName(subtitleCol: JSONObject?): String? {

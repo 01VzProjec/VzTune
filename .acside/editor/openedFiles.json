@@ -80,16 +80,31 @@
       "selection": {
         "end": {
           "column": 0,
-          "index": 13058,
-          "line": 342
+          "index": 9859,
+          "line": 216
         },
         "start": {
           "column": 0,
-          "index": 13058,
-          "line": 342
+          "index": 9859,
+          "line": 216
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicSearchParser.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 20896,
+          "line": 434
+        },
+        "start": {
+          "column": 0,
+          "index": 20896,
+          "line": 434
         }
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/music/MusicRepository.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicSearchParser.kt"
 }

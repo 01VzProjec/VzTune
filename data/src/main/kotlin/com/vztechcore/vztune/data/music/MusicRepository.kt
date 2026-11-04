@@ -1,4 +1,3 @@
-
 package com.vztechcore.vztune.data.music
 
 import android.util.Log
@@ -122,32 +121,28 @@ class MusicRepository @Inject constructor(
     private suspend fun validateAlbums(albums: List<SearchHit.AlbumHit>): List<SearchHit.AlbumHit> = coroutineScope {
         if (albums.isEmpty()) return@coroutineScope emptyList()
         val semaphore = Semaphore(6)
-        albums.map { hit ->
-            async {
+        val deferred = albums.map { hit ->
+            async<SearchHit.AlbumHit?> {
                 semaphore.withPermit {
                     val hasTracks = runCatching {
                         withTimeoutOrNull(6000L) { ytMusicRepository.browseAlbum(hit.album.id).tracks.isNotEmpty() }
                     }.getOrNull()
                     when {
-                        hasTracks == null -> {
-                            Log.d(TAG, "timeout validating album: ${hit.album.id}")
-                            hit
-                        }
-                        hasTracks == false -> {
-                            Log.d(TAG, "skip empty album: ${hit.album.id} '${hit.album.title}'")
-                            null
-                        }
+                        hasTracks == null -> hit
+                        hasTracks == false -> null
                         else -> hit
                     }
                 }
             }
-        }.awaitAll().filterNotNull()
+        }
+        deferred.awaitAll().filterNotNull()
     }
 
     private suspend fun validatePlaylists(playlists: List<SearchHit.PlaylistHit>): List<SearchHit.PlaylistHit> = coroutineScope {
+        if (playlists.isEmpty()) return@coroutineScope emptyList()
         val semaphore = Semaphore(8)
-        playlists.map { hit ->
-            async {
+        val deferred = playlists.map { hit ->
+            async<SearchHit.PlaylistHit?> {
                 semaphore.withPermit {
                     val count = hit.playlist.trackCount
                     if (count != null && count > 0) return@withPermit hit
@@ -156,22 +151,20 @@ class MusicRepository @Inject constructor(
                     }.getOrNull()
                     when {
                         hasTracks == null -> hit
-                        hasTracks == false -> {
-                            Log.d(TAG, "skip empty playlist: ${hit.playlist.id}")
-                            null
-                        }
+                        hasTracks == false -> null
                         else -> hit
                     }
                 }
             }
-        }.awaitAll().filterNotNull()
+        }
+        deferred.awaitAll().filterNotNull()
     }
 
     private suspend fun validateYouTubePlaylists(playlists: List<SearchHit.PlaylistHit>): List<SearchHit.PlaylistHit> = coroutineScope {
         if (playlists.isEmpty()) return@coroutineScope emptyList()
         val semaphore = Semaphore(4)
-        playlists.map { hit ->
-            async {
+        val deferred = playlists.map { hit ->
+            async<SearchHit.PlaylistHit?> {
                 semaphore.withPermit {
                     val rawId = hit.playlist.id.removePrefix("YT:")
                     if (rawId.startsWith("RD")) return@withPermit null
@@ -185,7 +178,8 @@ class MusicRepository @Inject constructor(
                     }
                 }
             }
-        }.awaitAll().filterNotNull()
+        }
+        deferred.awaitAll().filterNotNull()
     }
 
     private suspend fun searchOther(query: String, filter: SearchFilter, loadMore: Boolean, state: SearchState): SearchResult = coroutineScope {

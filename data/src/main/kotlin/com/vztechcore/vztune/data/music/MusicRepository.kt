@@ -16,12 +16,40 @@ import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
-// VERSAO SAFE - só busca e filtragem, sem extracao de audio
 @Singleton
 class MusicRepository @Inject constructor(
     private val youTubeRepository: YouTubeRepository,
     private val ytMusicRepository: YTMusicRepository,
 ) {
+
+    // =====================================================================
+    //  STREAM URL — delega pro YouTubeRepository (NewPipe)
+    // =====================================================================
+    // YTMusicRepository só resolve metadata; a extração de áudio real está
+    // em YouTubeRepository.getStreamUrl(videoId, titleHint, artistHint).
+    //
+    // Passamos title/artist como hints pra ativar o fallback interno
+    // (findBestMatchVideoId) quando o videoId do YT Music não tem stream
+    // disponível (vídeo removido, região, etc).
+    // =====================================================================
+    suspend fun getStreamUrl(track: Track): String? {
+        val artistHint = track.artist
+            .takeIf { it.isNotBlank() && !it.equals("Desconhecido", ignoreCase = true) }
+        val url = runCatching {
+            youTubeRepository.getStreamUrl(
+                videoId = track.id,
+                titleHint = track.title.takeIf { it.isNotBlank() },
+                artistHint = artistHint,
+            )
+        }.getOrElse { e ->
+            Log.e(TAG, "getStreamUrl failed for ${track.id}: ${e.message}", e)
+            null
+        }
+        if (url.isNullOrBlank()) {
+            Log.w(TAG, "getStreamUrl returned null for ${track.id} '${track.title}'")
+        }
+        return url
+    }
 
     private data class SearchState(
         val seenKeys: MutableSet<String> = mutableSetOf(),
@@ -110,7 +138,10 @@ class MusicRepository @Inject constructor(
         state.ytmHasMore = ytmPage.continuation != null
         val ytmPlaylists = ytmPage.items.filterIsInstance<SearchHit.PlaylistHit>()
         val ytmValidated = validatePlaylists(ytmPlaylists)
-        val ytFiltered = ytHits.filterNot { hit -> hit.playlist.title.startsWith("Mix -", ignoreCase = true) && hit.playlist.id.contains("RD", ignoreCase = true) }
+        val ytFiltered = ytHits.filterNot { hit ->
+            hit.playlist.title.startsWith("Mix -", ignoreCase = true) &&
+                hit.playlist.id.contains("RD", ignoreCase = true)
+        }
         val ytValidated = validateYouTubePlaylists(ytFiltered)
         val merged = ytValidated + ytmValidated
         val newHits = merged.filter { state.seenKeys.add(it.stableKey) }
@@ -160,26 +191,13 @@ class MusicRepository @Inject constructor(
         deferred.awaitAll().filterNotNull()
     }
 
-    private suspend fun validateYouTubePlaylists(playlists: List<SearchHit.PlaylistHit>): List<SearchHit.PlaylistHit> = coroutineScope {
-        if (playlists.isEmpty()) return@coroutineScope emptyList()
-        val semaphore = Semaphore(4)
-        val deferred = playlists.map { hit ->
-            async<SearchHit.PlaylistHit?> {
-                semaphore.withPermit {
-                    val rawId = hit.playlist.id.removePrefix("YT:")
-                    if (rawId.startsWith("RD")) return@withPermit null
-                    val hasTracks = runCatching {
-                        withTimeoutOrNull(6000L) { youTubeRepository.browseYouTubePlaylist(rawId).tracks.isNotEmpty() }
-                    }.getOrNull()
-                    when {
-                        hasTracks == null -> hit
-                        hasTracks == false -> null
-                        else -> hit
-                    }
-                }
-            }
-        }
-        deferred.awaitAll().filterNotNull()
+    // YouTubeRepository NÃO tem browseYouTubePlaylist() — só filtro client-side.
+    // Descarta auto-playlists (Mix/RD) que o NewPipe devolve.
+    private fun validateYouTubePlaylists(
+        playlists: List<SearchHit.PlaylistHit>
+    ): List<SearchHit.PlaylistHit> = playlists.filter { hit ->
+        val rawId = hit.playlist.id.removePrefix("YT:")
+        !rawId.startsWith("RD")
     }
 
     private suspend fun searchOther(query: String, filter: SearchFilter, loadMore: Boolean, state: SearchState): SearchResult = coroutineScope {

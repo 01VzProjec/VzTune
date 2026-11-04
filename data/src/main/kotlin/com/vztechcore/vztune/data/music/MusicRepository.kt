@@ -144,15 +144,15 @@ class MusicRepository @Inject constructor(
         loadMore: Boolean,
         state: SearchState,
     ): SearchResult = coroutineScope {
-        val ytDeferred = async {
-            if (!loadMore) youTubeRepository.searchPlaylists(query, loadMore = false)
-            else emptyList()
-        }
-        val ytmDeferred = async {
+        // For Playlists tab we now rely only on YouTube Music (VL) which has mosaic 2x2
+        // YouTube playlists (YT:) with single thumbnail were returning empty because
+        // MediaListViewModel only browses via YTMusicRepository. To avoid empty screens,
+        // we keep only YTM playlists here. YT playlists can be re-added later with a
+        // dedicated browse method in YouTubeRepository.
+        val ytmPageDeferred = async {
             ytMusicRepository.search(query, SearchFilter.PLAYLISTS, state.ytmContinuation)
         }
-        val ytHits = ytDeferred.await()
-        val ytmPage = ytmDeferred.await()
+        val ytmPage = ytmPageDeferred.await()
 
         state.ytmContinuation = ytmPage.continuation
         state.ytmHasMore = ytmPage.continuation != null
@@ -160,8 +160,12 @@ class MusicRepository @Inject constructor(
         val ytmPlaylists = ytmPage.items.filterIsInstance<SearchHit.PlaylistHit>()
         val ytmValidated = validatePlaylists(ytmPlaylists)
 
-        val merged = ytHits + ytmValidated
-        val newHits = merged.filter { state.seenKeys.add(it.stableKey) }
+        // Filter out known invalid cases: empty title or Mix ids that slip through
+        val cleaned = ytmValidated.filter { hit ->
+            hit.playlist.title.isNotBlank() && !hit.playlist.id.startsWith("RD")
+        }
+
+        val newHits = cleaned.filter { state.seenKeys.add(it.stableKey) }
         SearchResult.Success(newHits, state.ytmHasMore)
     }
 

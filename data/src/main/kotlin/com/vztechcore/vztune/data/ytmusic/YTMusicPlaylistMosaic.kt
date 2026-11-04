@@ -8,12 +8,12 @@ internal object YTMusicPlaylistMosaic {
     private val cache = ConcurrentHashMap<String, List<String>>()
 
     fun fetchMosaic(browseId: String): List<String> {
-        cache[browseId]?.let { return it }
-        if (browseId.startsWith("YT:")) return emptyList()
+        val cleanId = YTMusicTextUtils.normalizePlaylistBrowseId(browseId)
+        cache[cleanId]?.let { return it }
 
-        val json = runCatching { InnerTube.browse(browseId) }
+        val json = runCatching { InnerTube.browse(cleanId) }
             .getOrElse { e ->
-                Log.w("VzTuneMosaic", "browse failed for $browseId: ${e.message}")
+                Log.w("VzTuneMosaic", "browse failed for $cleanId: ${e.message}")
                 return emptyList()
             }
 
@@ -26,7 +26,7 @@ internal object YTMusicPlaylistMosaic {
             }
         }
         val result = thumbs.take(4)
-        cache[browseId] = result
+        cache[cleanId] = result
         return result
     }
 }

@@ -9,6 +9,7 @@ import com.vztechcore.vztune.core.domain.search.SearchResult
 import com.vztechcore.vztune.core.domain.search.SearchSuggestions
 import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
+import com.vztechcore.vztune.data.ytmusic.YTMusicTextUtils
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -170,14 +171,15 @@ class MusicRepository @Inject constructor(
         state.ytmContinuation = ytmPage.continuation
         state.ytmHasMore = ytmPage.continuation != null
         val ytmPlaylists = ytmPage.items.filterIsInstance<SearchHit.PlaylistHit>()
-        val ytmValidated = validatePlaylists(ytmPlaylists)
         val ytFiltered = ytHits.filterNot { hit ->
             hit.playlist.title.startsWith("Mix -", ignoreCase = true) &&
                 hit.playlist.id.contains("RD", ignoreCase = true)
         }
-        val ytValidated = validateYouTubePlaylists(ytFiltered)
-        val merged = ytValidated + ytmValidated
-        val newHits = merged.filter { state.seenKeys.add(it.stableKey) }
+        val allPlaylists = (ytFiltered + ytmPlaylists).distinctBy { hit ->
+            YTMusicTextUtils.normalizePlaylistBrowseId(hit.playlist.id)
+        }
+        val validated = validatePlaylists(allPlaylists)
+        val newHits = validated.filter { state.seenKeys.add(it.stableKey) }
         SearchResult.Success(newHits, state.ytmHasMore)
     }
 
@@ -211,24 +213,12 @@ class MusicRepository @Inject constructor(
                     if (count != null && count > 0) return@withPermit hit
                     val hasTracks = runCatching {
                         withTimeoutOrNull(5000L) { ytMusicRepository.browsePlaylist(hit.playlist.id).tracks.isNotEmpty() }
-                    }.getOrNull()
-                    when {
-                        hasTracks == null -> hit
-                        hasTracks == false -> null
-                        else -> hit
-                    }
+                    }.getOrDefault(false)
+                    if (hasTracks == true) hit else null
                 }
             }
         }
         deferred.awaitAll().filterNotNull()
-    }
-
-    // YouTubeRepository NÃO tem browse de playlist — só filtro client-side (RD/Mix).
-    private fun validateYouTubePlaylists(
-        playlists: List<SearchHit.PlaylistHit>
-    ): List<SearchHit.PlaylistHit> = playlists.filter { hit ->
-        val rawId = hit.playlist.id.removePrefix("YT:")
-        !rawId.startsWith("RD")
     }
 
     private suspend fun searchOther(query: String, filter: SearchFilter, loadMore: Boolean, state: SearchState): SearchResult = coroutineScope {

@@ -39,7 +39,6 @@ class YTMusicRepository @Inject constructor(
         val tracks: List<Track>,
     )
 
-    // RESTORED VideoDetails data class
     data class VideoDetails(
         val viewCount: String?,
         val likeCount: String?,
@@ -72,7 +71,6 @@ class YTMusicRepository @Inject constructor(
             if (query.isBlank()) return@withContext SearchSuggestions()
 
             coroutineScope {
-                // 1. Fetch text suggestions (queries)
                 val queriesDeferred = async {
                     runCatching {
                         val json = InnerTube.searchSuggestions(query)
@@ -80,10 +78,8 @@ class YTMusicRepository @Inject constructor(
                     }.getOrDefault(emptyList())
                 }
 
-                // 2. Fetch songs (lightweight, no enrichment for speed)
                 val songsDeferred = async {
                     runCatching {
-                        // Determine how many songs to fetch based on query length
                         val limit = when {
                             query.length <= 2 -> 3
                             query.length == 3 -> 4
@@ -128,7 +124,8 @@ class YTMusicRepository @Inject constructor(
     }
 
     suspend fun browsePlaylist(playlistId: String): PlaylistResult = withContext(Dispatchers.IO) {
-        val json = runCatching { InnerTube.browse(playlistId) }.getOrNull()
+        val cleanId = YTMusicTextUtils.normalizePlaylistBrowseId(playlistId)
+        val json = runCatching { InnerTube.browse(cleanId) }.getOrNull()
             ?: return@withContext PlaylistResult(null, null, null, null, emptyList())
 
         val header = YTMusicTextUtils.findFirst(json, "musicDetailHeaderRenderer")

@@ -52,18 +52,28 @@ class YTMusicEnricher @Inject constructor(
 
     // ================= SONG =================
 
+    private fun countArtists(artist: String?): Int {
+        if (artist.isNullOrBlank() || isLikelyMetadata(artist)) return 0
+        return artist.split(Regex("[,&/]")).count { it.isNotBlank() }
+    }
+
     private suspend fun enrichSongHit(hit: SearchHit.SongHit): SearchHit {
         val track = hit.track
-        val cachedAuthor = YTMusicCaches.authorCache[track.id]
-        if (!cachedAuthor.isNullOrBlank()) {
-            return if (cachedAuthor != track.artist) {
-                SearchHit.SongHit(track.copy(artist = cachedAuthor))
-            } else hit
+        val currentCount = countArtists(track.artist)
+
+        // If track already has a valid artist string (not metadata), keep it!
+        if (!isLikelyMetadata(track.artist)) {
+            val cached = YTMusicCaches.authorCache[track.id]
+            if (cached.isNullOrBlank() || currentCount > countArtists(cached)) {
+                YTMusicCaches.authorCache[track.id] = track.artist
+            }
+            return hit
         }
 
-        if (!isLikelyMetadata(track.artist)) {
-            YTMusicCaches.authorCache[track.id] = track.artist
-            return hit
+        // Only resolve author if current track.artist IS metadata or blank/unknown
+        val cachedAuthor = YTMusicCaches.authorCache[track.id]
+        if (!cachedAuthor.isNullOrBlank() && !isLikelyMetadata(cachedAuthor)) {
+            return SearchHit.SongHit(track.copy(artist = cachedAuthor))
         }
 
         val real = resolveAuthor(track)
@@ -133,9 +143,9 @@ class YTMusicEnricher @Inject constructor(
 
     private suspend fun enrichPlaylistHit(hit: SearchHit.PlaylistHit): SearchHit {
         val playlist = hit.playlist
-        if (playlist.id.startsWith("YT:")) return hit
+        val cleanId = YTMusicTextUtils.normalizePlaylistBrowseId(playlist.id)
 
-        val mosaic = YTMusicPlaylistMosaic.fetchMosaic(playlist.id)
+        val mosaic = YTMusicPlaylistMosaic.fetchMosaic(cleanId)
         if (mosaic.isEmpty() && playlist.thumbnailUrl != null) return hit
 
         return SearchHit.PlaylistHit(

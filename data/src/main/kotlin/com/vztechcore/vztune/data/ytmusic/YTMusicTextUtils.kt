@@ -30,6 +30,18 @@ internal object YTMusicTextUtils {
         RegexOption.IGNORE_CASE,
     )
 
+    /**
+     * Normalizes playlist browse IDs so InnerTube browse endpoint can load their tracks.
+     * YouTube playlists (PL...) or regular IDs (YT:PL...) need to be prefixed with VL (VLPL...).
+     */
+    fun normalizePlaylistBrowseId(rawId: String): String {
+        var id = rawId.removePrefix("YT:").trim()
+        if (!id.startsWith("VL") && (id.startsWith("PL") || id.startsWith("RD") || id.startsWith("LR") || id.startsWith("SE"))) {
+            id = "VL$id"
+        }
+        return id
+    }
+
     fun walk(node: Any?, block: (JSONObject) -> Unit) {
         when (node) {
             is JSONObject -> {

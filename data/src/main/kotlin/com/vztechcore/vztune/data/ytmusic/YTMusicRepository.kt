@@ -39,6 +39,18 @@ class YTMusicRepository @Inject constructor(
         val tracks: List<Track>,
     )
 
+    data class ArtistResult(
+        val browseId: String,
+        val name: String,
+        val thumbnailUrl: String?,
+        val subscribers: String?,
+        val description: String?,
+        val topSongs: List<Track>,
+        val albums: List<Album>,
+        val singles: List<Album>,
+        val relatedArtists: List<Artist>
+    )
+
     data class VideoDetails(
         val viewCount: String?,
         val likeCount: String?,
@@ -168,16 +180,29 @@ class YTMusicRepository @Inject constructor(
         out.distinctBy { it.id }.filter { !it.thumbnailUrl.isNullOrBlank() }.shuffled().take(30)
     }
 
-    suspend fun browseArtist(browseId: String): YTMusicArtistParser.ArtistPage =
+    suspend fun browseArtist(browseId: String): ArtistResult =
         withContext(Dispatchers.IO) {
             val json = runCatching { InnerTube.browse(browseId) }.getOrNull()
-                ?: return@withContext YTMusicArtistParser.ArtistPage(
+                ?: return@withContext ArtistResult(
                     browseId = browseId, name = "Artista",
                     thumbnailUrl = null, subscribers = null, description = null,
                     topSongs = emptyList(), albums = emptyList(), singles = emptyList(),
                     relatedArtists = emptyList()
                 )
-            YTMusicArtistParser.parseArtistPage(browseId, json)
+            
+            val parsed = YTMusicArtistParser.parseArtistPage(browseId, json)
+            
+            ArtistResult(
+                browseId = parsed.browseId,
+                name = parsed.name,
+                thumbnailUrl = parsed.thumbnailUrl,
+                subscribers = parsed.subscribers,
+                description = parsed.description,
+                topSongs = parsed.topSongs,
+                albums = parsed.albums,
+                singles = parsed.singles,
+                relatedArtists = parsed.relatedArtists
+            )
         }
 
     suspend fun getArtistFromVideo(videoId: String): Artist? =

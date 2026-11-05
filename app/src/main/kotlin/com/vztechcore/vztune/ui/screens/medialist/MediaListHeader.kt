@@ -1,6 +1,5 @@
 package com.vztechcore.vztune.ui.screens.medialist
 
-import android.graphics.drawable.BitmapDrawable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -20,15 +19,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.palette.graphics.Palette
 import coil.compose.AsyncImage
-import coil.imageLoader
-import coil.request.ImageRequest
-import coil.request.SuccessResult
 import com.vztechcore.vztune.core.domain.search.SortOrder
 
 @Composable
@@ -42,37 +36,8 @@ internal fun MediaListExpandedHeader(
     onSortClick: () -> Unit,
     onShuffleToggle: () -> Unit,
 ) {
-    var dominantColor by remember { mutableStateOf(Color.Transparent) }
-    val context = LocalContext.current
-    val imageLoader = context.imageLoader
-    val imageUrl = state.thumbnailUrl ?: state.mosaicThumbnails.firstOrNull()
-
-    LaunchedEffect(imageUrl) {
-        if (imageUrl != null) {
-            val request = ImageRequest.Builder(context)
-                .data(imageUrl)
-                .size(128)
-                .allowHardware(false)
-                .build()
-
-            val result = imageLoader.execute(request)
-            if (result is SuccessResult) {
-                val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
-                if (bitmap != null) {
-                    Palette.from(bitmap).generate { palette ->
-                        palette?.dominantSwatch?.rgb?.let { color ->
-                            dominantColor = Color(color)
-                        } ?: palette?.vibrantSwatch?.rgb?.let { color ->
-                            dominantColor = Color(color)
-                        } ?: palette?.mutedSwatch?.rgb?.let { color ->
-                            dominantColor = Color(color)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
+    // A cor dinâmica agora vem do Box principal na MediaListScreen!
+    // O Header fica com fundo transparente em cima para aproveitar a cor de fundo nativa.
     Column(Modifier.fillMaxWidth()) {
         // ================= HERO COVER (FULL WIDTH) =================
         Box(
@@ -90,20 +55,18 @@ internal fun MediaListExpandedHeader(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-
-            val topColor = if (dominantColor == Color.Transparent) Color.Black.copy(alpha = 0.4f) else dominantColor.copy(alpha = 0.5f)
-            val midColor = if (dominantColor == Color.Transparent) Color.Transparent else dominantColor.copy(alpha = 0.2f)
             
+            // Camuflagem apenas para as imagens, fundindo com a cor da tela embaixo
             Box(
                 Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
-                                0.0f to topColor,
-                                0.4f to midColor,
-                                0.8f to Color.Black.copy(alpha = 0.8f),
-                                1.0f to Color.Black
+                                0.0f to Color.Black.copy(alpha = 0.4f), // Escuro pros botões do topo
+                                0.4f to Color.Transparent, 
+                                0.8f to Color.Transparent,
+                                1.0f to Color.Black.copy(alpha = 0.2f)
                             )
                         )
                     )

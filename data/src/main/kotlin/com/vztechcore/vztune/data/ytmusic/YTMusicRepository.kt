@@ -32,7 +32,6 @@ class YTMusicRepository @Inject constructor(
         val tracks: List<Track>,
     )
 
-    // Adicionado trackCount e year para a nossa nova UI
     data class PlaylistResult(
         val coverUrl: String?,
         val owner: String?,
@@ -40,6 +39,7 @@ class YTMusicRepository @Inject constructor(
         val description: String?,
         val trackCount: Int,
         val year: String?,
+        val views: String?,
         val tracks: List<Track>,
     )
 
@@ -142,7 +142,7 @@ class YTMusicRepository @Inject constructor(
     suspend fun browsePlaylist(playlistId: String): PlaylistResult = withContext(Dispatchers.IO) {
         val cleanId = YTMusicTextUtils.normalizePlaylistBrowseId(playlistId)
         val json = runCatching { InnerTube.browse(cleanId) }.getOrNull()
-            ?: return@withContext PlaylistResult(null, null, null, null, 0, null, emptyList())
+            ?: return@withContext PlaylistResult(null, null, null, null, 0, null, null, emptyList())
 
         val parsed = YTMusicPlaylistParser.parsePlaylist(json)
         val finalTracks = enricher.enrichTracks(parsed.tracks, null)
@@ -154,6 +154,7 @@ class YTMusicRepository @Inject constructor(
             description = parsed.description,
             trackCount = parsed.trackCount.takeIf { it > 0 } ?: finalTracks.size,
             year = parsed.year,
+            views = parsed.views,
             tracks = finalTracks
         )
     }

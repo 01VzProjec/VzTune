@@ -15,9 +15,10 @@ data class MediaListUiState(
     val errorMessage: String? = null,
     val title: String = "",
     val subtitle: String? = null,
-    val owner: String? = null, // New field for robust creator display
-    val year: String? = null, // New field for release year
-    val originalTrackCount: Int? = null, // Extracted directly from API
+    val owner: String? = null,
+    val year: String? = null,
+    val views: String? = null, // Visualizações adicionadas!
+    val originalTrackCount: Int? = null,
     val thumbnailUrl: String? = null,
     val mosaicThumbnails: List<String> = emptyList(),
     val isAlbum: Boolean = false,
@@ -63,6 +64,7 @@ data class MediaListUiState(
         }
     }
     
+    // Header Subtitle reformulado: "Dono • Ano • Visualizações"
     val headerSubtitle: String?
         get() = buildString {
             val primary = owner ?: subtitle
@@ -70,6 +72,10 @@ data class MediaListUiState(
             if (!year.isNullOrBlank()) {
                 if (isNotEmpty()) append(" • ")
                 append(year)
+            }
+            if (!views.isNullOrBlank()) {
+                if (isNotEmpty()) append(" • ")
+                append(views)
             }
         }.takeIf { it.isNotBlank() }
 

@@ -1,5 +1,6 @@
 package com.vztechcore.vztune.ui.screens.medialist
 
+import android.graphics.drawable.BitmapDrawable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -27,8 +28,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.palette.graphics.Palette
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
 import com.vztechcore.vztune.ui.components.LocalNowPlaying
@@ -63,6 +70,38 @@ fun MediaListScreen(
     var showSortSheet by remember { mutableStateOf(false) }
     var showSearchOverlay by remember { mutableStateOf(false) }
     var shuffleJob by remember { mutableStateOf<Job?>(null) }
+
+    // Fundo Gradiente que pega a tela toda!
+    var dominantColor by remember { mutableStateOf(Color(0xFF0A0F1E)) }
+    val context = LocalContext.current
+    val imageLoader = context.imageLoader
+    val imageUrl = state.thumbnailUrl ?: state.mosaicThumbnails.firstOrNull()
+
+    LaunchedEffect(imageUrl) {
+        if (imageUrl != null) {
+            val request = ImageRequest.Builder(context)
+                .data(imageUrl)
+                .size(128)
+                .allowHardware(false)
+                .build()
+
+            val result = imageLoader.execute(request)
+            if (result is SuccessResult) {
+                val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
+                if (bitmap != null) {
+                    Palette.from(bitmap).generate { palette ->
+                        palette?.dominantSwatch?.rgb?.let { color ->
+                            dominantColor = Color(color)
+                        } ?: palette?.vibrantSwatch?.rgb?.let { color ->
+                            dominantColor = Color(color)
+                        } ?: palette?.mutedSwatch?.rgb?.let { color ->
+                            dominantColor = Color(color)
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     val isCollapsed by remember {
         derivedStateOf {
@@ -109,7 +148,18 @@ fun MediaListScreen(
         )
     }
 
-    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
+    // Box principal com o super gradiente
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(dominantColor.copy(alpha = 0.55f), Color.Black, Color.Black),
+                    startY = 0f,
+                    endY = 1600f
+                )
+            )
+    ) {
         LazyColumn(
             state = listState,
             contentPadding = PaddingValues(bottom = 140.dp),

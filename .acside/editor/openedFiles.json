@@ -65,13 +65,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 16560,
-          "line": 378
+          "index": 16259,
+          "line": 376
         },
         "start": {
           "column": 1,
-          "index": 16560,
-          "line": 378
+          "index": 16259,
+          "line": 376
         }
       }
     },
@@ -89,7 +89,37 @@
           "line": 257
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicArtistParser.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 9177,
+          "line": 201
+        },
+        "start": {
+          "column": 1,
+          "index": 9177,
+          "line": 201
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicPlaylistParser.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 6147,
+          "line": 149
+        },
+        "start": {
+          "column": 1,
+          "index": 6147,
+          "line": 149
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/music/MusicRepository.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicRepository.kt"
 }

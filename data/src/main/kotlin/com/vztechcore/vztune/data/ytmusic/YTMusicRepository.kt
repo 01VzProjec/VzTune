@@ -128,19 +128,17 @@ class YTMusicRepository @Inject constructor(
         val json = runCatching { InnerTube.browse(cleanId) }.getOrNull()
             ?: return@withContext PlaylistResult(null, null, null, null, emptyList())
 
-        val header = YTMusicTextUtils.findFirst(json, "musicDetailHeaderRenderer")
-            ?: YTMusicTextUtils.findFirst(json, "musicResponsiveHeaderRenderer")
-            ?: YTMusicTextUtils.findFirst(json, "musicEditablePlaylistDetailHeaderRenderer")
+        // Usando o nosso novo parser parrudo nível SimpMusic! 🔥
+        val parsed = YTMusicPlaylistParser.parsePlaylist(json)
+        val finalTracks = enricher.enrichTracks(parsed.tracks, null)
 
-        val cover = header?.let { YTMusicThumbnailUtils.extractHeaderCover(it) }
-        val title = header?.let { YTMusicArtistParser.extractHeaderTitle(it) }
-        val owner = header?.let { extractHeaderArtist(it) }
-        val desc = extractDescription(json)
-
-        val rawTracks = collectMusicItems(json).distinctBy { it.id }
-        val finalTracks = enricher.enrichTracks(rawTracks, null)
-
-        PlaylistResult(cover, owner, title, desc, finalTracks)
+        PlaylistResult(
+            coverUrl = parsed.coverUrl,
+            owner = parsed.owner,
+            title = parsed.title,
+            description = parsed.description,
+            tracks = finalTracks
+        )
     }
 
     // ================= ARTISTS =================

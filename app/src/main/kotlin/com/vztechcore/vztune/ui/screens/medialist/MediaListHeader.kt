@@ -47,7 +47,6 @@ internal fun MediaListExpandedHeader(
     val imageLoader = context.imageLoader
     val imageUrl = state.thumbnailUrl ?: state.mosaicThumbnails.firstOrNull()
 
-    // Dynamic Palette extraction for the gradient
     LaunchedEffect(imageUrl) {
         if (imageUrl != null) {
             val request = ImageRequest.Builder(context)
@@ -81,7 +80,6 @@ internal fun MediaListExpandedHeader(
                 .fillMaxWidth()
                 .height(360.dp)
         ) {
-            // 1. Image or Mosaic Background
             if (state.mosaicThumbnails.size >= 4) {
                 PlaylistMosaicLarge(state.mosaicThumbnails)
             } else {
@@ -93,7 +91,6 @@ internal fun MediaListExpandedHeader(
                 )
             }
 
-            // 2. Dynamic Gradient overlay (Color to Black)
             val topColor = if (dominantColor == Color.Transparent) Color.Black.copy(alpha = 0.4f) else dominantColor.copy(alpha = 0.5f)
             val midColor = if (dominantColor == Color.Transparent) Color.Transparent else dominantColor.copy(alpha = 0.2f)
             
@@ -112,7 +109,6 @@ internal fun MediaListExpandedHeader(
                     )
             )
 
-            // 3. Top Buttons (X, Search, More)
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -242,5 +238,84 @@ internal fun MediaListExpandedHeader(
         }
 
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+internal fun MediaListCollapsedHeader(
+    title: String,
+    thumbnailUrl: String?,
+    onBackClick: () -> Unit,
+    onSearchClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color.Black.copy(alpha = 0.95f), Color.Black.copy(alpha = 0.85f), Color.Transparent)
+                )
+            )
+            .statusBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MediaListCircleButton(Icons.Filled.Close, "Fechar", onBackClick)
+        Spacer(Modifier.width(12.dp))
+        if (!thumbnailUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)),
+            )
+            Spacer(Modifier.width(10.dp))
+        }
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onSearchClick) {
+            Icon(Icons.Filled.Search, contentDescription = "Pesquisar", tint = Color.White)
+        }
+    }
+}
+
+@Composable
+internal fun PlaylistMosaicLarge(thumbnails: List<String>) {
+    Row(Modifier.fillMaxSize()) {
+        Column(Modifier.weight(1f)) {
+            AsyncImage(
+                model = thumbnails.getOrNull(0),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+            AsyncImage(
+                model = thumbnails.getOrNull(2),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+        }
+        Column(Modifier.weight(1f)) {
+            AsyncImage(
+                model = thumbnails.getOrNull(1),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+            AsyncImage(
+                model = thumbnails.getOrNull(3),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+        }
     }
 }

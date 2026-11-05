@@ -1,7 +1,7 @@
 {
   "allFiles": [
     {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicTextUtils.kt",
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListHelpers.kt",
       "selection": {
         "end": {
           "column": 0,
@@ -12,156 +12,6 @@
           "column": 0,
           "index": 0,
           "line": 0
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicPlaylistMosaic.kt",
-      "selection": {
-        "end": {
-          "column": 0,
-          "index": 0,
-          "line": 0
-        },
-        "start": {
-          "column": 0,
-          "index": 0,
-          "line": 0
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicSearchParser.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 19326,
-          "line": 406
-        },
-        "start": {
-          "column": 1,
-          "index": 19326,
-          "line": 406
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicEnricher.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 12649,
-          "line": 338
-        },
-        "start": {
-          "column": 1,
-          "index": 12649,
-          "line": 338
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicRepository.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 17212,
-          "line": 405
-        },
-        "start": {
-          "column": 1,
-          "index": 17212,
-          "line": 405
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/music/MusicRepository.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 11495,
-          "line": 257
-        },
-        "start": {
-          "column": 1,
-          "index": 11495,
-          "line": 257
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicArtistParser.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 9239,
-          "line": 201
-        },
-        "start": {
-          "column": 1,
-          "index": 9239,
-          "line": 201
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicPlaylistParser.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 8086,
-          "line": 189
-        },
-        "start": {
-          "column": 1,
-          "index": 8086,
-          "line": 189
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/trackinfo/TrackInfoScreen.kt",
-      "selection": {
-        "end": {
-          "column": 0,
-          "index": 0,
-          "line": 0
-        },
-        "start": {
-          "column": 0,
-          "index": 0,
-          "line": 0
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListUiState.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 3682,
-          "line": 98
-        },
-        "start": {
-          "column": 1,
-          "index": 3682,
-          "line": 98
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListViewModel.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 5942,
-          "line": 146
-        },
-        "start": {
-          "column": 1,
-          "index": 5942,
-          "line": 146
         }
       }
     },
@@ -170,13 +20,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 9177,
-          "line": 245
+          "index": 11643,
+          "line": 320
         },
         "start": {
           "column": 1,
-          "index": 9177,
-          "line": 245
+          "index": 11643,
+          "line": 320
         }
       }
     }

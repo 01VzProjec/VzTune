@@ -55,7 +55,8 @@ class MediaListViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isLoading = false, title = album.title ?: it.title,
-                            subtitle = album.artist?.takeIf { a -> a != "Desconhecido" } ?: it.subtitle,
+                            subtitle = album.artist?.takeIf { a -> a != "Unknown" } ?: it.subtitle,
+                            owner = album.artist,
                             thumbnailUrl = album.coverUrl ?: it.thumbnailUrl,
                             description = album.description, allTracks = album.tracks,
                         )
@@ -70,6 +71,9 @@ class MediaListViewModel @Inject constructor(
                         it.copy(
                             isLoading = false, title = playlist.title ?: it.title,
                             subtitle = playlist.owner ?: it.subtitle,
+                            owner = playlist.owner,
+                            year = playlist.year,
+                            originalTrackCount = playlist.trackCount,
                             thumbnailUrl = playlist.coverUrl ?: it.thumbnailUrl,
                             description = playlist.description, allTracks = playlist.tracks,
                         )

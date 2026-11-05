@@ -1,5 +1,6 @@
 package com.vztechcore.vztune.ui.screens.medialist
 
+import android.graphics.drawable.BitmapDrawable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,17 +13,22 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.palette.graphics.Palette
 import coil.compose.AsyncImage
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.vztechcore.vztune.core.domain.search.SortOrder
 
 @Composable
@@ -36,6 +42,38 @@ internal fun MediaListExpandedHeader(
     onSortClick: () -> Unit,
     onShuffleToggle: () -> Unit,
 ) {
+    var dominantColor by remember { mutableStateOf(Color.Transparent) }
+    val context = LocalContext.current
+    val imageLoader = context.imageLoader
+    val imageUrl = state.thumbnailUrl ?: state.mosaicThumbnails.firstOrNull()
+
+    // Dynamic Palette extraction for the gradient
+    LaunchedEffect(imageUrl) {
+        if (imageUrl != null) {
+            val request = ImageRequest.Builder(context)
+                .data(imageUrl)
+                .size(128)
+                .allowHardware(false)
+                .build()
+
+            val result = imageLoader.execute(request)
+            if (result is SuccessResult) {
+                val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
+                if (bitmap != null) {
+                    Palette.from(bitmap).generate { palette ->
+                        palette?.dominantSwatch?.rgb?.let { color ->
+                            dominantColor = Color(color)
+                        } ?: palette?.vibrantSwatch?.rgb?.let { color ->
+                            dominantColor = Color(color)
+                        } ?: palette?.mutedSwatch?.rgb?.let { color ->
+                            dominantColor = Color(color)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Column(Modifier.fillMaxWidth()) {
         // ================= HERO COVER (FULL WIDTH) =================
         Box(
@@ -43,7 +81,7 @@ internal fun MediaListExpandedHeader(
                 .fillMaxWidth()
                 .height(360.dp)
         ) {
-            // 1. A imagem/mosaico ocupando tudo
+            // 1. Image or Mosaic Background
             if (state.mosaicThumbnails.size >= 4) {
                 PlaylistMosaicLarge(state.mosaicThumbnails)
             } else {
@@ -55,23 +93,26 @@ internal fun MediaListExpandedHeader(
                 )
             }
 
-            // 2. Gradiente preto por cima (camuflagem)
+            // 2. Dynamic Gradient overlay (Color to Black)
+            val topColor = if (dominantColor == Color.Transparent) Color.Black.copy(alpha = 0.4f) else dominantColor.copy(alpha = 0.5f)
+            val midColor = if (dominantColor == Color.Transparent) Color.Transparent else dominantColor.copy(alpha = 0.2f)
+            
             Box(
                 Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
-                                0.0f to Color.Black.copy(alpha = 0.4f), // Topo mais escuro para os ícones
-                                0.4f to Color.Transparent,              // Meio transparente
-                                0.8f to Color.Black.copy(alpha = 0.8f), // Começa a escurecer
-                                1.0f to Color.Black                     // Totalmente preto embaixo
+                                0.0f to topColor,
+                                0.4f to midColor,
+                                0.8f to Color.Black.copy(alpha = 0.8f),
+                                1.0f to Color.Black
                             )
                         )
                     )
             )
 
-            // 3. Botões no topo (X, Lupa, 3 pontinhos)
+            // 3. Top Buttons (X, Search, More)
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -89,7 +130,6 @@ internal fun MediaListExpandedHeader(
         }
 
         // ================= TITLE & METADATA =================
-        // Empurrando pra cima pra colar na imagem (margem negativa visual)
         Column(
             Modifier
                 .fillMaxWidth()
@@ -105,10 +145,11 @@ internal fun MediaListExpandedHeader(
                 overflow = TextOverflow.Ellipsis,
             )
 
-            if (!state.subtitle.isNullOrBlank()) {
+            val dynamicSubtitle = state.headerSubtitle
+            if (!dynamicSubtitle.isNullOrBlank()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    state.subtitle,
+                    dynamicSubtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.7f),
                 )
@@ -201,85 +242,5 @@ internal fun MediaListExpandedHeader(
         }
 
         Spacer(Modifier.height(8.dp))
-    }
-}
-
-@Composable
-internal fun MediaListCollapsedHeader(
-    title: String,
-    thumbnailUrl: String?,
-    onBackClick: () -> Unit,
-    onSearchClick: () -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color.Black.copy(alpha = 0.95f), Color.Black.copy(alpha = 0.85f), Color.Transparent)
-                )
-            )
-            .statusBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        MediaListCircleButton(Icons.Filled.Close, "Fechar", onBackClick)
-        Spacer(Modifier.width(12.dp))
-        if (!thumbnailUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = thumbnailUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)),
-            )
-            Spacer(Modifier.width(10.dp))
-        }
-        Text(
-            title,
-            style = MaterialTheme.typography.titleMedium,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        // Só a lupa como pedido
-        IconButton(onClick = onSearchClick) {
-            Icon(Icons.Filled.Search, contentDescription = "Pesquisar", tint = Color.White)
-        }
-    }
-}
-
-@Composable
-internal fun PlaylistMosaicLarge(thumbnails: List<String>) {
-    Row(Modifier.fillMaxSize()) {
-        Column(Modifier.weight(1f)) {
-            AsyncImage(
-                model = thumbnails.getOrNull(0),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
-            AsyncImage(
-                model = thumbnails.getOrNull(2),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
-        }
-        Column(Modifier.weight(1f)) {
-            AsyncImage(
-                model = thumbnails.getOrNull(1),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
-            AsyncImage(
-                model = thumbnails.getOrNull(3),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
-        }
     }
 }

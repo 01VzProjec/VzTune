@@ -5,8 +5,8 @@ import com.vztechcore.vztune.core.domain.music.Track
 import org.json.JSONObject
 
 /**
- * Parser dedicado a extrair Playlists de forma detalhada,
- * suportando paginação (continuations) para carregar playlists gigantes.
+ * Parser dedicated to extracting Playlists in detail,
+ * supporting continuations (pagination) to load giant playlists.
  */
 internal object YTMusicPlaylistParser {
 
@@ -29,8 +29,8 @@ internal object YTMusicPlaylistParser {
         val title = YTMusicArtistParser.extractHeaderTitle(header) ?: "Playlist"
         val coverUrl = header?.let { YTMusicThumbnailUtils.extractHeaderCover(it) }
         
-        // Agora com o sistema bruto de extração do dono da playlist!
-        val owner = extractOwner(header) ?: "Desconhecido"
+        // Robust system for extracting playlist owner/creator
+        val owner = extractOwner(header) ?: "Unknown"
         
         val subtitle = YTMusicTextUtils.runsText(header?.optJSONObject("subtitle"))
         val trackCount = extractTrackCount(subtitle)
@@ -54,7 +54,6 @@ internal object YTMusicPlaylistParser {
         return PlaylistDetails(
             title = title,
             owner = owner,
-            // Passamos o JSON inteiro para ele caçar a descrição onde quer que ela esteja!
             description = extractDescription(json, header),
             coverUrl = coverUrl,
             trackCount = trackCount,
@@ -98,7 +97,7 @@ internal object YTMusicPlaylistParser {
             
             // SimpMusic robust artist extraction
             val uploader = YTMusicSearchParser.extractArtistFromSubtitle(subtitleCol, subtitle)
-                ?: subtitle.substringBefore("•").trim().ifBlank { "Desconhecido" }
+                ?: subtitle.substringBefore("•").trim().ifBlank { "Unknown" }
                 
             out.add(
                 Track(
@@ -116,21 +115,21 @@ internal object YTMusicPlaylistParser {
     private fun extractOwner(header: JSONObject?): String? {
         if (header == null) return null
         
-        // 1. Tenta achar no straplineTextOne (Comum no layout novo: musicResponsiveHeaderRenderer)
+        // 1. Try finding in straplineTextOne (Common in new layout: musicResponsiveHeaderRenderer)
         val strapline = YTMusicTextUtils.runsText(header.optJSONObject("straplineTextOne"))
         if (strapline.isNotBlank()) {
             val owner = strapline.substringBefore("•").trim()
             if (owner.isNotBlank()) return owner
         }
         
-        // 2. Tenta achar no secondSubtitle
+        // 2. Try finding in secondSubtitle
         val secondSubtitle = YTMusicTextUtils.runsText(header.optJSONObject("secondSubtitle"))
         if (secondSubtitle.isNotBlank()) {
             val owner = secondSubtitle.substringBefore("•").trim()
             if (owner.isNotBlank()) return owner
         }
         
-        // 3. Tenta achar no subtitle clássico caçando o link do canal (UC...)
+        // 3. Try finding in classic subtitle hunting for the channel link (UC...)
         val runs = header.optJSONObject("subtitle")?.optJSONArray("runs")
         if (runs != null) {
             for (i in 0 until runs.length()) {
@@ -144,7 +143,7 @@ internal object YTMusicPlaylistParser {
             }
         }
         
-        // 4. Último recurso: pega a primeira coisa do subtitle antes de um pontinho '•'
+        // 4. Fallback: Grab the first segment of the subtitle before a bullet point '•'
         val subtitle = YTMusicTextUtils.runsText(header.optJSONObject("subtitle"))
         val firstPart = subtitle.split("•").firstOrNull()?.trim()
         if (firstPart != null && firstPart.isNotBlank() && !firstPart.equals("Playlist", true)) {
@@ -165,16 +164,16 @@ internal object YTMusicPlaylistParser {
     }
 
     private fun extractDescription(json: JSONObject, header: JSONObject?): String? {
-        // 1. Procura primeiro na página inteira (geralmente fica numa prateleira de descrição solta)
+        // 1. Look for the description in the global page shelves
         val shelf = YTMusicTextUtils.findFirst(json, "musicDescriptionShelfRenderer")
         val shelfDesc = YTMusicTextUtils.extractRunsText(shelf?.optJSONObject("description"))
         if (shelfDesc.isNotBlank()) return shelfDesc
 
-        // 2. Fallback: Procura dentro do próprio cabeçalho
+        // 2. Fallback: Look inside the header
         val headerDesc = YTMusicTextUtils.extractRunsText(header?.optJSONObject("description"))
         if (headerDesc.isNotBlank()) return headerDesc
         
-        // 3. Tenta pegar como texto normal se não for um 'run'
+        // 3. Try grabbing as normal text if it's not a 'run'
         val rawDesc = YTMusicTextUtils.runsText(header?.optJSONObject("description"))
         if (rawDesc.isNotBlank()) return rawDesc
 

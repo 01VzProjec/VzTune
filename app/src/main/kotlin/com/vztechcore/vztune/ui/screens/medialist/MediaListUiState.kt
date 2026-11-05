@@ -15,6 +15,9 @@ data class MediaListUiState(
     val errorMessage: String? = null,
     val title: String = "",
     val subtitle: String? = null,
+    val owner: String? = null, // New field for robust creator display
+    val year: String? = null, // New field for release year
+    val originalTrackCount: Int? = null, // Extracted directly from API
     val thumbnailUrl: String? = null,
     val mosaicThumbnails: List<String> = emptyList(),
     val isAlbum: Boolean = false,
@@ -35,10 +38,6 @@ data class MediaListUiState(
             MediaListTab.VIDEOS -> allTracks.filter { it.source == Source.YOUTUBE }
         }
 
-    /**
-     * Applies sortOrder to the given list.
-     * Kept for the ViewModel's onTrackClick / onPlayAll / onReorder flows.
-     */
     fun applySort(tracks: List<Track>): List<Track> = when (sortOrder) {
         SortOrder.MANUAL, SortOrder.SHUFFLE -> {
             if (manualOrder.isEmpty()) tracks
@@ -55,11 +54,6 @@ data class MediaListUiState(
         SortOrder.ARTIST_DESC -> tracks.sortedByDescending { it.artist.lowercase() }
     }
 
-    /**
-     * Used by the UI. Combines filteredTracks + sort logic + tab rules:
-     *   - ALL: applies sortOrder
-     *   - SONGS/VIDEOS: forces RECENT_TO_OLD
-     */
     fun getDisplayTracks(): List<Track> {
         val filtered = filteredTracks
         return if (isSortEnabled) {
@@ -68,10 +62,20 @@ data class MediaListUiState(
             filtered.reversed()
         }
     }
+    
+    val headerSubtitle: String?
+        get() = buildString {
+            val primary = owner ?: subtitle
+            if (!primary.isNullOrBlank()) append(primary)
+            if (!year.isNullOrBlank()) {
+                if (isNotEmpty()) append(" • ")
+                append(year)
+            }
+        }.takeIf { it.isNotBlank() }
 
     val trackCountLabel: String
         get() {
-            val count = filteredTracks.size
+            val count = originalTrackCount ?: filteredTracks.size
             return if (count == 1) "1 faixa" else "$count faixas"
         }
 

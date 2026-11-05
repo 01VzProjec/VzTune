@@ -7,8 +7,8 @@ import com.vztechcore.vztune.core.domain.music.Track
 import org.json.JSONObject
 
 /**
- * Parser focado 100% em extrair dados complexos de Artistas,
- * inspirado na robustez do SimpMusic/InnerTune.
+ * Parser dedicated to extracting complex Artist data,
+ * inspired by the robustness of SimpMusic/InnerTune.
  */
 internal object YTMusicArtistParser {
 
@@ -29,7 +29,7 @@ internal object YTMusicArtistParser {
             ?: YTMusicTextUtils.findFirst(json, "musicVisualHeaderRenderer")
             ?: YTMusicTextUtils.findFirst(json, "musicHeaderRenderer")
 
-        val name = extractHeaderTitle(header) ?: "Artista Desconhecido"
+        val name = extractHeaderTitle(header) ?: "Unknown Artist"
         val thumbnail = header?.let { YTMusicThumbnailUtils.extractHeaderCover(it) }
         val subscribers = extractSubscribers(header)
         val description = extractDescription(json)
@@ -54,7 +54,7 @@ internal object YTMusicArtistParser {
                     title.contains("single") -> {
                         extractAlbumsFromShelf(shelf, name, singles)
                     }
-                    title.contains("fã") || title.contains("fan") || title.contains("relacionado") -> {
+                    title.contains("fã") || title.contains("fan") || title.contains("relacionado") || title.contains("related") -> {
                         extractArtistsFromShelf(shelf, relatedArtists)
                     }
                 }
@@ -67,7 +67,7 @@ internal object YTMusicArtistParser {
                  when {
                      title.contains("álbum") || title.contains("album") -> extractAlbumsFromShelf(carousel, name, albums)
                      title.contains("single") -> extractAlbumsFromShelf(carousel, name, singles)
-                     title.contains("relacionado") || title.contains("similar") -> extractArtistsFromShelf(carousel, relatedArtists)
+                     title.contains("relacionado") || title.contains("similar") || title.contains("related") -> extractArtistsFromShelf(carousel, relatedArtists)
                  }
             }
         }

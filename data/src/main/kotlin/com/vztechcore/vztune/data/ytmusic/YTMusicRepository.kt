@@ -1,5 +1,6 @@
 package com.vztechcore.vztune.data.ytmusic
 
+import com.vztechcore.vztune.core.domain.music.Album
 import com.vztechcore.vztune.core.domain.music.Artist
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track

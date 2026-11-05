@@ -36,14 +36,12 @@ internal fun MediaListExpandedHeader(
     onSortClick: () -> Unit,
     onShuffleToggle: () -> Unit,
 ) {
-    // A cor dinâmica agora vem do Box principal na MediaListScreen!
-    // O Header fica com fundo transparente em cima para aproveitar a cor de fundo nativa.
     Column(Modifier.fillMaxWidth()) {
         // ================= HERO COVER (FULL WIDTH) =================
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(360.dp)
+                .height(340.dp)
         ) {
             if (state.mosaicThumbnails.size >= 4) {
                 PlaylistMosaicLarge(state.mosaicThumbnails)
@@ -56,17 +54,16 @@ internal fun MediaListExpandedHeader(
                 )
             }
             
-            // Camuflagem apenas para as imagens, fundindo com a cor da tela embaixo
+            // Subtle top/bottom overlay for image contrast
             Box(
                 Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
-                                0.0f to Color.Black.copy(alpha = 0.4f), // Escuro pros botões do topo
-                                0.4f to Color.Transparent, 
-                                0.8f to Color.Transparent,
-                                1.0f to Color.Black.copy(alpha = 0.2f)
+                                0.0f to Color.Black.copy(alpha = 0.45f),
+                                0.5f to Color.Transparent,
+                                1.0f to Color.Transparent
                             )
                         )
                     )
@@ -93,7 +90,7 @@ internal fun MediaListExpandedHeader(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
-                .offset(y = (-24).dp) 
+                .offset(y = (-16).dp) 
         ) {
             Text(
                 text = state.title,
@@ -110,7 +107,7 @@ internal fun MediaListExpandedHeader(
                 Text(
                     dynamicSubtitle,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = Color.White.copy(alpha = 0.8f),
                 )
             }
 
@@ -119,7 +116,7 @@ internal fun MediaListExpandedHeader(
                 Text(
                     state.metadataLabel,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = Color.White.copy(alpha = 0.6f),
                 )
             }
         }
@@ -165,7 +162,7 @@ internal fun MediaListExpandedHeader(
                 Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.10f))
+                    .background(Color.White.copy(alpha = 0.12f))
                     .clickable { onShuffleClick() },
                 contentAlignment = Alignment.Center,
             ) {

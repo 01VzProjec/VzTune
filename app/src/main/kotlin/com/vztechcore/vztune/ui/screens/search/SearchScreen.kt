@@ -39,21 +39,30 @@ fun SearchScreen(
     onPlayNextClick: (Track) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    // Estado local para controlar a aba de playlists (Tudo, Músicas, Vídeos)
     var playlistFilter by remember { mutableStateOf(PlaylistFilterType.ALL) }
 
-    // Filtra a lista de resultados em tempo real baseado no filtro de playlists
+    // Interleaves YT Music and YouTube playlists when ALL is selected
     val displayedHits = remember(state.hits, state.selectedFilter, playlistFilter) {
         if (state.selectedFilter == SearchFilter.PLAYLISTS) {
-            state.hits.filter { hit ->
-                if (hit is SearchHit.PlaylistHit) {
-                    when (playlistFilter) {
-                        PlaylistFilterType.ALL -> true
-                        PlaylistFilterType.MUSIC -> hit.playlist.source == Source.YOUTUBE_MUSIC
-                        PlaylistFilterType.VIDEO -> hit.playlist.source == Source.YOUTUBE
+            val playlistHits = state.hits.filterIsInstance<SearchHit.PlaylistHit>()
+            val otherHits = state.hits.filter { it !is SearchHit.PlaylistHit }
+
+            val filteredPlaylists = when (playlistFilter) {
+                PlaylistFilterType.MUSIC -> playlistHits.filter { it.playlist.source == Source.YOUTUBE_MUSIC }
+                PlaylistFilterType.VIDEO -> playlistHits.filter { it.playlist.source == Source.YOUTUBE }
+                PlaylistFilterType.ALL -> {
+                    val ytm = playlistHits.filter { it.playlist.source == Source.YOUTUBE_MUSIC }
+                    val yt = playlistHits.filter { it.playlist.source == Source.YOUTUBE }
+                    val interleaved = mutableListOf<SearchHit.PlaylistHit>()
+                    val maxLen = maxOf(ytm.size, yt.size)
+                    for (i in 0 until maxLen) {
+                        if (i < ytm.size) interleaved.add(ytm[i])
+                        if (i < yt.size) interleaved.add(yt[i])
                     }
-                } else true
+                    interleaved
+                }
             }
+            otherHits + filteredPlaylists
         } else {
             state.hits
         }
@@ -75,7 +84,6 @@ fun SearchScreen(
             showFilters = state.hasSearched,
         )
 
-        // Exibe a barra secundária de filtros SOMENTE se a aba Playlists estiver selecionada
         if (state.hasSearched && !state.showHistoryState && !state.showSuggestionsState && state.selectedFilter == SearchFilter.PLAYLISTS) {
             SearchPlaylistFilterTab(
                 selected = playlistFilter,
@@ -105,7 +113,6 @@ fun SearchScreen(
                 message = state.errorMessage,
                 onRetry = onSubmit,
             )
-            // Se a busca principal for vazia, OU se o nosso filtro secundário ocultar tudo, mostramos a tela de "Sem Resultados"
             state.isEmptyResult || (state.selectedFilter == SearchFilter.PLAYLISTS && displayedHits.isEmpty()) -> SearchNoResultsState(query = state.query)
             else -> SearchResultsContent(
                 hits = displayedHits,

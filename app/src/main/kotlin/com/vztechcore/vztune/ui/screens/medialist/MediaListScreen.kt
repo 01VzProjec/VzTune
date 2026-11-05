@@ -39,10 +39,12 @@ import coil.request.SuccessResult
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
 import com.vztechcore.vztune.ui.components.LocalNowPlaying
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -71,31 +73,32 @@ fun MediaListScreen(
     var showSearchOverlay by remember { mutableStateOf(false) }
     var shuffleJob by remember { mutableStateOf<Job?>(null) }
 
-    // Fundo Gradiente que pega a tela toda!
-    var dominantColor by remember { mutableStateOf(Color(0xFF0A0F1E)) }
+    var dominantColor by remember { mutableStateOf(Color(0xFF1E293B)) } // Elegant slate default
     val context = LocalContext.current
     val imageLoader = context.imageLoader
     val imageUrl = state.thumbnailUrl ?: state.mosaicThumbnails.firstOrNull()
 
     LaunchedEffect(imageUrl) {
-        if (imageUrl != null) {
-            val request = ImageRequest.Builder(context)
-                .data(imageUrl)
-                .size(128)
-                .allowHardware(false)
-                .build()
+        if (!imageUrl.isNullOrBlank()) {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val request = ImageRequest.Builder(context)
+                        .data(imageUrl)
+                        .size(120)
+                        .allowHardware(false)
+                        .build()
 
-            val result = imageLoader.execute(request)
-            if (result is SuccessResult) {
-                val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
-                if (bitmap != null) {
-                    Palette.from(bitmap).generate { palette ->
-                        palette?.dominantSwatch?.rgb?.let { color ->
-                            dominantColor = Color(color)
-                        } ?: palette?.vibrantSwatch?.rgb?.let { color ->
-                            dominantColor = Color(color)
-                        } ?: palette?.mutedSwatch?.rgb?.let { color ->
-                            dominantColor = Color(color)
+                    val result = imageLoader.execute(request)
+                    if (result is SuccessResult) {
+                        val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
+                        if (bitmap != null) {
+                            val palette = Palette.from(bitmap).generate()
+                            val colorRgb = palette.vibrantSwatch?.rgb
+                                ?: palette.dominantSwatch?.rgb
+                                ?: palette.mutedSwatch?.rgb
+                            if (colorRgb != null) {
+                                dominantColor = Color(colorRgb)
+                            }
                         }
                     }
                 }
@@ -148,15 +151,19 @@ fun MediaListScreen(
         )
     }
 
-    // Box principal com o super gradiente
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(dominantColor.copy(alpha = 0.55f), Color.Black, Color.Black),
+                    colors = listOf(
+                        dominantColor.copy(alpha = 0.85f),
+                        dominantColor.copy(alpha = 0.35f),
+                        Color(0xFF090D16),
+                        Color(0xFF05070C)
+                    ),
                     startY = 0f,
-                    endY = 1600f
+                    endY = 1800f
                 )
             )
     ) {

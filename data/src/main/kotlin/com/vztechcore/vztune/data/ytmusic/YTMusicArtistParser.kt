@@ -30,7 +30,7 @@ internal object YTMusicArtistParser {
             ?: YTMusicTextUtils.findFirst(json, "musicHeaderRenderer")
 
         val name = extractHeaderTitle(header) ?: "Artista Desconhecido"
-        val thumbnail = YTMusicThumbnailUtils.extractHeaderCover(header)
+        val thumbnail = header?.let { YTMusicThumbnailUtils.extractHeaderCover(it) }
         val subscribers = extractSubscribers(header)
         val description = extractDescription(json)
 

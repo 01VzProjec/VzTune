@@ -168,15 +168,14 @@ class YTMusicRepository @Inject constructor(
         out.distinctBy { it.id }.filter { !it.thumbnailUrl.isNullOrBlank() }.shuffled().take(30)
     }
 
-    suspend fun browseArtist(browseId: String): ArtistResult =
+    suspend fun browseArtist(browseId: String): YTMusicArtistParser.ArtistPage =
         withContext(Dispatchers.IO) {
             val json = runCatching { InnerTube.browse(browseId) }.getOrNull()
-                ?: return@withContext ArtistResult(
+                ?: return@withContext YTMusicArtistParser.ArtistPage(
                     browseId = browseId, name = "Artista",
                     thumbnailUrl = null, subscribers = null, description = null,
-                    topSongs = emptyList(), allSongs = emptyList(), allVideos = emptyList(),
-                    allAlbums = emptyList(), allSingles = emptyList(),
-                    featured = emptyList(), relatedArtists = emptyList(),
+                    topSongs = emptyList(), albums = emptyList(), singles = emptyList(),
+                    relatedArtists = emptyList()
                 )
             YTMusicArtistParser.parseArtistPage(browseId, json)
         }

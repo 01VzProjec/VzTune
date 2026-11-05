@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -36,12 +37,17 @@ internal fun MediaListExpandedHeader(
     onSortClick: () -> Unit,
     onShuffleToggle: () -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth()) {
-        // ================= HERO COVER (FULL WIDTH) =================
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(Color.Black),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // ================= HERO COVER WITH BOTTOM FADE =================
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(340.dp)
+                .height(320.dp)
         ) {
             if (state.mosaicThumbnails.size >= 4) {
                 PlaylistMosaicLarge(state.mosaicThumbnails)
@@ -53,8 +59,7 @@ internal fun MediaListExpandedHeader(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            
-            // Subtle top/bottom overlay for image contrast
+
             Box(
                 Modifier
                     .fillMaxSize()
@@ -63,7 +68,8 @@ internal fun MediaListExpandedHeader(
                             colorStops = arrayOf(
                                 0.0f to Color.Black.copy(alpha = 0.45f),
                                 0.5f to Color.Transparent,
-                                1.0f to Color.Transparent
+                                0.82f to Color.Black.copy(alpha = 0.85f),
+                                1.0f to Color.Black
                             )
                         )
                     )
@@ -85,43 +91,84 @@ internal fun MediaListExpandedHeader(
             }
         }
 
-        // ================= TITLE & METADATA =================
+        // ================= CENTERED TITLE & CREATOR DETAILS =================
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .offset(y = (-16).dp) 
+                .padding(horizontal = 24.dp)
+                .offset(y = (-12).dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = state.title,
                 style = MaterialTheme.typography.headlineMedium,
                 color = Color.White,
                 fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
 
-            val dynamicSubtitle = state.headerSubtitle
-            if (!dynamicSubtitle.isNullOrBlank()) {
-                Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(8.dp))
+
+            // Creator profile row
+            val ownerName = state.owner ?: state.subtitle ?: "YouTube"
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.AccountCircle,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.85f),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
                 Text(
-                    dynamicSubtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.8f),
+                    text = ownerName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
-            if (state.metadataLabel.isNotBlank()) {
-                Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(6.dp))
+
+            // Stats row (Views • Total Duration)
+            val statsText = buildString {
+                if (!state.views.isNullOrBlank()) {
+                    append(state.views)
+                }
+                if (state.totalDurationLabel.isNotBlank()) {
+                    if (isNotEmpty()) append(" • ")
+                    append(state.totalDurationLabel)
+                } else if (state.metadataLabel.isNotBlank()) {
+                    if (isNotEmpty()) append(" • ")
+                    append(state.metadataLabel)
+                }
+            }
+
+            if (statsText.isNotBlank()) {
                 Text(
-                    state.metadataLabel,
-                    style = MaterialTheme.typography.bodySmall,
+                    text = statsText,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center
                 )
             }
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(8.dp))
 
         if (state.showTabs) {
             MediaListTabs(state.selectedTab, onTabSelected)
@@ -130,7 +177,9 @@ internal fun MediaListExpandedHeader(
 
         // ================= ACTION BUTTONS =================
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
@@ -213,7 +262,7 @@ internal fun MediaListCollapsedHeader(
             .fillMaxWidth()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color.Black.copy(alpha = 0.95f), Color.Black.copy(alpha = 0.85f), Color.Transparent)
+                    listOf(Color.Black.copy(alpha = 0.98f), Color.Black.copy(alpha = 0.85f), Color.Transparent)
                 )
             )
             .statusBarsPadding()

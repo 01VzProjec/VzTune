@@ -23,16 +23,17 @@ internal object YTMusicPlaylistParser {
         val header = YTMusicTextUtils.findFirst(json, "musicDetailHeaderRenderer")
             ?: YTMusicTextUtils.findFirst(json, "musicResponsiveHeaderRenderer")
             ?: YTMusicTextUtils.findFirst(json, "musicEditablePlaylistDetailHeaderRenderer")
+            ?: YTMusicTextUtils.findFirst(json, "playlistHeaderRenderer")
 
         val title = YTMusicArtistParser.extractHeaderTitle(header) ?: "Playlist"
         val coverUrl = header?.let { YTMusicThumbnailUtils.extractHeaderCover(it) }
-        
-        val subtitleRuns = header?.optJSONObject("subtitle")?.optJSONArray("runs")
-        val (owner, year, views) = extractPlaylistMetadata(subtitleRuns)
-        
-        val trackCount = extractTrackCount(YTMusicTextUtils.runsText(header?.optJSONObject("secondSubtitle")) + " " + YTMusicTextUtils.runsText(header?.optJSONObject("subtitle")))
-        
-        val shelf = YTMusicTextUtils.findFirst(json, "musicPlaylistShelfRenderer") 
+        val (owner, year, views) = extractPlaylistMetadata(header)
+        val trackCount = extractTrackCount(
+            YTMusicTextUtils.runsText(header?.optJSONObject("secondSubtitle")) + " " +
+                YTMusicTextUtils.runsText(header?.optJSONObject("subtitle"))
+        )
+
+        val shelf = YTMusicTextUtils.findFirst(json, "musicPlaylistShelfRenderer")
             ?: YTMusicTextUtils.findFirst(json, "musicShelfRenderer")
 
         val tracks = mutableListOf<Track>()
@@ -60,77 +61,124 @@ internal object YTMusicPlaylistParser {
         )
     }
 
-    private fun extractPlaylistMetadata(subtitleRuns: JSONArray?): Triple<String, String?, String?> {
-        var owner = "Desconhecido"
+    private fun extractPlaylistMetadata(header: JSONObject?): Triple<String, String?, String?> {
+        if (header == null) return Triple("YouTube", null, null)
+
+        var owner: String? = null
         var year: String? = null
         var views: String? = null
 
-        if (subtitleRuns == null) return Triple(owner, year, views)
+        YTMusicTextUtils.walk(header) { node ->
+            if (owner != null) return@walk
 
-        val parts = mutableListOf<String>()
-        for (i in 0 until subtitleRuns.length()) {
-            val text = subtitleRuns.optJSONObject(i)?.optString("text")?.trim() ?: continue
-            if (text.isNotBlank() && text != "•" && text != "·") {
-                parts.add(text)
-            }
-        }
+            val runs = node.optJSONArray("runs") ?: return@walk
+            for (i in 0 until runs.length()) {
+                val run = runs.optJSONObject(i) ?: continue
+                val text = run.optString("text").trim()
+                val browseId = run.optJSONObject("navigationEndpoint")
+                    ?.optJSONObject("browseEndpoint")
+                    ?.optString("browseId")
 
-        if (parts.isNotEmpty()) {
-            // O primeiro item útil geralmente é o criador/dono
-            val firstPart = parts[0]
-            if (!firstPart.equals("Playlist", true) && !firstPart.equals("Álbum", true) && !firstPart.equals("Album", true)) {
-                owner = firstPart
-            }
-
-            // O resto pode ser o Ano ou Visualizações
-            for (part in parts.drop(1)) {
-                if (YTMusicTextUtils.isYear(part)) {
-                    year = part
-                } else if (YTMusicTextUtils.isViewCount(part)) {
-                    views = part
+                if (browseId?.startsWith("UC") == true || browseId?.startsWith("MPAD") == true) {
+                    if (text.isNotBlank() &&
+                        !text.equals("Playlist", true) &&
+                        !text.equals("Álbum", true) &&
+                        !text.equals("Album", true)
+                    ) {
+                        owner = text
+                        break
+                    }
                 }
             }
         }
-        return Triple(owner, year, views)
+
+        if (owner == null) {
+            val strapline = YTMusicTextUtils.runsText(header.optJSONObject("straplineTextOne"))
+            if (strapline.isNotBlank() && !YTMusicTextUtils.isTypeWord(strapline)) {
+                owner = strapline
+            }
+        }
+
+        if (owner == null) {
+            val author = YTMusicTextUtils.runsText(header.optJSONObject("author"))
+            if (author.isNotBlank() && !YTMusicTextUtils.isTypeWord(author)) {
+                owner = author
+            }
+        }
+
+        val subtitleRuns = header.optJSONObject("subtitle")?.optJSONArray("runs")
+            ?: header.optJSONObject("secondSubtitle")?.optJSONArray("runs")
+
+        if (subtitleRuns != null) {
+            val parts = mutableListOf<String>()
+            for (i in 0 until subtitleRuns.length()) {
+                val run = subtitleRuns.optJSONObject(i) ?: continue
+                val text = run.optString("text").trim()
+                if (text.isNotBlank() && text != "•" && text != "·") {
+                    parts.add(text)
+                }
+            }
+
+            for (part in parts) {
+                when {
+                    YTMusicTextUtils.isYear(part) -> year = part
+                    YTMusicTextUtils.isViewCount(part) -> views = part
+                    owner == null &&
+                        !YTMusicTextUtils.isTypeWord(part) &&
+                        !YTMusicTextUtils.isDuration(part) &&
+                        !YTMusicTextUtils.isDate(part) -> {
+                        owner = part
+                    }
+                }
+            }
+        }
+
+        return Triple(owner ?: "YouTube", year, views)
     }
 
     fun parsePlaylistContinuation(json: JSONObject): Pair<List<Track>, String?> {
         val tracks = mutableListOf<Track>()
+
         val contents = YTMusicTextUtils.findFirst(json, "musicPlaylistShelfContinuation")
-            ?.optJSONArray("contents") ?: json.optJSONArray("continuationContents")
-        
+            ?.optJSONArray("contents")
+            ?: json.optJSONArray("continuationContents")
+
         if (contents != null) {
-             for (i in 0 until contents.length()) {
+            for (i in 0 until contents.length()) {
                 val renderer = contents.optJSONObject(i)?.optJSONObject("musicResponsiveListItemRenderer")
                 if (renderer != null) {
                     parsePlaylistItem(renderer, tracks)
                 }
             }
         }
-        
-        val continuation = extractContinuation(YTMusicTextUtils.findFirst(json, "musicPlaylistShelfContinuation"))
+
+        val continuation = extractContinuation(
+            YTMusicTextUtils.findFirst(json, "musicPlaylistShelfContinuation")
+        )
         return Pair(tracks, continuation)
     }
 
     private fun parsePlaylistItem(r: JSONObject, out: MutableList<Track>) {
         val columns = r.optJSONArray("flexColumns") ?: return
         val title = YTMusicTextUtils.flexText(columns, 0) ?: return
-        
+
         var videoId = r.optJSONObject("playlistItemData")?.optString("videoId")
         if (videoId.isNullOrBlank() || videoId == "null") {
-            videoId = r.optJSONObject("navigationEndpoint")?.optJSONObject("watchEndpoint")?.optString("videoId")
+            videoId = r.optJSONObject("navigationEndpoint")
+                ?.optJSONObject("watchEndpoint")
+                ?.optString("videoId")
         }
 
         if (!videoId.isNullOrBlank() && videoId != "null") {
-            val subtitleCol = columns.optJSONObject(1)?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
+            val subtitleCol = columns.optJSONObject(1)
+                ?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
             val subtitle = YTMusicTextUtils.runsText(subtitleCol)
-            
+
             val uploader = YTMusicSearchParser.extractArtistFromSubtitle(subtitleCol, subtitle)
-                ?: subtitle.substringBefore("•").trim().ifBlank { "Desconhecido" }
-                
-            // Correção crucial: Detectar se é música ou vídeo em vez de forçar Source.YOUTUBE_MUSIC
+                ?: subtitle.substringBefore("•").trim().ifBlank { "YouTube" }
+
             val source = YTMusicSearchParser.detectSource(videoId, r)
-                
+
             out.add(
                 Track(
                     id = videoId,
@@ -156,9 +204,6 @@ internal object YTMusicPlaylistParser {
 
         val headerDesc = YTMusicTextUtils.extractRunsText(header?.optJSONObject("description"))
         if (headerDesc.isNotBlank()) return headerDesc
-        
-        val rawDesc = YTMusicTextUtils.runsText(header?.optJSONObject("description"))
-        if (rawDesc.isNotBlank()) return rawDesc
 
         return null
     }

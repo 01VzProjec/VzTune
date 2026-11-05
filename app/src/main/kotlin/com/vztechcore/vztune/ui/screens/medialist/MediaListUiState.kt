@@ -17,7 +17,7 @@ data class MediaListUiState(
     val subtitle: String? = null,
     val owner: String? = null,
     val year: String? = null,
-    val views: String? = null, // Visualizações adicionadas!
+    val views: String? = null,
     val originalTrackCount: Int? = null,
     val thumbnailUrl: String? = null,
     val mosaicThumbnails: List<String> = emptyList(),
@@ -63,21 +63,6 @@ data class MediaListUiState(
             filtered.reversed()
         }
     }
-    
-    // Header Subtitle reformulado: "Dono • Ano • Visualizações"
-    val headerSubtitle: String?
-        get() = buildString {
-            val primary = owner ?: subtitle
-            if (!primary.isNullOrBlank()) append(primary)
-            if (!year.isNullOrBlank()) {
-                if (isNotEmpty()) append(" • ")
-                append(year)
-            }
-            if (!views.isNullOrBlank()) {
-                if (isNotEmpty()) append(" • ")
-                append(views)
-            }
-        }.takeIf { it.isNotBlank() }
 
     val trackCountLabel: String
         get() {
@@ -92,7 +77,7 @@ data class MediaListUiState(
             val h = totalSeconds / 3600
             val m = (totalSeconds % 3600) / 60
             val s = totalSeconds % 60
-            return if (h > 0) "${h}h, ${m}m" else "${m}m, ${s}s"
+            return if (h > 0) "${h}h ${m}min total" else "${m}min total"
         }
 
     val metadataLabel: String

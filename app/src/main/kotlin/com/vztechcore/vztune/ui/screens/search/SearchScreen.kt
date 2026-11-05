@@ -1,15 +1,25 @@
 package com.vztechcore.vztune.ui.screens.search
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchFilter
@@ -41,7 +51,6 @@ fun SearchScreen(
 ) {
     var playlistFilter by remember { mutableStateOf(PlaylistFilterType.ALL) }
 
-    // Interleaves YT Music and YouTube playlists when ALL is selected
     val displayedHits = remember(state.hits, state.selectedFilter, playlistFilter) {
         if (state.selectedFilter == SearchFilter.PLAYLISTS) {
             val playlistHits = state.hits.filterIsInstance<SearchHit.PlaylistHit>()
@@ -124,5 +133,51 @@ fun SearchScreen(
                 onPlayNextClick = onPlayNextClick,
             )
         }
+    }
+}
+
+@Composable
+fun SearchYouTubePlaylistCard(
+    hit: SearchHit.PlaylistHit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White.copy(alpha = 0.08f))
+        ) {
+            AsyncImage(
+                model = hit.playlist.thumbnailUrl,
+                contentDescription = hit.playlist.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = hit.playlist.title,
+            style = MaterialTheme.typography.titleMedium,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = "${hit.playlist.owner} • Playlist",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.6f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

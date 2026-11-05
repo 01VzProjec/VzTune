@@ -24,9 +24,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 enum class PlaylistFilterType(val label: String, val description: String) {
-    ALL("Tudo", "Mostrando playlists do YouTube e YouTube Music"),
-    MUSIC("YT Music", "Mostrando playlists oficiais do YouTube Music"),
-    VIDEO("YouTube", "Mostrando playlists criadas no YouTube")
+    ALL("Tudo", "Mostrando Playlists do YouTube e YouTube Music"),
+    MUSIC("YT Music", "Mostrando Playlists da comunidade YouTube Music"),
+    VIDEO("YouTube", "Mostrando Playlists do YouTube")
 }
 
 @Composable

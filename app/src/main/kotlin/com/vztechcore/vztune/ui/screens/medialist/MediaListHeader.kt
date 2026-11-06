@@ -111,27 +111,40 @@ internal fun MediaListExpandedHeader(
 
             Spacer(Modifier.height(8.dp))
 
-            // Creator profile row
-            val ownerName = state.owner ?: state.subtitle ?: "YouTube"
+            // Creator profile row with avatar picture
+            val ownerName = state.owner ?: state.subtitle ?: "Criador"
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.AccountCircle,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.85f),
-                        modifier = Modifier.size(24.dp)
+                if (!state.ownerAvatarUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = state.ownerAvatarUrl,
+                        contentDescription = ownerName,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clip(CircleShape)
                     )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.AccountCircle,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
                 }
+
                 Spacer(Modifier.width(8.dp))
+
                 Text(
                     text = ownerName,
                     style = MaterialTheme.typography.bodyLarge,

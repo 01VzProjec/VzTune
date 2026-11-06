@@ -35,6 +35,7 @@ class YTMusicRepository @Inject constructor(
     data class PlaylistResult(
         val coverUrl: String?,
         val owner: String?,
+        val ownerAvatarUrl: String?,
         val title: String?,
         val description: String?,
         val trackCount: Int,
@@ -142,7 +143,7 @@ class YTMusicRepository @Inject constructor(
     suspend fun browsePlaylist(playlistId: String): PlaylistResult = withContext(Dispatchers.IO) {
         val cleanId = YTMusicTextUtils.normalizePlaylistBrowseId(playlistId)
         val json = runCatching { InnerTube.browse(cleanId) }.getOrNull()
-            ?: return@withContext PlaylistResult(null, null, null, null, 0, null, null, emptyList())
+            ?: return@withContext PlaylistResult(null, null, null, null, null, 0, null, null, emptyList())
 
         val parsed = YTMusicPlaylistParser.parsePlaylist(json)
         val finalTracks = enricher.enrichTracks(parsed.tracks, null)
@@ -150,6 +151,7 @@ class YTMusicRepository @Inject constructor(
         PlaylistResult(
             coverUrl = parsed.coverUrl,
             owner = parsed.owner,
+            ownerAvatarUrl = parsed.ownerAvatarUrl,
             title = parsed.title,
             description = parsed.description,
             trackCount = parsed.trackCount.takeIf { it > 0 } ?: finalTracks.size,

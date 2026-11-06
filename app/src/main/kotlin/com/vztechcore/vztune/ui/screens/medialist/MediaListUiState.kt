@@ -16,6 +16,7 @@ data class MediaListUiState(
     val title: String = "",
     val subtitle: String? = null,
     val owner: String? = null,
+    val ownerAvatarUrl: String? = null,
     val year: String? = null,
     val views: String? = null,
     val originalTrackCount: Int? = null,

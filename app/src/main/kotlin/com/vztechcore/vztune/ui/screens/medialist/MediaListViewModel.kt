@@ -72,8 +72,9 @@ class MediaListViewModel @Inject constructor(
                             isLoading = false, title = playlist.title ?: it.title,
                             subtitle = playlist.owner ?: it.subtitle,
                             owner = playlist.owner,
+                            ownerAvatarUrl = playlist.ownerAvatarUrl,
                             year = playlist.year,
-                            views = playlist.views, // Repassando as views
+                            views = playlist.views,
                             originalTrackCount = playlist.trackCount,
                             thumbnailUrl = playlist.coverUrl ?: it.thumbnailUrl,
                             description = playlist.description, allTracks = playlist.tracks,

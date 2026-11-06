@@ -1,7 +1,5 @@
 package com.vztechcore.vztune.data.ytmusic
-​import com.vztechcore.vztune.core.domain.music.Source
-import com.vztechcore.vztune.core.domain.music.Track
-import org.json.JSONArray
+​import com.vztechcore.vztune.core.domain.music.Track
 import org.json.JSONObject
 ​internal object YTMusicPlaylistParser {
 ​data class PlaylistDetails(
@@ -16,6 +14,12 @@ val views: String?,
 val tracks: List<Track>,
 val continuationToken: String?
 )
+​private data class Quadruple<A, B, C, D>(
+val first: A,
+val second: B,
+val third: C,
+val fourth: D
+)
 ​fun parsePlaylist(json: JSONObject): PlaylistDetails {
 val header = YTMusicTextUtils.findFirst(json, "musicDetailHeaderRenderer")
 ?: YTMusicTextUtils.findFirst(json, "musicResponsiveHeaderRenderer")
@@ -23,8 +27,12 @@ val header = YTMusicTextUtils.findFirst(json, "musicDetailHeaderRenderer")
 ?: YTMusicTextUtils.findFirst(json, "playlistHeaderRenderer")
 ​val title = YTMusicArtistParser.extractHeaderTitle(header) ?: "Playlist"
 val coverUrl = header?.let { YTMusicThumbnailUtils.extractHeaderCover(it) }
-​val (owner, ownerAvatarUrl, year, views) = extractPlaylistMetadata(header)
-val trackCount = extractTrackCount(
+​val meta = extractPlaylistMetadata(header)
+val owner = meta.first
+val ownerAvatarUrl = meta.second
+val year = meta.third
+val views = meta.fourth
+​val trackCount = extractTrackCount(
 YTMusicTextUtils.runsText(header?.optJSONObject("secondSubtitle")) + " " +
 YTMusicTextUtils.runsText(header?.optJSONObject("subtitle"))
 )
@@ -59,15 +67,13 @@ if (header == null) return Quadruple("Criador Desconhecido", null, null, null)
 var ownerAvatarUrl: String? = null
 var year: String? = null
 var views: String? = null
-​// 1. Extract owner avatar thumbnail if present
-val avatarNode = header.optJSONObject("straplineThumbnail")
+​val avatarNode = header.optJSONObject("straplineThumbnail")
 ?: header.optJSONObject("authorThumbnail")
 ?: header.optJSONObject("owner")?.optJSONObject("musicArtistCardModel")
 if (avatarNode != null) {
 ownerAvatarUrl = YTMusicThumbnailUtils.thumbnailOf(avatarNode)
 }
-​// 2. Extract owner name from strapline / ownerText / author
-val strapline = YTMusicTextUtils.runsText(header.optJSONObject("straplineTextOne"))
+​val strapline = YTMusicTextUtils.runsText(header.optJSONObject("straplineTextOne"))
 if (strapline.isNotBlank() && !YTMusicTextUtils.isTypeWord(strapline)) {
 owner = strapline
 }
@@ -83,8 +89,7 @@ if (author.isNotBlank() && !YTMusicTextUtils.isTypeWord(author)) {
 owner = author
 }
 }
-​// 3. Search for channel runs (UC... browse endpoint)
-if (owner == null) {
+​if (owner == null) {
 YTMusicTextUtils.walk(header) { node ->
 if (owner != null) return@walk
 val runs = node.optJSONArray("runs") ?: return@walk
@@ -103,8 +108,7 @@ break
 }
 }
 }
-​// 4. Subtitle runs fallback
-val subtitleRuns = header.optJSONObject("subtitle")?.optJSONArray("runs")
+​val subtitleRuns = header.optJSONObject("subtitle")?.optJSONArray("runs")
 ?: header.optJSONObject("secondSubtitle")?.optJSONArray("runs")
 ​if (subtitleRuns != null) {
 val parts = mutableListOf<String>()
@@ -127,7 +131,6 @@ owner = part
 }
 ​return Quadruple(owner ?: "Criador", ownerAvatarUrl, year, views)
 }
-​private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 ​fun parsePlaylistContinuation(json: JSONObject): Pair<List<Track>, String?> {
 val tracks = mutableListOf<Track>()
 val contents = YTMusicTextUtils.findFirst(json, "musicPlaylistShelfContinuation")

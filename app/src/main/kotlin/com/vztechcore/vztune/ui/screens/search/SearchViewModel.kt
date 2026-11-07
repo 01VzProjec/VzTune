@@ -9,6 +9,7 @@ import com.vztechcore.vztune.core.domain.search.SearchResult
 import com.vztechcore.vztune.core.domain.search.SearchSuggestions
 import com.vztechcore.vztune.data.music.MusicRepository
 import com.vztechcore.vztune.data.player.PlayerController
+import com.vztechcore.vztune.data.prefs.RecentPlayedStore
 import com.vztechcore.vztune.data.prefs.SearchHistoryStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -27,6 +28,7 @@ import javax.inject.Inject
 class SearchViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
     private val historyStore: SearchHistoryStore,
+    private val recentPlayedStore: RecentPlayedStore,
     private val playerController: PlayerController,
 ) : ViewModel() {
 
@@ -57,6 +59,11 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             historyStore.history.collect { list ->
                 _uiState.update { it.copy(history = list) }
+            }
+        }
+        viewModelScope.launch {
+            recentPlayedStore.tracks.collect { list ->
+                _uiState.update { it.copy(recentTracks = list) }
             }
         }
     }
@@ -158,6 +165,8 @@ class SearchViewModel @Inject constructor(
     private fun playRadio(seed: Track) {
         if (_uiState.value.isBuildingQueue) return
         _uiState.update { it.copy(isBuildingQueue = true) }
+        // Remember the track for the "recently played" row of the Search home.
+        viewModelScope.launch { recentPlayedStore.add(seed) }
         viewModelScope.launch {
             val queue = runCatching { musicRepository.buildRadioQueue(seed) }.getOrDefault(listOf(seed))
             _uiState.update { it.copy(isBuildingQueue = false) }

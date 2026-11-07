@@ -82,9 +82,11 @@ class MediaListViewModel @Inject constructor(
 
                     // Same here: pick the first candidate that is a REAL account name.
                     // If YTM returns "20 songs" or "1.2M views", isValidOwner rejects it.
+                    // The owner coming from the card (same name shown in the list) wins over
+                    // the parsed header, which may contain labels such as "21 itens".
                     val resolvedOwner = listOfNotNull(
-                        playlist.owner,
                         route.subtitle,
+                        playlist.owner,
                         _uiState.value.subtitle
                     ).firstOrNull { isValidOwner(it) }
 
@@ -202,7 +204,7 @@ private val PLACEHOLDER_OWNERS = setOf(
 private val NON_OWNER_PATTERNS = listOf(
     // "20 songs", "12 músicas", "1.2M views", "3 mil visualizações"
     Regex(
-        "^\\d[\\d.,]*\\s*(k|m|b|mil|mi|bi)?\\s*(músicas?|musicas?|songs?|faixas?|tracks?|vídeos?|videos?|episódios?|episodes?|views?|visualizações|visualizacoes|reproduções|reproducoes|plays?)\\b.*$",
+        "^\\d[\\d.,]*\\s*(k|m|b|mil|mi|bi)?\\s*(músicas?|musicas?|songs?|faixas?|tracks?|itens?|items?|vídeos?|videos?|episódios?|episodes?|views?|visualizações|visualizacoes|reproduções|reproducoes|plays?)\\b.*$",
         RegexOption.IGNORE_CASE,
     ),
     // "1h 30min", "1 hora e 20 minutos total"

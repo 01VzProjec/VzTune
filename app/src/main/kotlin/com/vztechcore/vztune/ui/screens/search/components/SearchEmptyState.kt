@@ -18,71 +18,33 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vztechcore.vztune.ui.components.SkeletonColumn
+import com.vztechcore.vztune.ui.components.fadeOutBottom
 
-/** Idle state shown before any search is submitted. */
+/** Loading state: skeleton cards (like YouTube / YT Music) that fade out at the bottom. */
 @Composable
-fun SearchEmptyState(modifier: Modifier = Modifier) {
-    Column(
+fun SearchLoadingState(
+    video: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Top,
+            .clipToBounds()
+            .fadeOutBottom(0.5f),
     ) {
-        Spacer(Modifier.height(40.dp))
-
-        Text(
-            text = "Tudo que você procura",
-            style = MaterialTheme.typography.headlineMedium,
-            color = Color.White,
-            fontWeight = FontWeight.ExtraBold,
-            textAlign = TextAlign.Center,
-            lineHeight = 34.sp,
+        SkeletonColumn(
+            count = if (video) 4 else 10,
+            video = video,
+            horizontalPadding = if (video) 12.dp else 8.dp,
+            modifier = Modifier.padding(top = 8.dp),
         )
-
-        Spacer(Modifier.height(12.dp))
-
-        Text(
-            text = "Busque por Músicas, Vídeos, Artistas, Playlists e muito mais",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.6f),
-            textAlign = TextAlign.Center,
-            lineHeight = 20.sp,
-        )
-
-        Spacer(Modifier.height(28.dp))
-
-        Box(
-            Modifier
-                .clip(RoundedCornerShape(50))
-                .background(Color(0xFFFBBF24).copy(alpha = 0.06f))
-                .border(1.dp, Color(0xFFFBBF24).copy(alpha = 0.5f), RoundedCornerShape(50))
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-        ) {
-            Text(
-                text = "VzTune • by Vtzin x — VzTechCore",
-                style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFFFBBF24),
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.5.sp,
-            )
-        }
-    }
-}
-
-/** Loading state shown while the first page of results is being fetched. */
-@Composable
-fun SearchLoadingState(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp)
     }
 }
 

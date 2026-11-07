@@ -32,7 +32,7 @@ internal object YTMusicTextUtils {
 
     // "20 songs", "12 músicas", "3 vídeos"...
     private val COUNT_LABEL_REGEX = Regex(
-        "^\\d[\\d.,]*\\s*(músicas?|musicas?|songs?|faixas?|tracks?|vídeos?|videos?|episódios?|episodios?|episodes?)\\b.*$",
+        "^\\d[\\d.,]*\\s*(músicas?|musicas?|songs?|faixas?|tracks?|itens?|items?|vídeos?|videos?|episódios?|episodios?|episodes?)\\b.*$",
         RegexOption.IGNORE_CASE,
     )
 

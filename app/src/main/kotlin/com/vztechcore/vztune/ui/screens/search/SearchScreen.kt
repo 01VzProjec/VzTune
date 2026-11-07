@@ -27,7 +27,7 @@ import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.ui.screens.search.components.PlaylistFilterType
 import com.vztechcore.vztune.ui.screens.search.components.SearchAutocomplete
 import com.vztechcore.vztune.ui.screens.search.components.SearchBar
-import com.vztechcore.vztune.ui.screens.search.components.SearchEmptyState
+import com.vztechcore.vztune.ui.screens.search.components.SearchHome
 import com.vztechcore.vztune.ui.screens.search.components.SearchErrorState
 import com.vztechcore.vztune.ui.screens.search.components.SearchLoadingState
 import com.vztechcore.vztune.ui.screens.search.components.SearchNoResultsState
@@ -94,7 +94,7 @@ fun SearchScreen(
             showFilters = state.hasSearched,
         )
 
-        if (state.hasSearched && !state.showHistoryState && !state.showSuggestionsState && state.selectedFilter == SearchFilter.PLAYLISTS) {
+        if (state.hasSearched && !state.showHomeState && !state.showSuggestionsState && state.selectedFilter == SearchFilter.PLAYLISTS) {
             SearchPlaylistFilterTab(
                 selected = playlistFilter,
                 onSelect = { playlistFilter = it }
@@ -102,23 +102,30 @@ fun SearchScreen(
         }
 
         when {
-            state.showHistoryState || state.showSuggestionsState -> {
-                SearchAutocomplete(
-                    query = state.query,
-                    history = state.history,
-                    suggestions = state.suggestions,
-                    showHistory = state.showHistoryState,
-                    onPickQuery = { q ->
-                        onQueryChange(q)
-                        onSubmit()
-                    },
-                    onRemoveHistory = onRemoveHistory,
-                    onClearHistory = onClearHistory,
-                    onPickSong = { track -> onHitClick(SearchHit.SongHit(track)) },
-                )
-            }
-            state.showIdleState -> SearchEmptyState()
-            state.isLoading -> SearchLoadingState()
+            state.showHomeState -> SearchHome(
+                recentTracks = state.recentTracks,
+                history = state.history,
+                onPickTrack = { track ->
+                    val hit = if (track.source == Source.YOUTUBE) SearchHit.VideoHit(track) else SearchHit.SongHit(track)
+                    onHitClick(hit)
+                },
+                onPickQuery = { q ->
+                    onQueryChange(q)
+                    onSubmit()
+                },
+                onRemoveHistory = onRemoveHistory,
+                onClearHistory = onClearHistory,
+            )
+            state.showSuggestionsState -> SearchAutocomplete(
+                query = state.query,
+                suggestions = state.suggestions,
+                onPickQuery = { q ->
+                    onQueryChange(q)
+                    onSubmit()
+                },
+                onPickSong = { track -> onHitClick(SearchHit.SongHit(track)) },
+            )
+            state.isLoading -> SearchLoadingState(video = state.selectedFilter == SearchFilter.VIDEOS)
             state.errorMessage != null -> SearchErrorState(
                 message = state.errorMessage,
                 onRetry = onSubmit,

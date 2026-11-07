@@ -43,18 +43,23 @@ import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchSuggestions
 import com.vztechcore.vztune.ui.components.NowPlayingThumbnail
 
+/**
+ * Suggestions while typing, in this order:
+ *   1. first 2 search suggestions
+ *   2. up to 3 tracks matching the input
+ *   3. the remaining search suggestions
+ */
 @Composable
 fun SearchAutocomplete(
     query: String,
-    history: List<String>,
     suggestions: SearchSuggestions,
-    showHistory: Boolean,
     onPickQuery: (String) -> Unit,
-    onRemoveHistory: (String) -> Unit,
-    onClearHistory: () -> Unit,
     onPickSong: (Track) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val topQueries = suggestions.queries.take(2)
+    val restQueries = suggestions.queries.drop(2)
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(
@@ -65,121 +70,16 @@ fun SearchAutocomplete(
         ),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        if (showHistory) {
-            if (history.isEmpty()) {
-                item { EmptyHistory() }
-            } else {
-                item { ClearHistoryRow(onClearHistory) }
-                items(history, key = { "h_$it" }) { q ->
-                    HistoryRow(
-                        query = q,
-                        onPick = { onPickQuery(q) },
-                        onRemove = { onRemoveHistory(q) },
-                    )
-                }
-            }
-        } else {
-            // 1. Songs (up to 3-5 based on query length)
-            items(suggestions.songs, key = { "sg_${it.id}" }) { track ->
-                SuggestSongRow(track = track, onClick = { onPickSong(track) })
-            }
-
-            // Spacer between songs and queries
-            if (suggestions.songs.isNotEmpty() && suggestions.queries.isNotEmpty()) {
-                item { Spacer(Modifier.height(12.dp)) }
-            }
-
-            // 2. Text Queries (with highlighting)
-            items(suggestions.queries, key = { "q_$it" }) { q ->
-                SuggestQueryRow(
-                    query = q,
-                    currentInput = query,
-                    onPick = { onPickQuery(q) },
-                )
-            }
+        items(topQueries, key = { "q_$it" }) { q ->
+            SuggestQueryRow(query = q, currentInput = query, onPick = { onPickQuery(q) })
         }
-    }
-}
 
-@Composable
-private fun EmptyHistory() {
-    Box(
-        Modifier.fillMaxSize().padding(32.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "Nenhuma pesquisa ainda.\nComece digitando algo :)",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.5f),
-            textAlign = TextAlign.Center,
-            lineHeight = 20.sp,
-        )
-    }
-}
+        items(suggestions.songs.take(3), key = { "sg_${it.id}" }) { track ->
+            SuggestSongRow(track = track, onClick = { onPickSong(track) })
+        }
 
-@Composable
-private fun ClearHistoryRow(onClearAll: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .clickable { onClearAll() }
-            .padding(horizontal = 8.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.Filled.DeleteOutline,
-            contentDescription = null,
-            tint = Color(0xFFFBBF24),
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(
-            text = "Excluir Histórico de Pesquisa",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFFFBBF24),
-            fontWeight = FontWeight.SemiBold,
-        )
-    }
-    Spacer(Modifier.height(4.dp))
-}
-
-@Composable
-private fun HistoryRow(
-    query: String,
-    onPick: () -> Unit,
-    onRemove: () -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .clickable { onPick() }
-            .padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.Filled.History,
-            contentDescription = null,
-            tint = Color.White.copy(alpha = 0.4f),
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(
-            text = query,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.85f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
-            Icon(
-                imageVector = Icons.Filled.Close,
-                contentDescription = "Remover",
-                tint = Color.White.copy(alpha = 0.35f),
-                modifier = Modifier.size(16.dp),
-            )
+        items(restQueries, key = { "q_$it" }) { q ->
+            SuggestQueryRow(query = q, currentInput = query, onPick = { onPickQuery(q) })
         }
     }
 }

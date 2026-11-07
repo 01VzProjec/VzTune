@@ -53,13 +53,12 @@ class MediaListViewModel @Inject constructor(
                 if (route.isAlbum) {
                     val album = ytMusicRepository.browseAlbum(route.id)
 
-                    // Prefer the freshly-parsed artist, but fall back to whatever
-                    // we carried from the search card (route.subtitle) so the
-                    // header always shows *something* — never "Criador".
-                    val resolvedArtist = album.artist
-                        ?.takeIf { it.isNotBlank() && it != "Unknown" }
-                        ?: route.subtitle?.takeIf { it.isNotBlank() }
-                        ?: _uiState.value.subtitle?.takeIf { it.isNotBlank() }
+                    // Rejeita números e lixo, prioriza o subtítulo vindo do card
+                    val resolvedArtist = listOfNotNull(
+                        album.artist,
+                        route.subtitle,
+                        _uiState.value.subtitle
+                    ).firstOrNull { isValidOwner(it) }
 
                     _uiState.update {
                         it.copy(
@@ -81,13 +80,13 @@ class MediaListViewModel @Inject constructor(
                         playlist = ytMusicRepository.browsePlaylist(route.id)
                     }
 
-                    // Same story here: if the fresh browse response doesn't give
-                    // us a usable owner, reuse the one we already had from the
-                    // card (route.subtitle). This is what makes the name stick.
-                    val resolvedOwner = playlist.owner
-                        ?.takeIf { it.isNotBlank() && it != "Criador" && it != "Creator" }
-                        ?: route.subtitle?.takeIf { it.isNotBlank() && it != "Criador" }
-                        ?: _uiState.value.subtitle?.takeIf { it.isNotBlank() }
+                    // Mesma coisa aqui: pega o primeiro que for um nome REAL de usuário.
+                    // Se o YTM devolver "20 músicas" ou "1.2M views", o isValidOwner barra.
+                    val resolvedOwner = listOfNotNull(
+                        playlist.owner,
+                        route.subtitle,
+                        _uiState.value.subtitle
+                    ).firstOrNull { isValidOwner(it) }
 
                     _uiState.update {
                         it.copy(
@@ -115,6 +114,32 @@ class MediaListViewModel @Inject constructor(
                 _uiState.update { it.copy(isLoading = false, errorMessage = "Erro: ${e.message}") }
             }
         }
+    }
+
+    /**
+     * Valida se uma string é um nome de usuário/canal válido.
+     * Rejeita contagens ("12 músicas"), visualizações ("1.2M views"),
+     * durações ("1h 30min") e placeholders ("Criador", "Unknown").
+     */
+    private fun isValidOwner(text: String?): Boolean {
+        if (text.isNullOrBlank()) return false
+        
+        val lower = text.lowercase().trim()
+        if (lower in setOf("criador", "creator", "unknown", "desconhecido", "álbum", "album", "playlist")) {
+            return false
+        }
+        
+        if (lower.contains("música") || lower.contains("faixa") || 
+            lower.contains("song") || lower.contains("track") ||
+            lower.contains("view") || lower.contains("visualizaç") || 
+            lower.contains("reproduç") || lower.contains("min") || 
+            lower.contains("hora") || lower.contains("total")) {
+            return false
+        }
+        
+        if (text.toIntOrNull() != null) return false
+        
+        return true
     }
 
     fun onTabSelected(tab: MediaListTab) {

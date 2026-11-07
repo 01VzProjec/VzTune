@@ -1,7 +1,10 @@
 package com.vztechcore.vztune.ui.screens.medialist
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,16 +22,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.search.SortOrder
 
@@ -49,7 +55,7 @@ internal fun MediaListExpandedHeader(
             .background(Color.Black),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // ================= HERO COVER WITH BOTTOM FADE + DESCRIPTION =================
+        // ================= HERO COVER WITH BOTTOM FADE + CREDITS =================
         Box(
             Modifier
                 .fillMaxWidth()
@@ -98,15 +104,12 @@ internal fun MediaListExpandedHeader(
                 }
             }
 
-            // Description card — slides down from above the screen (movie credits style)
+            // Description rolling text
             val description = state.description?.takeIf { it.isNotBlank() }
             if (description != null) {
-                DescriptionOverlaySlot(
+                DescriptionScroller(
                     description = description,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .statusBarsPadding()
-                        .padding(top = 56.dp, start = 16.dp, end = 16.dp),
+                    modifier = Modifier.fillMaxSize()
                 )
             }
         }
@@ -131,7 +134,7 @@ internal fun MediaListExpandedHeader(
 
             Spacer(Modifier.height(8.dp))
 
-            // Creator name — avatar disabled (YTM browse doesn't reliably expose it)
+            // Creator name — avatar disabled
             val ownerName = state.owner ?: state.subtitle
             if (!ownerName.isNullOrBlank()) {
                 Row(
@@ -260,97 +263,76 @@ internal fun MediaListExpandedHeader(
 }
 
 /**
- * Movie-credits style slide-down.
+ * Movie-credits style scrolling description.
  *
- * The card starts a full screen above its final position (i.e. genuinely
- * off-screen) and glides down into place over ~2.5s. After it lands, tapping
- * the card toggles expand/collapse of the description text.
- *
- * Implemented with [Animatable] + [graphicsLayer] instead of AnimatedVisibility
- * so we control the exact travel distance (a full screen height) rather than
- * "its own height * N", and to dodge the ColumnScope/BoxScope receiver conflict
- * that AnimatedVisibility had in this position.
+ * The text starts fully above the container and scrolls down over 30 seconds.
+ * A gradient mask (DstIn) causes lines to fade out as they reach the bottom edge.
  */
 @Composable
-private fun DescriptionOverlaySlot(
+private fun DescriptionScroller(
     description: String,
     modifier: Modifier = Modifier,
 ) {
-    var expanded by remember(description) { mutableStateOf(false) }
+    val transition = rememberInfiniteTransition(label = "credits")
+    val progress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(30000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "progress"
+    )
 
-    val density = LocalDensity.current
-    val config = LocalConfiguration.current
-    val screenHeightPx = with(density) { config.screenHeightDp.dp.toPx() }
-
-    val offsetY = remember { Animatable(-screenHeightPx) }
-
-    LaunchedEffect(description) {
-        // Reset so re-entering the same playlist replays the entrance.
-        offsetY.snapTo(-screenHeightPx)
-        offsetY.animateTo(
-            targetValue = 0f,
-            animationSpec = tween(
-                durationMillis = 2500,
-                easing = LinearEasing,
-            ),
-        )
-    }
-
-    Box(
-        modifier = modifier.graphicsLayer { translationY = offsetY.value }
+    BoxWithConstraints(
+        modifier = modifier
+            // Gradient mask: fades out the text line by line at the bottom
+            .drawWithContent {
+                drawContent()
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0.0f to Color.Black,
+                            0.6f to Color.Black,
+                            1.0f to Color.Transparent
+                        )
+                    ),
+                    blendMode = BlendMode.DstIn
+                )
+            }
     ) {
-        DescriptionCard(
-            description = description,
-            expanded = expanded,
-            onToggle = { expanded = !expanded },
-        )
-    }
-}
+        val density = LocalDensity.current
+        val containerHeightPx = with(density) { maxHeight.toPx() }
 
-@Composable
-private fun DescriptionCard(
-    description: String,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.Black.copy(alpha = 0.72f))
-            .clickable { onToggle() }
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Filled.Info,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.7f),
-                modifier = Modifier.size(16.dp),
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = "Sobre a playlist",
-                color = Color.White.copy(alpha = 0.7f),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.weight(1f))
-            Icon(
-                imageVector = if (expanded) Icons.Filled.KeyboardArrowUp
-                else Icons.Filled.KeyboardArrowDown,
-                contentDescription = if (expanded) "Recolher" else "Expandir",
-                tint = Color.White,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        Spacer(Modifier.height(6.dp))
+        var textHeightPx by remember { mutableFloatStateOf(0f) }
+        
+        // Safe fallback before measurement
+        val safeTextHeight = if (textHeightPx > 0f) textHeightPx else containerHeightPx * 2
+
+        // Start entirely above the container, end entirely below it
+        val startY = -safeTextHeight - 50f
+        val endY = containerHeightPx
+
+        val currentY = startY + (endY - startY) * progress
+
         Text(
             text = description,
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = 0.9f),
-            maxLines = if (expanded) Int.MAX_VALUE else 3,
-            overflow = TextOverflow.Ellipsis,
+            color = Color.White,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                textAlign = TextAlign.Center,
+                lineHeight = 26.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 0.5.sp
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp)
+                .onGloballyPositioned {
+                    textHeightPx = it.size.height.toFloat()
+                }
+                .graphicsLayer {
+                    translationY = currentY
+                }
         )
     }
 }

@@ -1,11 +1,5 @@
 package com.vztechcore.vztune.ui.screens.medialist
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -22,19 +16,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.search.SortOrder
 
@@ -55,123 +43,106 @@ internal fun MediaListExpandedHeader(
             .background(Color.Black),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // ================= MOSAIC + TITLE WRAPPER =================
+        // ================= HERO COVER =================
         Box(
             Modifier
                 .fillMaxWidth()
+                .height(320.dp)
         ) {
-            Column(
-                Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // 1. Hero Cover
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(320.dp)
-                ) {
-                    if (state.mosaicThumbnails.size >= 4) {
-                        PlaylistMosaicLarge(state.mosaicThumbnails)
-                    } else {
-                        AsyncImage(
-                            model = state.thumbnailUrl,
-                            contentDescription = state.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colorStops = arrayOf(
-                                        0.0f to Color.Black.copy(alpha = 0.45f),
-                                        0.5f to Color.Transparent,
-                                        0.82f to Color.Black.copy(alpha = 0.85f),
-                                        1.0f to Color.Black
-                                    )
-                                )
-                            )
-                    )
-
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        MediaListCircleButton(Icons.Filled.Close, "Fechar", onBackClick)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            MediaListCircleButton(Icons.Filled.Search, "Pesquisar", onSearchClick)
-                            MediaListCircleButton(Icons.Filled.MoreVert, "Mais", { })
-                        }
-                    }
-                }
-
-                // 2. Title & Creator Details
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .offset(y = (-12).dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = state.title,
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.ExtraBold,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    // Creator name — apenas texto agora, sem ícone
-                    val ownerName = state.owner ?: state.subtitle
-                    if (!ownerName.isNullOrBlank()) {
-                        Text(
-                            text = ownerName,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color.White.copy(alpha = 0.9f),
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(6.dp))
-                    }
-
-                    val statsText = buildString {
-                        if (!state.views.isNullOrBlank()) append(state.views)
-                        if (state.totalDurationLabel.isNotBlank()) {
-                            if (isNotEmpty()) append(" • ")
-                            append(state.totalDurationLabel)
-                        }
-                    }.ifBlank { state.metadataLabel }
-
-                    if (statsText.isNotBlank()) {
-                        Text(
-                            text = statsText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.6f),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
+            if (state.mosaicThumbnails.size >= 4) {
+                PlaylistMosaicLarge(state.mosaicThumbnails)
+            } else {
+                AsyncImage(
+                    model = state.thumbnailUrl,
+                    contentDescription = state.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
 
-            // 3. Description Scroller (sobrepõe o Mosaico e o Título)
-            val description = state.description?.takeIf { it.isNotBlank() }
-            if (description != null) {
-                DescriptionScroller(
-                    description = description,
-                    modifier = Modifier.fillMaxSize()
+            // Dark gradient — top for icons, bottom for the fade into the list
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.0f to Color.Black.copy(alpha = 0.45f),
+                                0.5f to Color.Transparent,
+                                0.82f to Color.Black.copy(alpha = 0.85f),
+                                1.0f to Color.Black
+                            )
+                        )
+                    )
+            )
+
+            // Top action buttons
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MediaListCircleButton(Icons.Filled.Close, "Fechar", onBackClick)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MediaListCircleButton(Icons.Filled.Search, "Pesquisar", onSearchClick)
+                    MediaListCircleButton(Icons.Filled.MoreVert, "Mais", { })
+                }
+            }
+        }
+
+        // ================= CENTERED TITLE & CREATOR DETAILS =================
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .offset(y = (-12).dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = state.title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            // Creator name — apenas texto, sem ícone (Como você pediu)
+            val ownerName = state.owner ?: state.subtitle
+            if (!ownerName.isNullOrBlank()) {
+                Text(
+                    text = ownerName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(6.dp))
+            }
+
+            // Stats row: "<views> • <total duration>"
+            val statsText = buildString {
+                if (!state.views.isNullOrBlank()) append(state.views)
+                if (state.totalDurationLabel.isNotBlank()) {
+                    if (isNotEmpty()) append(" • ")
+                    append(state.totalDurationLabel)
+                }
+            }.ifBlank { state.metadataLabel }
+
+            if (statsText.isNotBlank()) {
+                Text(
+                    text = statsText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center
                 )
             }
         }
@@ -255,78 +226,6 @@ internal fun MediaListExpandedHeader(
         }
 
         Spacer(Modifier.height(8.dp))
-    }
-}
-
-/**
- * Movie-credits style scrolling description (bottom-up).
- * O texto começa fora da tela (embaixo) e sobe até sumir no topo,
- * passando por cima do Mosaico e do Título.
- */
-@Composable
-private fun DescriptionScroller(
-    description: String,
-    modifier: Modifier = Modifier,
-) {
-    val transition = rememberInfiniteTransition(label = "credits")
-    val progress by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(35000, easing = LinearEasing), // 35s é um bom tempo de leitura
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "progress"
-    )
-
-    BoxWithConstraints(
-        modifier = modifier
-            // Gradiente de transparência para sumir no topo
-            .drawWithContent {
-                drawContent()
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0.0f to Color.Transparent, // Topo
-                            0.25f to Color.Black,      // Aparece a partir de 25%
-                            1.0f to Color.Black        // Embaixo
-                        )
-                    ),
-                    blendMode = BlendMode.DstIn
-                )
-            }
-    ) {
-        val density = LocalDensity.current
-        val containerHeightPx = with(density) { maxHeight.toPx() }
-
-        var textHeightPx by remember { mutableFloatStateOf(0f) }
-        val safeTextHeight = if (textHeightPx > 0f) textHeightPx else containerHeightPx * 2
-
-        // Começa debaixo do container e sobe até sair por cima
-        val startY = containerHeightPx
-        val endY = -safeTextHeight - 100f
-
-        val currentY = startY + (endY - startY) * progress
-
-        Text(
-            text = description,
-            color = Color.White,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                textAlign = TextAlign.Center,
-                lineHeight = 26.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.5.sp
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 32.dp)
-                .onGloballyPositioned {
-                    textHeightPx = it.size.height.toFloat()
-                }
-                .graphicsLayer {
-                    translationY = currentY
-                }
-        )
     }
 }
 

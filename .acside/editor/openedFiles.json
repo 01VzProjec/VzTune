@@ -80,16 +80,31 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 15306,
-          "line": 409
+          "index": 11073,
+          "line": 308
         },
         "start": {
           "column": 1,
-          "index": 15306,
-          "line": 409
+          "index": 11073,
+          "line": 308
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 17737,
+          "line": 358
+        },
+        "start": {
+          "column": 1,
+          "index": 17737,
+          "line": 358
         }
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListHeader.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt"
 }

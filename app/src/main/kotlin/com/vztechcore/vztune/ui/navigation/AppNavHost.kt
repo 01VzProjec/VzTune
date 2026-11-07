@@ -78,7 +78,6 @@ fun AppNavHost(modifier: Modifier = Modifier) {
 
     val isMediaListScreen = backStackEntry?.destination?.hasRoute<Routes.MediaList>() == true
     val isTrackInfoScreen = backStackEntry?.destination?.hasRoute<Routes.TrackInfo>() == true
-    val isFullScreenRoute = isMediaListScreen || isTrackInfoScreen
 
     val playback = LocalNowPlaying.current
     val track = playback.currentTrack
@@ -200,8 +199,8 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 }
             }
 
-            // Bottom player chrome — hidden while a full-screen route is on top
-            if (!isFullScreenRoute) {
+            // Bottom player chrome. Escondido apenas na TrackInfo para ela ocupar a tela toda.
+            if (!isTrackInfoScreen) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -210,108 +209,127 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         .imePadding()
                 ) {
                     if (track != null) {
-                        AnimatedVisibility(
-                            visible = isMinimized,
-                            enter = slideInVertically(
-                                initialOffsetY = { it },
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-                            ) + fadeIn(),
-                            exit = slideOutVertically(
-                                targetOffsetY = { it },
-                                animationSpec = tween(300)
-                            ) + fadeOut(),
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(bottom = 16.dp, start = 16.dp, end = 16.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    Modifier
-                                        .size(48.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.75f))
-                                        .clickable { isMinimized = false },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = currentTab.selectedIcon,
-                                        contentDescription = "Abrir Menu",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
+                        if (isMediaListScreen) {
+                            // Na playlist, mostra APENAS o MiniPlayerBar fixo no fundo
+                            MiniPlayerBar(
+                                track = track,
+                                isPlaying = playback.isPlaying,
+                                isLoading = playback.isLoading,
+                                progress = playback.progress,
+                                dominantColor = dominantColor,
+                                onPlayPauseClick = miniPlayerVm::togglePlayPause,
+                                onNextClick = miniPlayerVm::next,
+                                onPrevClick = miniPlayerVm::previous,
+                                onClick = { },
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        } else {
+                            // Nas outras telas, mostra o comportamento de minimizar/expandir normal
+                            AnimatedVisibility(
+                                visible = isMinimized,
+                                enter = slideInVertically(
+                                    initialOffsetY = { it },
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                                ) + fadeIn(),
+                                exit = slideOutVertically(
+                                    targetOffsetY = { it },
+                                    animationSpec = tween(300)
+                                ) + fadeOut(),
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(bottom = 16.dp, start = 16.dp, end = 16.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.Black.copy(alpha = 0.75f))
+                                            .clickable { isMinimized = false },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = currentTab.selectedIcon,
+                                            contentDescription = "Abrir Menu",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                    CompactMiniPlayerBar(
+                                        track = track,
+                                        isPlaying = playback.isPlaying,
+                                        isLoading = playback.isLoading,
+                                        onPlayPauseClick = miniPlayerVm::togglePlayPause,
+                                        onNextClick = miniPlayerVm::next,
+                                        onClick = { },
+                                        modifier = Modifier.weight(1f)
                                     )
                                 }
-                                Spacer(Modifier.width(8.dp))
-                                CompactMiniPlayerBar(
-                                    track = track,
-                                    isPlaying = playback.isPlaying,
-                                    isLoading = playback.isLoading,
-                                    onPlayPauseClick = miniPlayerVm::togglePlayPause,
-                                    onNextClick = miniPlayerVm::next,
-                                    onClick = { },
-                                    modifier = Modifier.weight(1f)
-                                )
                             }
-                        }
 
-                        AnimatedVisibility(
-                            visible = !isMinimized,
-                            enter = slideInVertically(
-                                initialOffsetY = { it },
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-                            ) + fadeIn(),
-                            exit = slideOutVertically(
-                                targetOffsetY = { it },
-                                animationSpec = tween(300)
-                            ) + fadeOut(),
-                            modifier = Modifier.align(Alignment.BottomCenter)
-                        ) {
-                            Column {
-                                MiniPlayerBar(
-                                    track = track,
-                                    isPlaying = playback.isPlaying,
-                                    isLoading = playback.isLoading,
-                                    progress = playback.progress,
-                                    dominantColor = dominantColor,
-                                    onPlayPauseClick = miniPlayerVm::togglePlayPause,
-                                    onNextClick = miniPlayerVm::next,
-                                    onPrevClick = miniPlayerVm::previous,
-                                    onClick = { }
-                                )
-                                AppBottomBar(
-                                    selected = currentTab,
-                                    onSelect = { tab ->
-                                        val route = when (tab) {
-                                            AppTab.HOME -> Routes.Home
-                                            AppTab.ANALYTICS -> Routes.Analytics
-                                            AppTab.LIBRARY -> Routes.Library
-                                            AppTab.SEARCH -> Routes.Search
-                                        }
-                                        navController.navigate(route) {
-                                            popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                )
+                            AnimatedVisibility(
+                                visible = !isMinimized,
+                                enter = slideInVertically(
+                                    initialOffsetY = { it },
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                                ) + fadeIn(),
+                                exit = slideOutVertically(
+                                    targetOffsetY = { it },
+                                    animationSpec = tween(300)
+                                ) + fadeOut(),
+                                modifier = Modifier.align(Alignment.BottomCenter)
+                            ) {
+                                Column {
+                                    MiniPlayerBar(
+                                        track = track,
+                                        isPlaying = playback.isPlaying,
+                                        isLoading = playback.isLoading,
+                                        progress = playback.progress,
+                                        dominantColor = dominantColor,
+                                        onPlayPauseClick = miniPlayerVm::togglePlayPause,
+                                        onNextClick = miniPlayerVm::next,
+                                        onPrevClick = miniPlayerVm::previous,
+                                        onClick = { }
+                                    )
+                                    AppBottomBar(
+                                        selected = currentTab,
+                                        onSelect = { tab ->
+                                            val route = when (tab) {
+                                                AppTab.HOME -> Routes.Home
+                                                AppTab.ANALYTICS -> Routes.Analytics
+                                                AppTab.LIBRARY -> Routes.Library
+                                                AppTab.SEARCH -> Routes.Search
+                                            }
+                                            navController.navigate(route) {
+                                                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        },
+                                    )
+                                }
                             }
                         }
                     } else {
-                        AppBottomBar(
-                            selected = currentTab,
-                            onSelect = { tab ->
-                                val route = when (tab) {
-                                    AppTab.HOME -> Routes.Home
-                                    AppTab.ANALYTICS -> Routes.Analytics
-                                    AppTab.LIBRARY -> Routes.Library
-                                    AppTab.SEARCH -> Routes.Search
-                                }
-                                navController.navigate(route) {
-                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                        )
+                        if (!isMediaListScreen) {
+                            AppBottomBar(
+                                selected = currentTab,
+                                onSelect = { tab ->
+                                    val route = when (tab) {
+                                        AppTab.HOME -> Routes.Home
+                                        AppTab.ANALYTICS -> Routes.Analytics
+                                        AppTab.LIBRARY -> Routes.Library
+                                        AppTab.SEARCH -> Routes.Search
+                                    }
+                                    navController.navigate(route) {
+                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -319,13 +337,6 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * Converts a domain [Track] into the serializable [Routes.TrackInfo] payload
- * and pushes it onto the back stack.
- *
- * Note: `streamUrl` is intentionally not passed — TrackInfoViewModel re-resolves
- * the stream via MusicRepository to get fresh itag/mime/quality.
- */
 private fun NavController.navigateToTrackInfo(track: Track) {
     navigate(
         Routes.TrackInfo(

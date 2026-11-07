@@ -97,33 +97,18 @@ internal fun MediaListExpandedHeader(
                 }
             }
 
-            // Description card — slides down from the top when the playlist has a description
+            // Description card — slides down from the top when the playlist has a description.
+            // Extracted to its own composable because calling AnimatedVisibility directly
+            // inside BoxScope (with an enclosing ColumnScope) is ambiguous in Kotlin.
             val description = state.description?.takeIf { it.isNotBlank() }
             if (description != null) {
-                var expanded by remember(description) { mutableStateOf(false) }
-                AnimatedVisibility(
-                    visible = true,
-                    enter = slideInVertically(
-                        initialOffsetY = { -it * 2 },
-                        animationSpec = tween(
-                            durationMillis = 700,
-                            delayMillis = 200,
-                            easing = FastOutSlowInEasing,
-                        )
-                    ) + fadeIn(
-                        animationSpec = tween(durationMillis = 500, delayMillis = 200)
-                    ),
+                DescriptionOverlaySlot(
+                    description = description,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .statusBarsPadding()
                         .padding(top = 56.dp, start = 16.dp, end = 16.dp),
-                ) {
-                    DescriptionCard(
-                        description = description,
-                        expanded = expanded,
-                        onToggle = { expanded = !expanded },
-                    )
-                }
+                )
             }
         }
 
@@ -293,6 +278,41 @@ internal fun MediaListExpandedHeader(
         }
 
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+/**
+ * Standalone composable that owns the AnimatedVisibility for the description overlay.
+ *
+ * Kept OUT of the enclosing Column so that `AnimatedVisibility` resolves to the
+ * top-level function instead of `ColumnScope.AnimatedVisibility` (which would be
+ * an implicit-receiver error from inside BoxScope).
+ */
+@Composable
+private fun DescriptionOverlaySlot(
+    description: String,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember(description) { mutableStateOf(false) }
+    AnimatedVisibility(
+        visible = true,
+        enter = slideInVertically(
+            initialOffsetY = { -it * 2 },
+            animationSpec = tween(
+                durationMillis = 700,
+                delayMillis = 200,
+                easing = FastOutSlowInEasing,
+            )
+        ) + fadeIn(
+            animationSpec = tween(durationMillis = 500, delayMillis = 200)
+        ),
+        modifier = modifier,
+    ) {
+        DescriptionCard(
+            description = description,
+            expanded = expanded,
+            onToggle = { expanded = !expanded },
+        )
     }
 }
 

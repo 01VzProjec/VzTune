@@ -78,7 +78,12 @@ data class MediaListUiState(
             val h = totalSeconds / 3600
             val m = (totalSeconds % 3600) / 60
             val s = totalSeconds % 60
-            return if (h > 0) "${h}h ${m}min total" else "${m}min total"
+            return when {
+                h > 0 && m > 0 -> "${h}h ${m}min total"
+                h > 0 -> "${h}h total"
+                m > 0 -> "${m}min total"
+                else -> "${s}s total"
+            }
         }
 
     val metadataLabel: String

@@ -136,21 +136,67 @@ fun SearchResultCard(
                 )
             }
         }
-        is SearchHit.PlaylistHit -> RowCard(
-            imageUrl = hit.playlist.thumbnailUrl, mosaic = hit.playlist.mosaicThumbnails, shape = ThumbnailShape.SQUARE, title = hit.playlist.title,
-            subtitle = { Text("Playlist · ${hit.playlist.owner ?: ""}", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            durationLabel = null, isPlaying = false, isPaused = false, onClick = onClick, onMoreClick = onMoreClick, showMoreButton = false,
-        )
+        is SearchHit.PlaylistHit -> {
+            val owner = hit.playlist.owner?.takeIf { it.isNotBlank() }
+            val views = hit.playlist.views?.takeIf { it.isNotBlank() }
+            val subtitleText = listOfNotNull(owner, views)
+                .joinToString(" • ")
+                .ifBlank { "Playlist" }
+            RowCard(
+                imageUrl = hit.playlist.thumbnailUrl,
+                mosaic = hit.playlist.mosaicThumbnails,
+                shape = ThumbnailShape.SQUARE,
+                title = hit.playlist.title,
+                subtitle = {
+                    Text(
+                        subtitleText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                durationLabel = null,
+                isPlaying = false,
+                isPaused = false,
+                onClick = onClick,
+                onMoreClick = onMoreClick,
+                showMoreButton = false,
+            )
+        }
         is SearchHit.ArtistHit -> RowCard(
             imageUrl = hit.artist.thumbnailUrl, shape = ThumbnailShape.CIRCLE, title = hit.artist.name,
             subtitle = { Text("Artista", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f)) },
             durationLabel = null, isPlaying = false, isPaused = false, onClick = onClick, onMoreClick = onMoreClick, showMoreButton = false,
         )
-        is SearchHit.AlbumHit -> RowCard(
-            imageUrl = hit.album.thumbnailUrl, shape = ThumbnailShape.SQUARE, title = hit.album.title,
-            subtitle = { Text("Álbum · ${hit.album.artist}", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            durationLabel = null, isPlaying = false, isPaused = false, onClick = onClick, onMoreClick = onMoreClick, showMoreButton = false,
-        )
+        is SearchHit.AlbumHit -> {
+            val artist = hit.album.artist.takeIf { it.isNotBlank() }
+            val views = hit.album.views?.takeIf { it.isNotBlank() }
+            val year = hit.album.year?.toString()?.takeIf { it.isNotBlank() }
+            val subtitleText = listOfNotNull(artist, views ?: year)
+                .joinToString(" • ")
+                .ifBlank { "Álbum" }
+            RowCard(
+                imageUrl = hit.album.thumbnailUrl,
+                shape = ThumbnailShape.SQUARE,
+                title = hit.album.title,
+                subtitle = {
+                    Text(
+                        subtitleText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                durationLabel = null,
+                isPlaying = false,
+                isPaused = false,
+                onClick = onClick,
+                onMoreClick = onMoreClick,
+                showMoreButton = false,
+            )
+        }
     }
 }
 

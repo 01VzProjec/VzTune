@@ -9,7 +9,7 @@ internal object YTMusicPlaylistParser {
 
     data class PlaylistDetails(
         val title: String,
-        val owner: String,
+        val owner: String?,             // null = unknown (UI decides fallback)
         val ownerAvatarUrl: String?,
         val description: String?,
         val coverUrl: String?,
@@ -20,11 +20,11 @@ internal object YTMusicPlaylistParser {
         val continuationToken: String?
     )
 
-    private data class Quadruple<A, B, C, D>(
-        val first: A,
-        val second: B,
-        val third: C,
-        val fourth: D
+    private data class Meta(
+        val owner: String?,
+        val ownerAvatarUrl: String?,
+        val year: String?,
+        val views: String?,
     )
 
     fun parsePlaylist(json: JSONObject): PlaylistDetails {
@@ -37,10 +37,6 @@ internal object YTMusicPlaylistParser {
         val coverUrl = header?.let { YTMusicThumbnailUtils.extractHeaderCover(it) }
 
         val meta = extractPlaylistMetadata(header)
-        val owner = meta.first
-        val ownerAvatarUrl = meta.second
-        val year = meta.third
-        val views = meta.fourth
 
         val trackCount = extractTrackCount(
             YTMusicTextUtils.runsText(header?.optJSONObject("secondSubtitle")) + " " +
@@ -61,111 +57,149 @@ internal object YTMusicPlaylistParser {
             }
         }
 
-        val continuation = extractContinuation(shelf)
-
         return PlaylistDetails(
             title = title,
-            owner = owner,
-            ownerAvatarUrl = ownerAvatarUrl,
+            owner = meta.owner,
+            ownerAvatarUrl = meta.ownerAvatarUrl,
             description = extractDescription(json, header),
             coverUrl = coverUrl,
             trackCount = trackCount,
-            year = year,
-            views = views,
+            year = meta.year,
+            views = meta.views,
             tracks = tracks,
-            continuationToken = continuation
+            continuationToken = extractContinuation(shelf)
         )
     }
 
-    private fun extractPlaylistMetadata(
-        header: JSONObject?
-    ): Quadruple<String, String?, String?, String?> {
-        if (header == null) return Quadruple("Criador Desconhecido", null, null, null)
+    private fun extractPlaylistMetadata(header: JSONObject?): Meta {
+        if (header == null) return Meta(null, null, null, null)
 
         var owner: String? = null
         var ownerAvatarUrl: String? = null
         var year: String? = null
         var views: String? = null
 
-        val avatarNode = header.optJSONObject("straplineThumbnail")
-            ?: header.optJSONObject("authorThumbnail")
-            ?: header.optJSONObject("owner")?.optJSONObject("musicArtistCardModel")
+        // ---- 1. AVATAR — multiple known layouts ----
+        ownerAvatarUrl = extractAvatar(header)
 
-        if (avatarNode != null) {
-            ownerAvatarUrl = YTMusicThumbnailUtils.thumbnailOf(avatarNode)
-        }
-
-        val strapline = YTMusicTextUtils.runsText(header.optJSONObject("straplineTextOne"))
-        if (strapline.isNotBlank() && !YTMusicTextUtils.isTypeWord(strapline)) {
-            owner = strapline
-        }
-
-        if (owner == null) {
-            val ownerText = YTMusicTextUtils.runsText(header.optJSONObject("ownerText"))
-            if (ownerText.isNotBlank() && !YTMusicTextUtils.isTypeWord(ownerText)) {
-                owner = ownerText
+        // ---- 2. OWNER ----
+        // straplineTextOne: usually "Channel: <Name>" or just "<Name>"
+        header.optJSONObject("straplineTextOne")?.optJSONArray("runs")?.let { runs ->
+            for (i in 0 until runs.length()) {
+                val run = runs.optJSONObject(i) ?: continue
+                val browseId = run.optJSONObject("navigationEndpoint")
+                    ?.optJSONObject("browseEndpoint")?.optString("browseId")
+                if (browseId?.startsWith("UC") == true || browseId?.startsWith("MPAD") == true) {
+                    val cleaned = cleanOwner(run.optString("text"))
+                    if (cleaned != null) { owner = cleaned; break }
+                }
             }
         }
 
+        // ownerText / author
         if (owner == null) {
-            val author = YTMusicTextUtils.runsText(header.optJSONObject("author"))
-            if (author.isNotBlank() && !YTMusicTextUtils.isTypeWord(author)) {
-                owner = author
-            }
+            owner = cleanOwner(YTMusicTextUtils.runsText(header.optJSONObject("ownerText")))
+        }
+        if (owner == null) {
+            owner = cleanOwner(YTMusicTextUtils.runsText(header.optJSONObject("author")))
         }
 
+        // Deep walk for UC browseIds inside runs
         if (owner == null) {
             YTMusicTextUtils.walk(header) { node ->
                 if (owner != null) return@walk
-
                 val runs = node.optJSONArray("runs") ?: return@walk
                 for (i in 0 until runs.length()) {
                     val run = runs.optJSONObject(i) ?: continue
-                    val text = run.optString("text").trim()
                     val browseId = run.optJSONObject("navigationEndpoint")
-                        ?.optJSONObject("browseEndpoint")
-                        ?.optString("browseId")
-
-                    if (browseId?.startsWith("UC") == true ||
-                        browseId?.startsWith("MPAD") == true
-                    ) {
-                        if (text.isNotBlank() && !YTMusicTextUtils.isTypeWord(text)) {
-                            owner = text
-                            break
-                        }
+                        ?.optJSONObject("browseEndpoint")?.optString("browseId")
+                    if (browseId?.startsWith("UC") == true || browseId?.startsWith("MPAD") == true) {
+                        val cleaned = cleanOwner(run.optString("text"))
+                        if (cleaned != null) { owner = cleaned; break }
                     }
                 }
             }
         }
 
-        val subtitleRuns = header.optJSONObject("subtitle")?.optJSONArray("runs")
-            ?: header.optJSONObject("secondSubtitle")?.optJSONArray("runs")
+        // ---- 3. SUBTITLES (year / views / maybe owner) ----
+        val subtitleArrays = listOf(
+            header.optJSONObject("subtitle")?.optJSONArray("runs"),
+            header.optJSONObject("secondSubtitle")?.optJSONArray("runs"),
+        )
 
-        if (subtitleRuns != null) {
-            val parts = mutableListOf<String>()
-            for (i in 0 until subtitleRuns.length()) {
-                val run = subtitleRuns.optJSONObject(i) ?: continue
-                val text = run.optString("text").trim()
-                if (text.isNotBlank() && text != "•" && text != "·") {
-                    parts.add(text)
-                }
-            }
+        for (runs in subtitleArrays) {
+            if (runs == null) continue
+            for (i in 0 until runs.length()) {
+                val text = runs.optJSONObject(i)?.optString("text")?.trim() ?: continue
+                if (text.isBlank() || text == "•" || text == "·") continue
 
-            for (part in parts) {
                 when {
-                    YTMusicTextUtils.isYear(part) -> year = part
-                    YTMusicTextUtils.isViewCount(part) -> views = part
+                    YTMusicTextUtils.isYear(text) -> year = text
+                    YTMusicTextUtils.isViewCount(text) -> views = text
                     owner == null &&
-                        !YTMusicTextUtils.isTypeWord(part) &&
-                        !YTMusicTextUtils.isDuration(part) &&
-                        !YTMusicTextUtils.isDate(part) -> {
-                        owner = part
+                        !YTMusicTextUtils.isTypeWord(text) &&
+                        !YTMusicTextUtils.isDuration(text) &&
+                        !YTMusicTextUtils.isDate(text) -> {
+                        owner = cleanOwner(text)
                     }
                 }
             }
         }
 
-        return Quadruple(owner ?: "Criador", ownerAvatarUrl, year, views)
+        return Meta(owner, ownerAvatarUrl, year, views)
+    }
+
+    /**
+     * Cleans an owner candidate:
+     *  - strips "Channel: " / "Canal: " prefix
+     *  - strips " - Topic" suffix
+     *  - drops type words ("Playlist", "Álbum", ...), empty strings and dates
+     * Returns null when the candidate is not a usable owner name.
+     */
+    private fun cleanOwner(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        var s = raw.trim()
+        s = s.removePrefix("Channel: ").removePrefix("channel: ")
+        s = s.removePrefix("Canal: ").removePrefix("canal: ")
+        s = YTMusicTextUtils.cleanArtistName(s).trim()
+        if (s.isBlank()) return null
+        if (YTMusicTextUtils.isTypeWord(s)) return null
+        if (YTMusicTextUtils.isDuration(s)) return null
+        if (YTMusicTextUtils.isDate(s)) return null
+        if (YTMusicTextUtils.isYear(s)) return null
+        if (s.length > 100) return null
+        return s
+    }
+
+    private fun extractAvatar(header: JSONObject): String? {
+        // 1. straplineThumbnail — classic layout
+        header.optJSONObject("straplineThumbnail")?.let { node ->
+            YTMusicThumbnailUtils.thumbnailOf(node)?.let { return it }
+        }
+        // 2. authorThumbnail
+        header.optJSONObject("authorThumbnail")?.let { node ->
+            YTMusicThumbnailUtils.thumbnailOf(node)?.let { return it }
+        }
+        // 3. facepile.avatarStackModel.avatars[0]
+        header.optJSONObject("facepile")
+            ?.optJSONObject("avatarStackModel")
+            ?.optJSONArray("avatars")
+            ?.let { arr ->
+                if (arr.length() > 0) {
+                    arr.optJSONObject(0)
+                        ?.optJSONObject("avatar")
+                        ?.optJSONObject("musicThumbnailRenderer")
+                        ?.let { YTMusicThumbnailUtils.thumbnailOf(it) }
+                        ?.let { return it }
+                }
+            }
+        // 4. owner.musicArtistCardModel
+        header.optJSONObject("owner")
+            ?.optJSONObject("musicArtistCardModel")
+            ?.let { node ->
+                YTMusicThumbnailUtils.thumbnailOf(node)?.let { return it }
+            }
+        return null
     }
 
     fun parsePlaylistContinuation(json: JSONObject): Pair<List<Track>, String?> {

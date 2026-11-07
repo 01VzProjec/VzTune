@@ -4,9 +4,11 @@ data class Playlist(
     val id: String,
     val title: String,
     val owner: String? = null,
+    val ownerAvatarUrl: String? = null,
+    val views: String? = null,
     val thumbnailUrl: String? = null,
     val trackCount: Int? = null,
     val source: Source,
-    // Até 4 thumbnails das primeiras faixas para o mosaico 2x2.
+    // Up to 4 thumbnails from the first tracks, for the 2x2 mosaic.
     val mosaicThumbnails: List<String> = emptyList(),
 )

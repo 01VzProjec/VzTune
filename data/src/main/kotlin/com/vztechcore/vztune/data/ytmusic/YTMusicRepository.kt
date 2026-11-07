@@ -29,8 +29,9 @@ class YTMusicRepository @Inject constructor(
         val artist: String?,
         val title: String?,
         val description: String?,
+        val views: String?,
         val tracks: List<Track>,
-    )
+    )    
 
     data class PlaylistResult(
         val coverUrl: String?,
@@ -123,7 +124,7 @@ class YTMusicRepository @Inject constructor(
 
     suspend fun browseAlbum(albumId: String): AlbumResult = withContext(Dispatchers.IO) {
         val json = runCatching { InnerTube.browse(albumId) }.getOrNull()
-            ?: return@withContext AlbumResult(null, null, null, null, emptyList())
+            ?: return@withContext AlbumResult(null, null, null, null, null, emptyList())
 
         val header = YTMusicTextUtils.findFirst(json, "musicDetailHeaderRenderer")
             ?: YTMusicTextUtils.findFirst(json, "musicResponsiveHeaderRenderer")
@@ -131,13 +132,14 @@ class YTMusicRepository @Inject constructor(
         val cover = header?.let { YTMusicThumbnailUtils.extractHeaderCover(it) }
         val title = header?.let { YTMusicArtistParser.extractHeaderTitle(it) }
         val artist = header?.let { extractHeaderArtist(it) }
+        val views = header?.let { extractHeaderViews(it) }
         val desc = extractDescription(json)
 
         val rawTracks = collectMusicItems(json).distinctBy { it.id }
         val albumTracks = rawTracks.filter { it.source == Source.YOUTUBE_MUSIC }
         val finalTracks = enricher.enrichTracks(albumTracks, artist)
 
-        AlbumResult(cover, artist, title, desc, finalTracks)
+        AlbumResult(cover, artist, title, desc, views, finalTracks)
     }
 
     suspend fun browsePlaylist(playlistId: String): PlaylistResult = withContext(Dispatchers.IO) {
@@ -396,6 +398,22 @@ class YTMusicRepository @Inject constructor(
                 }
             }
             if (artists.isNotEmpty()) return artists.joinToString(", ")
+        }
+        return null
+    }
+    
+    private fun extractHeaderViews(header: JSONObject): String? {
+        val subtitleArrays = listOf(
+            header.optJSONObject("subtitle")?.optJSONArray("runs"),
+            header.optJSONObject("secondSubtitle")?.optJSONArray("runs"),
+        )
+        for (runs in subtitleArrays) {
+            if (runs == null) continue
+            for (i in 0 until runs.length()) {
+                val text = runs.optJSONObject(i)?.optString("text")?.trim() ?: continue
+                if (text.isBlank()) continue
+                if (YTMusicTextUtils.isViewCount(text)) return text
+            }
         }
         return null
     }

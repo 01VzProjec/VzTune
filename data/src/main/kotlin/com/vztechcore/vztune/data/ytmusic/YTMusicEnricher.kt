@@ -118,8 +118,9 @@ class YTMusicEnricher @Inject constructor(
             YTMusicTextUtils.isTypeWord(album.artist) ||
             isLikelyMetadata(album.artist)
         val needsThumb = album.thumbnailUrl.isNullOrBlank()
+        val needsViews = album.views.isNullOrBlank()
 
-        if (!needsArtist && !needsThumb) return hit
+        if (!needsArtist && !needsThumb && !needsViews) return hit
 
         val header = YTMusicAlbumParser.parseAlbumHeader(album.id) ?: return hit
 
@@ -133,11 +134,13 @@ class YTMusicEnricher @Inject constructor(
         } else {
             album.thumbnailUrl
         }
+        val newViews = album.views ?: header.views
 
         return SearchHit.AlbumHit(
             album.copy(
                 artist = newArtist,
                 thumbnailUrl = newThumb,
+                views = newViews,
             )
         )
     }
@@ -146,17 +149,21 @@ class YTMusicEnricher @Inject constructor(
 
     private suspend fun enrichPlaylistHit(hit: SearchHit.PlaylistHit): SearchHit {
         val playlist = hit.playlist
-        val cleanId = YTMusicTextUtils.normalizePlaylistBrowseId(playlist.id)
+        val meta = YTMusicPlaylistMeta.fetch(playlist.id)
 
-        val mosaic = YTMusicPlaylistMosaic.fetchMosaic(cleanId)
-        if (mosaic.isEmpty() && playlist.thumbnailUrl != null) return hit
+        val resolvedOwner = playlist.owner
+            ?.takeIf { it.isNotBlank() && !YTMusicTextUtils.isTypeWord(it) }
+            ?: meta.owner
 
         return SearchHit.PlaylistHit(
             playlist.copy(
-                thumbnailUrl = playlist.thumbnailUrl ?: mosaic.firstOrNull(),
-                mosaicThumbnails = mosaic,
+                thumbnailUrl = playlist.thumbnailUrl ?: meta.coverUrl ?: meta.mosaic.firstOrNull(),
+                mosaicThumbnails = meta.mosaic,
+                owner = resolvedOwner,
+                ownerAvatarUrl = meta.ownerAvatarUrl,
+                views = playlist.views ?: meta.views,
             )
-        )
+        )   
     }
 
     // ================= TRACKS =================

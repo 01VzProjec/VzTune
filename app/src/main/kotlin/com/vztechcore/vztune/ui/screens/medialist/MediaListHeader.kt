@@ -1,5 +1,10 @@
 package com.vztechcore.vztune.ui.screens.medialist
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -43,7 +48,7 @@ internal fun MediaListExpandedHeader(
             .background(Color.Black),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // ================= HERO COVER WITH BOTTOM FADE =================
+        // ================= HERO COVER WITH BOTTOM FADE + DESCRIPTION =================
         Box(
             Modifier
                 .fillMaxWidth()
@@ -60,6 +65,7 @@ internal fun MediaListExpandedHeader(
                 )
             }
 
+            // Dark gradient — top for icons, bottom for the fade into the list
             Box(
                 Modifier
                     .fillMaxSize()
@@ -75,6 +81,7 @@ internal fun MediaListExpandedHeader(
                     )
             )
 
+            // Top action buttons
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -87,6 +94,35 @@ internal fun MediaListExpandedHeader(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     MediaListCircleButton(Icons.Filled.Search, "Pesquisar", onSearchClick)
                     MediaListCircleButton(Icons.Filled.MoreVert, "Mais", { })
+                }
+            }
+
+            // Description card — slides down from the top when the playlist has a description
+            val description = state.description?.takeIf { it.isNotBlank() }
+            if (description != null) {
+                var expanded by remember(description) { mutableStateOf(false) }
+                AnimatedVisibility(
+                    visible = true,
+                    enter = slideInVertically(
+                        initialOffsetY = { -it * 2 },
+                        animationSpec = tween(
+                            durationMillis = 700,
+                            delayMillis = 200,
+                            easing = FastOutSlowInEasing,
+                        )
+                    ) + fadeIn(
+                        animationSpec = tween(durationMillis = 500, delayMillis = 200)
+                    ),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        .padding(top = 56.dp, start = 16.dp, end = 16.dp),
+                ) {
+                    DescriptionCard(
+                        description = description,
+                        expanded = expanded,
+                        onToggle = { expanded = !expanded },
+                    )
                 }
             }
         }
@@ -112,64 +148,61 @@ internal fun MediaListExpandedHeader(
             Spacer(Modifier.height(8.dp))
 
             // Creator profile row with avatar picture
-            val ownerName = state.owner ?: state.subtitle ?: "Criador"
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                if (!state.ownerAvatarUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = state.ownerAvatarUrl,
-                        contentDescription = ownerName,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(26.dp)
-                            .clip(CircleShape)
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(26.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.AccountCircle,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.85f),
-                            modifier = Modifier.size(26.dp)
+            val ownerName = state.owner ?: state.subtitle
+            if (!ownerName.isNullOrBlank()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    if (!state.ownerAvatarUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = state.ownerAvatarUrl,
+                            contentDescription = ownerName,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(26.dp)
+                                .clip(CircleShape)
                         )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(26.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.AccountCircle,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.85f),
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
                     }
+
+                    Spacer(Modifier.width(8.dp))
+
+                    Text(
+                        text = ownerName,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
 
-                Spacer(Modifier.width(8.dp))
-
-                Text(
-                    text = ownerName,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.White.copy(alpha = 0.9f),
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Spacer(Modifier.height(6.dp))
             }
 
-            Spacer(Modifier.height(6.dp))
-
-            // Stats row (Views • Total Duration)
+            // Stats row: "<views> • <total duration>", falls back to track count + duration
             val statsText = buildString {
-                if (!state.views.isNullOrBlank()) {
-                    append(state.views)
-                }
+                if (!state.views.isNullOrBlank()) append(state.views)
                 if (state.totalDurationLabel.isNotBlank()) {
                     if (isNotEmpty()) append(" • ")
                     append(state.totalDurationLabel)
-                } else if (state.metadataLabel.isNotBlank()) {
-                    if (isNotEmpty()) append(" • ")
-                    append(state.metadataLabel)
                 }
-            }
+            }.ifBlank { state.metadataLabel }
 
             if (statsText.isNotBlank()) {
                 Text(
@@ -260,6 +293,54 @@ internal fun MediaListExpandedHeader(
         }
 
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun DescriptionCard(
+    description: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.Black.copy(alpha = 0.72f))
+            .clickable { onToggle() }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Filled.Info,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.7f),
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = "Sobre a playlist",
+                color = Color.White.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.weight(1f))
+            Icon(
+                imageVector = if (expanded) Icons.Filled.KeyboardArrowUp
+                else Icons.Filled.KeyboardArrowDown,
+                contentDescription = if (expanded) "Recolher" else "Expandir",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.9f),
+            maxLines = if (expanded) Int.MAX_VALUE else 3,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

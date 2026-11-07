@@ -5,6 +5,7 @@ data class Album(
     val title: String,
     val artist: String,
     val year: Int? = null,
+    val views: String? = null,
     val thumbnailUrl: String? = null,
     val source: Source,
 )

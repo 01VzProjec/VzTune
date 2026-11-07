@@ -54,11 +54,14 @@ class MediaListViewModel @Inject constructor(
                     val album = ytMusicRepository.browseAlbum(route.id)
                     _uiState.update {
                         it.copy(
-                            isLoading = false, title = album.title ?: it.title,
+                            isLoading = false,
+                            title = album.title ?: it.title,
                             subtitle = album.artist?.takeIf { a -> a != "Unknown" } ?: it.subtitle,
                             owner = album.artist,
                             thumbnailUrl = album.coverUrl ?: it.thumbnailUrl,
-                            description = album.description, allTracks = album.tracks,
+                            description = album.description,
+                            views = album.views,
+                            allTracks = album.tracks,
                         )
                     }
                 } else {
@@ -69,7 +72,8 @@ class MediaListViewModel @Inject constructor(
                     }
                     _uiState.update {
                         it.copy(
-                            isLoading = false, title = playlist.title ?: it.title,
+                            isLoading = false,
+                            title = playlist.title ?: it.title,
                             subtitle = playlist.owner ?: it.subtitle,
                             owner = playlist.owner,
                             ownerAvatarUrl = playlist.ownerAvatarUrl,
@@ -77,7 +81,14 @@ class MediaListViewModel @Inject constructor(
                             views = playlist.views,
                             originalTrackCount = playlist.trackCount,
                             thumbnailUrl = playlist.coverUrl ?: it.thumbnailUrl,
-                            description = playlist.description, allTracks = playlist.tracks,
+                            description = playlist.description,
+                            mosaicThumbnails = playlist.tracks
+                                .asSequence()
+                                .mapNotNull { t -> t.thumbnailUrl }
+                                .distinct()
+                                .take(4)
+                                .toList(),
+                            allTracks = playlist.tracks,
                         )
                     }
                 }

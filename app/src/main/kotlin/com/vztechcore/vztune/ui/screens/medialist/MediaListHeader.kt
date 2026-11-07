@@ -1,10 +1,8 @@
 package com.vztechcore.vztune.ui.screens.medialist
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -23,7 +21,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -97,9 +98,7 @@ internal fun MediaListExpandedHeader(
                 }
             }
 
-            // Description card — slides down from the top when the playlist has a description.
-            // Extracted to its own composable because calling AnimatedVisibility directly
-            // inside BoxScope (with an enclosing ColumnScope) is ambiguous in Kotlin.
+            // Description card — slides down from above the screen (movie credits style)
             val description = state.description?.takeIf { it.isNotBlank() }
             if (description != null) {
                 DescriptionOverlaySlot(
@@ -132,41 +131,20 @@ internal fun MediaListExpandedHeader(
 
             Spacer(Modifier.height(8.dp))
 
-            // Creator profile row with avatar picture
+            // Creator name — avatar disabled (YTM browse doesn't reliably expose it)
             val ownerName = state.owner ?: state.subtitle
             if (!ownerName.isNullOrBlank()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    if (!state.ownerAvatarUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = state.ownerAvatarUrl,
-                            contentDescription = ownerName,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(26.dp)
-                                .clip(CircleShape)
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(26.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.AccountCircle,
-                                contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.85f),
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.width(8.dp))
-
+                    Icon(
+                        imageVector = Icons.Filled.AccountCircle,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.75f),
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
                     Text(
                         text = ownerName,
                         style = MaterialTheme.typography.bodyLarge,
@@ -282,11 +260,16 @@ internal fun MediaListExpandedHeader(
 }
 
 /**
- * Standalone composable that owns the AnimatedVisibility for the description overlay.
+ * Movie-credits style slide-down.
  *
- * Kept OUT of the enclosing Column so that `AnimatedVisibility` resolves to the
- * top-level function instead of `ColumnScope.AnimatedVisibility` (which would be
- * an implicit-receiver error from inside BoxScope).
+ * The card starts a full screen above its final position (i.e. genuinely
+ * off-screen) and glides down into place over ~2.5s. After it lands, tapping
+ * the card toggles expand/collapse of the description text.
+ *
+ * Implemented with [Animatable] + [graphicsLayer] instead of AnimatedVisibility
+ * so we control the exact travel distance (a full screen height) rather than
+ * "its own height * N", and to dodge the ColumnScope/BoxScope receiver conflict
+ * that AnimatedVisibility had in this position.
  */
 @Composable
 private fun DescriptionOverlaySlot(
@@ -294,19 +277,27 @@ private fun DescriptionOverlaySlot(
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember(description) { mutableStateOf(false) }
-    AnimatedVisibility(
-        visible = true,
-        enter = slideInVertically(
-            initialOffsetY = { -it * 2 },
+
+    val density = LocalDensity.current
+    val config = LocalConfiguration.current
+    val screenHeightPx = with(density) { config.screenHeightDp.dp.toPx() }
+
+    val offsetY = remember { Animatable(-screenHeightPx) }
+
+    LaunchedEffect(description) {
+        // Reset so re-entering the same playlist replays the entrance.
+        offsetY.snapTo(-screenHeightPx)
+        offsetY.animateTo(
+            targetValue = 0f,
             animationSpec = tween(
-                durationMillis = 700,
-                delayMillis = 200,
-                easing = FastOutSlowInEasing,
-            )
-        ) + fadeIn(
-            animationSpec = tween(durationMillis = 500, delayMillis = 200)
-        ),
-        modifier = modifier,
+                durationMillis = 2500,
+                easing = LinearEasing,
+            ),
+        )
+    }
+
+    Box(
+        modifier = modifier.graphicsLayer { translationY = offsetY.value }
     ) {
         DescriptionCard(
             description = description,

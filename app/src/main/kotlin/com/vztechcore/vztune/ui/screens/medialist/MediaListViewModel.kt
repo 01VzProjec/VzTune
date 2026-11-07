@@ -52,12 +52,22 @@ class MediaListViewModel @Inject constructor(
             runCatching {
                 if (route.isAlbum) {
                     val album = ytMusicRepository.browseAlbum(route.id)
+
+                    // Prefer the freshly-parsed artist, but fall back to whatever
+                    // we carried from the search card (route.subtitle) so the
+                    // header always shows *something* — never "Criador".
+                    val resolvedArtist = album.artist
+                        ?.takeIf { it.isNotBlank() && it != "Unknown" }
+                        ?: route.subtitle?.takeIf { it.isNotBlank() }
+                        ?: _uiState.value.subtitle?.takeIf { it.isNotBlank() }
+
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             title = album.title ?: it.title,
-                            subtitle = album.artist?.takeIf { a -> a != "Unknown" } ?: it.subtitle,
-                            owner = album.artist,
+                            subtitle = resolvedArtist ?: it.subtitle,
+                            owner = resolvedArtist,
+                            ownerAvatarUrl = null,
                             thumbnailUrl = album.coverUrl ?: it.thumbnailUrl,
                             description = album.description,
                             views = album.views,
@@ -70,13 +80,22 @@ class MediaListViewModel @Inject constructor(
                         delay(1000)
                         playlist = ytMusicRepository.browsePlaylist(route.id)
                     }
+
+                    // Same story here: if the fresh browse response doesn't give
+                    // us a usable owner, reuse the one we already had from the
+                    // card (route.subtitle). This is what makes the name stick.
+                    val resolvedOwner = playlist.owner
+                        ?.takeIf { it.isNotBlank() && it != "Criador" && it != "Creator" }
+                        ?: route.subtitle?.takeIf { it.isNotBlank() && it != "Criador" }
+                        ?: _uiState.value.subtitle?.takeIf { it.isNotBlank() }
+
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             title = playlist.title ?: it.title,
-                            subtitle = playlist.owner ?: it.subtitle,
-                            owner = playlist.owner,
-                            ownerAvatarUrl = playlist.ownerAvatarUrl,
+                            subtitle = resolvedOwner ?: it.subtitle,
+                            owner = resolvedOwner,
+                            ownerAvatarUrl = null,
                             year = playlist.year,
                             views = playlist.views,
                             originalTrackCount = playlist.trackCount,

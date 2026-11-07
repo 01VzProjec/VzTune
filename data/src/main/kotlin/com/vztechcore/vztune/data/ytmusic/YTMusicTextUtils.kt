@@ -30,6 +30,18 @@ internal object YTMusicTextUtils {
         RegexOption.IGNORE_CASE,
     )
 
+    // "20 songs", "12 músicas", "3 vídeos"...
+    private val COUNT_LABEL_REGEX = Regex(
+        "^\\d[\\d.,]*\\s*(músicas?|musicas?|songs?|faixas?|tracks?|vídeos?|videos?|episódios?|episodios?|episodes?)\\b.*$",
+        RegexOption.IGNORE_CASE,
+    )
+
+    // "1 hora e 20 minutos", "1 hour, 20 minutes", "45 min"...
+    private val TOTAL_DURATION_REGEX = Regex(
+        "^(\\d+\\s*(h|hr|hrs|hora|horas|hour|hours|min|mins|minuto|minutos|minute|minutes|s|seg|sec)\\b[\\s,.]*(e|and)?[\\s,.]*)+$",
+        RegexOption.IGNORE_CASE,
+    )
+
     /**
      * Normalizes playlist browse IDs so InnerTube browse endpoint can load their tracks.
      * YouTube playlists (PL...) or regular IDs (YT:PL...) need to be prefixed with VL (VLPL...).
@@ -130,7 +142,14 @@ internal object YTMusicTextUtils {
     fun isViewCount(text: String): Boolean =
         text.contains("views", true) ||
             text.contains("visualizaç", true) ||
+            text.contains("exibiç", true) ||
             text.contains("reproduç", true)
+
+    /** True for track-count labels ("20 songs") and total-duration labels ("1 hora e 20 minutos"). */
+    fun isCountOrDurationLabel(text: String): Boolean {
+        val t = text.trim()
+        return COUNT_LABEL_REGEX.matches(t) || TOTAL_DURATION_REGEX.matches(t)
+    }
     fun isTypeWord(text: String): Boolean = text.lowercase() in TYPE_WORDS
 
     fun cleanArtistName(raw: String): String {

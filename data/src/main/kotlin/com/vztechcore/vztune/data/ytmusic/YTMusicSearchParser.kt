@@ -22,6 +22,7 @@ internal object YTMusicSearchParser {
             val thumbnailUrl: String?,
             val durationSeconds: Long,
             val source: Source,
+            val isExplicit: Boolean = false,
         ) : ParsedItem {
             override val stableKey: String get() = "song_${source.name}_$videoId"
         }
@@ -94,6 +95,7 @@ internal object YTMusicSearchParser {
                         durationSeconds = item.durationSeconds,
                         thumbnailUrl = item.thumbnailUrl,
                         source = item.source,
+                        isExplicit = item.isExplicit,
                     )
                 )
             }
@@ -133,6 +135,22 @@ internal object YTMusicSearchParser {
                 )
             }
         }
+    }
+
+    /**
+     * True when a list item renderer carries the "explicit" inline badge.
+     * YouTube Music exposes it as badges[].musicInlineBadgeRenderer.icon.iconType == MUSIC_EXPLICIT_BADGE.
+     */
+    internal fun hasExplicitBadge(renderer: JSONObject): Boolean {
+        val badges = renderer.optJSONArray("badges") ?: return false
+        for (i in 0 until badges.length()) {
+            val iconType = badges.optJSONObject(i)
+                ?.optJSONObject("musicInlineBadgeRenderer")
+                ?.optJSONObject("icon")
+                ?.optString("iconType")
+            if (iconType == "MUSIC_EXPLICIT_BADGE") return true
+        }
+        return false
     }
 
     fun detectSource(videoId: String, renderer: JSONObject): Source {
@@ -203,7 +221,7 @@ internal object YTMusicSearchParser {
         if (!videoId.isNullOrBlank() && videoId != "null") {
             val source = detectSource(videoId, r)
             val uploader = extractArtistFromSubtitle(subtitleCol, subtitle) ?: extractChannelName(subtitleCol) ?: "Unknown"
-            out += ParsedItem.Song(videoId, title, uploader, thumb, YTMusicTextUtils.parseDuration(YTMusicTextUtils.fixedText(r)), source)
+            out += ParsedItem.Song(videoId, title, uploader, thumb, YTMusicTextUtils.parseDuration(YTMusicTextUtils.fixedText(r)), source, hasExplicitBadge(r))
             return
         }
 

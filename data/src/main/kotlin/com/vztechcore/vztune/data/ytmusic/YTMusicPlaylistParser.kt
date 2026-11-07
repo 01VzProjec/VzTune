@@ -146,6 +146,22 @@ internal object YTMusicPlaylistParser {
             }
         }
 
+        // ---- 4. VIEWS FALLBACK ----
+        // YouTube (non-Music) playlists may expose the view count in other runs of the header.
+        if (views == null) {
+            YTMusicTextUtils.walk(header) { node ->
+                if (views != null) return@walk
+                val runs = node.optJSONArray("runs") ?: return@walk
+                for (i in 0 until runs.length()) {
+                    val text = runs.optJSONObject(i)?.optString("text")?.trim().orEmpty()
+                    if (text.isNotBlank() && YTMusicTextUtils.isViewCount(text)) {
+                        views = text
+                        break
+                    }
+                }
+            }
+        }
+
         return Meta(owner, ownerAvatarUrl, year, views)
     }
 
@@ -167,6 +183,9 @@ internal object YTMusicPlaylistParser {
         if (YTMusicTextUtils.isDuration(s)) return null
         if (YTMusicTextUtils.isDate(s)) return null
         if (YTMusicTextUtils.isYear(s)) return null
+        // Track counts ("20 songs") and total durations must never be treated as the creator name.
+        if (YTMusicTextUtils.isCountOrDurationLabel(s)) return null
+        if (YTMusicTextUtils.isViewCount(s)) return null
         if (s.length > 100) return null
         return s
     }
@@ -258,7 +277,8 @@ internal object YTMusicPlaylistParser {
                     durationSeconds = YTMusicTextUtils.parseDuration(
                         YTMusicTextUtils.fixedText(r)
                     ),
-                    source = source
+                    source = source,
+                    isExplicit = YTMusicSearchParser.hasExplicitBadge(r)
                 )
             )
         }

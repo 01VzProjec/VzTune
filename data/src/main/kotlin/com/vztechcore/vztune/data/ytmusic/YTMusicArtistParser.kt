@@ -128,7 +128,8 @@ internal object YTMusicArtistParser {
                         artist = artistName,
                         thumbnailUrl = YTMusicThumbnailUtils.thumbnailOf(renderer.optJSONObject("thumbnail")),
                         durationSeconds = YTMusicTextUtils.parseDuration(YTMusicTextUtils.fixedText(renderer)),
-                        source = Source.YOUTUBE_MUSIC
+                        source = Source.YOUTUBE_MUSIC,
+                        isExplicit = YTMusicSearchParser.hasExplicitBadge(renderer)
                     )
                 )
             }

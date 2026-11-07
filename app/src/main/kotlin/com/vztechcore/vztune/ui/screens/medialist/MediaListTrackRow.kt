@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
@@ -90,18 +89,19 @@ internal fun MediaListVideoCard(
     track: Track, isPlaying: Boolean, isPaused: Boolean, onClick: () -> Unit, onMoreClick: () -> Unit, modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 12.dp, vertical = 8.dp)) {
+        // 16:9 thumbnail only — the "more" button now lives next to the title/channel
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
             MediaThumbnail(imageUrl = track.thumbnailUrl, shape = ThumbnailShape.WIDE, cornerRadius = 10.dp, isPlaying = isPlaying, isPaused = isPaused)
-            IconButton(onClick = onMoreClick, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(32.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f))) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White, modifier = Modifier.size(20.dp))
-            }
         }
         Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Text(track.title, style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
                 TrackSubtitle(track = track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
+            }
+            IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
             }
         }
     }

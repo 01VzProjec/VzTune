@@ -82,6 +82,13 @@ class YTMusicRepository @Inject constructor(
         SearchPage(enriched, next)
     }
 
+    /**
+     * Fills missing views / owner on playlist hits that did not come from YouTube Music
+     * (e.g. NewPipe results). Cover and mosaic are left untouched.
+     */
+    suspend fun fillPlaylistStats(hits: List<SearchHit.PlaylistHit>): List<SearchHit.PlaylistHit> =
+        enricher.fillPlaylistStats(hits)
+
     // ================= SUGGESTIONS =================
 
     suspend fun suggestions(query: String): SearchSuggestions =
@@ -348,6 +355,7 @@ class YTMusicRepository @Inject constructor(
                             durationSeconds = YTMusicTextUtils
                                 .parseDuration(YTMusicTextUtils.fixedText(r)),
                             source = source,
+                            isExplicit = YTMusicSearchParser.hasExplicitBadge(r),
                         )
                     }
                 }

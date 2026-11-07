@@ -113,8 +113,8 @@ internal fun MediaListExpandedHeader(
 
             Spacer(Modifier.height(8.dp))
 
-            // Creator name — apenas texto, sem ícone (Como você pediu)
-            val ownerName = state.owner ?: state.subtitle
+            // Creator name — plain text, no icon. Never falls back to counts or card subtitles.
+            val ownerName = state.owner?.takeIf { it.isNotBlank() }
             if (!ownerName.isNullOrBlank()) {
                 Text(
                     text = ownerName,
@@ -128,14 +128,14 @@ internal fun MediaListExpandedHeader(
                 Spacer(Modifier.height(6.dp))
             }
 
-            // Stats row: "<views> • <total duration>"
+            // Stats row: "<views> • <total duration>" (no track count on purpose)
             val statsText = buildString {
                 if (!state.views.isNullOrBlank()) append(state.views)
                 if (state.totalDurationLabel.isNotBlank()) {
                     if (isNotEmpty()) append(" • ")
                     append(state.totalDurationLabel)
                 }
-            }.ifBlank { state.metadataLabel }
+            }
 
             if (statsText.isNotBlank()) {
                 Text(

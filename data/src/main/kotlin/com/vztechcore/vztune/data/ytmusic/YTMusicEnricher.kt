@@ -166,6 +166,36 @@ class YTMusicEnricher @Inject constructor(
         )   
     }
 
+    /**
+     * Lightweight enrichment for playlists from other sources (YouTube search):
+     * only fills views and owner, keeping the original cover.
+     */
+    suspend fun fillPlaylistStats(
+        hits: List<SearchHit.PlaylistHit>,
+    ): List<SearchHit.PlaylistHit> {
+        if (hits.isEmpty()) return hits
+        return coroutineScope {
+            val semaphore = Semaphore(8)
+            hits.map { hit ->
+                async {
+                    semaphore.withPermit {
+                        val p = hit.playlist
+                        val hasViews = !p.views.isNullOrBlank()
+                        val hasOwner = !p.owner.isNullOrBlank()
+                        if (hasViews && hasOwner) return@withPermit hit
+                        val meta = YTMusicPlaylistMeta.fetch(p.id)
+                        SearchHit.PlaylistHit(
+                            p.copy(
+                                owner = p.owner?.takeIf { it.isNotBlank() } ?: meta.owner,
+                                views = p.views?.takeIf { it.isNotBlank() } ?: meta.views,
+                            )
+                        )
+                    }
+                }
+            }.awaitAll()
+        }
+    }
+
     // ================= TRACKS =================
 
     suspend fun enrichTracks(

@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
@@ -205,22 +204,24 @@ fun VideoResultCard(hit: SearchHit.VideoHit, onClick: () -> Unit, onMoreClick: (
     val nowPlaying = LocalNowPlaying.current
     val isCurrent = nowPlaying.isCurrent(hit.track.id, hit.track.source)
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onClick() }) {
+        // 16:9 thumbnail only — the "more" button now lives next to the title/channel
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
             MediaThumbnail(
                 imageUrl = hit.track.thumbnailUrl, shape = ThumbnailShape.WIDE, cornerRadius = 12.dp,
                 isPlaying = isCurrent && nowPlaying.isPlaying, isPaused = isCurrent && !nowPlaying.isPlaying,
             )
-            IconButton(
-                onClick = onMoreClick,
-                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(32.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
-            ) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White, modifier = Modifier.size(20.dp))
-            }
         }
         Spacer(Modifier.height(8.dp))
-        Text(hit.track.title, style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Spacer(Modifier.height(2.dp))
-        TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                Text(hit.track.title, style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(2.dp))
+                TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
+            }
+            IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
+            }
+        }
     }
 }
 

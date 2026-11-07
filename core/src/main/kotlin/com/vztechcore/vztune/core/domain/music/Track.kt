@@ -12,4 +12,6 @@ data class Track(
     val thumbnailUrl: String? = null,
     val source: Source,
     val streamUrl: String? = null,
+    // True when the source flags the track as containing explicit lyrics.
+    val isExplicit: Boolean = false,
 )

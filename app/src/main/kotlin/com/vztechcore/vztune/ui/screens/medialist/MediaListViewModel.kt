@@ -53,7 +53,7 @@ class MediaListViewModel @Inject constructor(
                 if (route.isAlbum) {
                     val album = ytMusicRepository.browseAlbum(route.id)
 
-                    // Rejeita números e lixo, prioriza o subtítulo vindo do card
+                    // Reject numbers and junk, prefer the subtitle coming from the card
                     val resolvedArtist = listOfNotNull(
                         album.artist,
                         route.subtitle,
@@ -80,8 +80,8 @@ class MediaListViewModel @Inject constructor(
                         playlist = ytMusicRepository.browsePlaylist(route.id)
                     }
 
-                    // Mesma coisa aqui: pega o primeiro que for um nome REAL de usuário.
-                    // Se o YTM devolver "20 músicas" ou "1.2M views", o isValidOwner barra.
+                    // Same here: pick the first candidate that is a REAL account name.
+                    // If YTM returns "20 songs" or "1.2M views", isValidOwner rejects it.
                     val resolvedOwner = listOfNotNull(
                         playlist.owner,
                         route.subtitle,
@@ -117,28 +117,20 @@ class MediaListViewModel @Inject constructor(
     }
 
     /**
-     * Valida se uma string é um nome de usuário/canal válido.
-     * Rejeita contagens ("12 músicas"), visualizações ("1.2M views"),
-     * durações ("1h 30min") e placeholders ("Criador", "Unknown").
+     * Checks whether a string looks like a real account/channel name.
+     * Rejects counts ("12 songs"), view counts ("1.2M views"), total durations
+     * ("1h 30min") and placeholders ("Creator", "Unknown").
+     * Uses whole-string patterns so real names containing "min", "hora", "total"
+     * or "track" (e.g. "Admin Music", "Total Tracks") are no longer discarded.
      */
     private fun isValidOwner(text: String?): Boolean {
         if (text.isNullOrBlank()) return false
-        
-        val lower = text.lowercase().trim()
-        if (lower in setOf("criador", "creator", "unknown", "desconhecido", "álbum", "album", "playlist")) {
-            return false
-        }
-        
-        if (lower.contains("música") || lower.contains("faixa") || 
-            lower.contains("song") || lower.contains("track") ||
-            lower.contains("view") || lower.contains("visualizaç") || 
-            lower.contains("reproduç") || lower.contains("min") || 
-            lower.contains("hora") || lower.contains("total")) {
-            return false
-        }
-        
-        if (text.toIntOrNull() != null) return false
-        
+
+        val trimmed = text.trim()
+        if (trimmed.lowercase() in PLACEHOLDER_OWNERS) return false
+        if (NON_OWNER_PATTERNS.any { it.matches(trimmed) }) return false
+        if (trimmed.toIntOrNull() != null) return false
+
         return true
     }
 
@@ -202,3 +194,20 @@ class MediaListViewModel @Inject constructor(
         if (shuffled.isNotEmpty()) playerController.playQueue(shuffled, 0)
     }
 }
+
+private val PLACEHOLDER_OWNERS = setOf(
+    "criador", "creator", "unknown", "desconhecido", "álbum", "album", "playlist",
+)
+
+private val NON_OWNER_PATTERNS = listOf(
+    // "20 songs", "12 músicas", "1.2M views", "3 mil visualizações"
+    Regex(
+        "^\\d[\\d.,]*\\s*(k|m|b|mil|mi|bi)?\\s*(músicas?|musicas?|songs?|faixas?|tracks?|vídeos?|videos?|episódios?|episodes?|views?|visualizações|visualizacoes|reproduções|reproducoes|plays?)\\b.*$",
+        RegexOption.IGNORE_CASE,
+    ),
+    // "1h 30min", "1 hora e 20 minutos total"
+    Regex(
+        "^(\\d+\\s*(h|hr|hrs|hora|horas|hour|hours|min|mins|minuto|minutos|minute|minutes|s|seg|sec)\\b[\\s,.]*(e|and)?[\\s,.]*)+(total)?$",
+        RegexOption.IGNORE_CASE,
+    ),
+)

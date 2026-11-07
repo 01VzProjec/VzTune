@@ -188,7 +188,9 @@ class MusicRepository @Inject constructor(
             hit.playlist.title.startsWith("Mix -", ignoreCase = true) &&
                 hit.playlist.id.contains("RD", ignoreCase = true)
         }
-        val allPlaylists = (ytFiltered + ytmPlaylists).distinctBy { hit ->
+        // YouTube playlists come without view counts, so fill them in like the YT Music ones.
+        val ytWithStats = ytMusicRepository.fillPlaylistStats(ytFiltered)
+        val allPlaylists = (ytWithStats + ytmPlaylists).distinctBy { hit ->
             YTMusicTextUtils.normalizePlaylistBrowseId(hit.playlist.id)
         }
         val validated = validatePlaylists(allPlaylists)

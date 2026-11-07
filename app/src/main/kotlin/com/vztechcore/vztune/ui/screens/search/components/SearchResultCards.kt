@@ -42,7 +42,8 @@ fun SearchResultsContent(
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
     onHitClick: (SearchHit) -> Unit,
-    onPlayNextClick: (Track) -> Unit, // Mudou aqui
+    onPlayNextClick: (Track) -> Unit,
+    onTrackInfoClick: (Track) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val isVideoMode = hits.all { it is SearchHit.VideoHit } && hits.isNotEmpty()
@@ -68,12 +69,23 @@ fun SearchResultsContent(
         ) {
             itemsIndexed(hits, key = { _, item -> item.stableKey }) { _, hit ->
                 if (isVideoMode && hit is SearchHit.VideoHit) {
-                    VideoResultCard(hit = hit, onClick = { onHitClick(hit) }, onMoreClick = { })
+                    VideoResultCard(
+                        hit = hit,
+                        onClick = { onHitClick(hit) },
+                        onMoreClick = { onTrackInfoClick(hit.track) },
+                    )
                 } else {
                     SearchResultCard(
                         hit = hit,
                         onClick = { onHitClick(hit) },
-                        onMoreClick = { },
+                        onMoreClick = {
+                            val track = when (hit) {
+                                is SearchHit.SongHit -> hit.track
+                                is SearchHit.VideoHit -> hit.track
+                                else -> null
+                            }
+                            if (track != null) onTrackInfoClick(track)
+                        },
                         onPlayNextClick = onPlayNextClick,
                     )
                 }

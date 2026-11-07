@@ -42,11 +42,13 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.ui.components.AppBottomBar
 import com.vztechcore.vztune.ui.components.CompactMiniPlayerBar
 import com.vztechcore.vztune.ui.components.EclipseBackground
@@ -58,6 +60,8 @@ import com.vztechcore.vztune.ui.screens.medialist.MediaListScreen
 import com.vztechcore.vztune.ui.screens.medialist.MediaListViewModel
 import com.vztechcore.vztune.ui.screens.search.SearchScreen
 import com.vztechcore.vztune.ui.screens.search.SearchViewModel
+import com.vztechcore.vztune.ui.screens.trackinfo.TrackInfoScreen
+import com.vztechcore.vztune.ui.screens.trackinfo.TrackInfoViewModel
 import com.vztechcore.vztune.ui.theme.VzOnSurface
 
 @Composable
@@ -73,6 +77,8 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     }
 
     val isMediaListScreen = backStackEntry?.destination?.hasRoute<Routes.MediaList>() == true
+    val isTrackInfoScreen = backStackEntry?.destination?.hasRoute<Routes.TrackInfo>() == true
+    val isFullScreenRoute = isMediaListScreen || isTrackInfoScreen
 
     val playback = LocalNowPlaying.current
     val track = playback.currentTrack
@@ -160,6 +166,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onLoadMore = vm::onLoadMore,
                         onHitClick = vm::onHitClick,
                         onPlayNextClick = vm::onPlayNextClick,
+                        onTrackInfoClick = { navController.navigateToTrackInfo(it) },
                     )
                 }
 
@@ -179,32 +186,30 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onShuffleOnce = vm::shuffleOnce,
                         onStopShuffle = vm::stopShuffle,
                         onPlayNextClick = vm::onPlayNextClick,
+                        onTrackInfoClick = { navController.navigateToTrackInfo(it) },
+                    )
+                }
+
+                composable<Routes.TrackInfo> {
+                    val vm: TrackInfoViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    TrackInfoScreen(
+                        state = state,
+                        onBackClick = { navController.popBackStack() },
                     )
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .imePadding()
-            ) {
-                if (track != null) {
-                    if (isMediaListScreen) {
-                        MiniPlayerBar(
-                            track = track,
-                            isPlaying = playback.isPlaying,
-                            isLoading = playback.isLoading,
-                            progress = playback.progress,
-                            dominantColor = dominantColor,
-                            onPlayPauseClick = miniPlayerVm::togglePlayPause,
-                            onNextClick = miniPlayerVm::next,
-                            onPrevClick = miniPlayerVm::previous,
-                            onClick = { },
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    } else {
+            // Bottom player chrome — hidden while a full-screen route is on top
+            if (!isFullScreenRoute) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .imePadding()
+                ) {
+                    if (track != null) {
                         AnimatedVisibility(
                             visible = isMinimized,
                             enter = slideInVertically(
@@ -215,7 +220,9 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                                 targetOffsetY = { it },
                                 animationSpec = tween(300)
                             ) + fadeOut(),
-                            modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 16.dp, start = 16.dp, end = 16.dp)
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(bottom = 16.dp, start = 16.dp, end = 16.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
@@ -288,9 +295,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                                 )
                             }
                         }
-                    }
-                } else {
-                    if (!isMediaListScreen) {
+                    } else {
                         AppBottomBar(
                             selected = currentTab,
                             onSelect = { tab ->
@@ -312,6 +317,27 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+/**
+ * Converts a domain [Track] into the serializable [Routes.TrackInfo] payload
+ * and pushes it onto the back stack.
+ *
+ * Note: `streamUrl` is intentionally not passed — TrackInfoViewModel re-resolves
+ * the stream via MusicRepository to get fresh itag/mime/quality.
+ */
+private fun NavController.navigateToTrackInfo(track: Track) {
+    navigate(
+        Routes.TrackInfo(
+            id = track.id,
+            title = track.title,
+            artist = track.artist,
+            album = track.album,
+            thumbnailUrl = track.thumbnailUrl,
+            sourceName = track.source.name,
+            durationSeconds = track.durationSeconds,
+        )
+    )
 }
 
 @Composable

@@ -56,6 +56,7 @@ fun MediaListScreen(
     onShuffleOnce: () -> Unit,
     onStopShuffle: () -> Unit,
     onPlayNextClick: (Track) -> Unit,
+    onTrackInfoClick: (Track) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -166,7 +167,7 @@ fun MediaListScreen(
                             isPlaying = isPlaying,
                             isPaused = isPaused,
                             onClick = { onTrackClick(track) },
-                            onMoreClick = { },
+                            onMoreClick = { onTrackInfoClick(track) },
                         )
                     } else if (canReorder) {
                         ReorderableItem(reorderableState, key = track.id) { isDragging ->
@@ -176,7 +177,7 @@ fun MediaListScreen(
                                 isPlaying = isPlaying,
                                 isPaused = isPaused,
                                 onClick = { onTrackClick(track) },
-                                onMoreClick = { },
+                                onMoreClick = { onTrackInfoClick(track) },
                                 onPlayNext = { onPlayNextClick(track) },
                                 showDragHandle = true,
                                 dragHandleModifier = Modifier.longPressDraggableHandle(),
@@ -194,7 +195,7 @@ fun MediaListScreen(
                             isPlaying = isPlaying,
                             isPaused = isPaused,
                             onClick = { onTrackClick(track) },
-                            onMoreClick = { },
+                            onMoreClick = { onTrackInfoClick(track) },
                             onPlayNext = { onPlayNextClick(track) },
                             showDragHandle = false,
                             dragHandleModifier = Modifier,
@@ -227,6 +228,7 @@ fun MediaListScreen(
                 onClose = { showSearchOverlay = false },
                 onTrackClick = onTrackClick,
                 onPlayNextClick = onPlayNextClick,
+                onTrackInfoClick = onTrackInfoClick,
             )
         }
     }

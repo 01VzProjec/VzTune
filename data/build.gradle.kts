@@ -61,7 +61,6 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.common)
-    implementation(libs.newpipe.extractor)
 
     // DataStore
     implementation(libs.androidx.datastore.preferences)
@@ -72,7 +71,6 @@ dependencies {
 
     // Extractors
     implementation(libs.newpipe.extractor)
-    // implementation(libs.innertube) // DISABLED: not published on JitPack
     implementation(libs.okhttp)
 
     // Core library desugaring (required by NewPipeExtractor)

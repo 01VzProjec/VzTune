@@ -47,6 +47,7 @@ fun SearchScreen(
     onLoadMore: () -> Unit,
     onHitClick: (SearchHit) -> Unit = {},
     onPlayNextClick: (Track) -> Unit = {},
+    onTrackInfoClick: (Track) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var playlistFilter by remember { mutableStateOf(PlaylistFilterType.ALL) }
@@ -131,6 +132,7 @@ fun SearchScreen(
                 onLoadMore = onLoadMore,
                 onHitClick = onHitClick,
                 onPlayNextClick = onPlayNextClick,
+                onTrackInfoClick = onTrackInfoClick,
             )
         }
     }

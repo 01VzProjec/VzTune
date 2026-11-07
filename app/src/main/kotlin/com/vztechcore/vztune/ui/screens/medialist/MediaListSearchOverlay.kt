@@ -56,6 +56,7 @@ internal fun MediaListSearchOverlay(
     onClose: () -> Unit,
     onTrackClick: (Track) -> Unit,
     onPlayNextClick: (Track) -> Unit,
+    onTrackInfoClick: (Track) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
@@ -140,7 +141,7 @@ internal fun MediaListSearchOverlay(
                             isPlaying = isCurrent && nowPlaying.isPlaying,
                             isPaused = isCurrent && !nowPlaying.isPlaying,
                             onClick = { onTrackClick(track) },
-                            onMoreClick = { },
+                            onMoreClick = { onTrackInfoClick(track) },
                             onPlayNext = { onPlayNextClick(track) },
                             showDragHandle = false,
                             dragHandleModifier = Modifier,

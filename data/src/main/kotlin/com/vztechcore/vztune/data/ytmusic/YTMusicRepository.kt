@@ -2,6 +2,9 @@ package com.vztechcore.vztune.data.ytmusic
 
 import com.vztechcore.vztune.core.domain.music.Album
 import com.vztechcore.vztune.core.domain.music.Artist
+import com.vztechcore.vztune.core.domain.music.ArtistListKind
+import com.vztechcore.vztune.core.domain.music.BrowseRef
+import com.vztechcore.vztune.core.domain.music.Playlist
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchFilter
@@ -54,7 +57,23 @@ class YTMusicRepository @Inject constructor(
         val topSongs: List<Track>,
         val albums: List<Album>,
         val singles: List<Album>,
-        val relatedArtists: List<Artist>
+        val relatedArtists: List<Artist>,
+        val views: String? = null,
+        val songsMore: BrowseRef? = null,
+        val albumsMore: BrowseRef? = null,
+        val singlesMore: BrowseRef? = null,
+        val videos: List<Track> = emptyList(),
+        val videosMore: BrowseRef? = null,
+        val featured: List<Playlist> = emptyList(),
+        val featuredMore: BrowseRef? = null,
+    )
+
+    /** One page of an artist "see all" list. Only the list matching the requested kind is filled. */
+    data class ArtistListPage(
+        val tracks: List<Track> = emptyList(),
+        val albums: List<Album> = emptyList(),
+        val playlists: List<Playlist> = emptyList(),
+        val continuation: String? = null,
     )
 
     data class VideoDetails(
@@ -218,9 +237,36 @@ class YTMusicRepository @Inject constructor(
                 topSongs = parsed.topSongs,
                 albums = parsed.albums,
                 singles = parsed.singles,
-                relatedArtists = parsed.relatedArtists
+                relatedArtists = parsed.relatedArtists,
+                views = parsed.views,
+                songsMore = parsed.songsMore,
+                albumsMore = parsed.albumsMore,
+                singlesMore = parsed.singlesMore,
+                videos = parsed.videos,
+                videosMore = parsed.videosMore,
+                featured = parsed.featured,
+                featuredMore = parsed.featuredMore,
             )
         }
+
+    /**
+     * Loads one page of an artist "see all" list (songs, videos, albums, singles or featured playlists).
+     * Pass [continuation] = null for the first page, then the token returned in the previous page.
+     */
+    suspend fun browseArtistList(
+        kind: ArtistListKind,
+        artistName: String,
+        ref: BrowseRef,
+        continuation: String?,
+    ): ArtistListPage = withContext(Dispatchers.IO) {
+        val json = runCatching {
+            if (continuation == null) InnerTube.browse(ref.browseId, ref.params)
+            else InnerTube.browseContinuation(continuation)
+        }.getOrNull() ?: return@withContext ArtistListPage()
+
+        val page = YTMusicArtistParser.parseListPage(kind, artistName, json)
+        ArtistListPage(page.tracks, page.albums, page.playlists, page.continuation)
+    }
 
     suspend fun getArtistFromVideo(videoId: String): Artist? =
         withContext(Dispatchers.IO) {

@@ -74,9 +74,15 @@ object InnerTube {
             put("continuation", token)
         })
 
-    fun browse(browseId: String): JSONObject =
+    fun browse(browseId: String, params: String? = null): JSONObject =
         post("browse", WEB_REMIX, buildBody(WEB_REMIX).apply {
             put("browseId", browseId)
+            if (!params.isNullOrBlank()) put("params", params)
+        })
+
+    fun browseContinuation(token: String): JSONObject =
+        post("browse", WEB_REMIX, buildBody(WEB_REMIX).apply {
+            put("continuation", token)
         })
 
     fun searchSuggestions(input: String): JSONObject =

@@ -41,6 +41,9 @@ class SearchViewModel @Inject constructor(
             val id: String, val title: String, val artist: String,
             val thumbnailUrl: String?,
         ) : NavigationEvent
+        data class OpenArtist(
+            val id: String, val name: String, val thumbnailUrl: String?,
+        ) : NavigationEvent
     }
 
     private val _navigationEvent = MutableSharedFlow<NavigationEvent>()
@@ -156,7 +159,11 @@ class SearchViewModel @Inject constructor(
                     _navigationEvent.emit(NavigationEvent.OpenAlbum(hit.album.id, hit.album.title, hit.album.artist, hit.album.thumbnailUrl))
                 }
             }
-            is SearchHit.ArtistHit -> Unit
+            is SearchHit.ArtistHit -> {
+                viewModelScope.launch {
+                    _navigationEvent.emit(NavigationEvent.OpenArtist(hit.artist.id, hit.artist.name, hit.artist.thumbnailUrl))
+                }
+            }
         }
     }
 

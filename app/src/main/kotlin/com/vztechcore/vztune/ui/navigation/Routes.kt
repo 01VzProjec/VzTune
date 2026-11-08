@@ -16,6 +16,22 @@ object Routes {
         val thumbnailUrl: String? = null,
     )
 
+    /** Artist profile page. [id] is the YouTube Music channel/browse id (UC...). */
+    @Serializable data class Artist(
+        val id: String,
+        val name: String,
+        val thumbnailUrl: String? = null,
+    )
+
+    /** "See all" list of an artist. [kind] is an ArtistListKind name. */
+    @Serializable data class ArtistList(
+        val artistId: String,
+        val artistName: String,
+        val kind: String,
+        val browseId: String,
+        val params: String? = null,
+    )
+
     @Serializable data class TrackInfo(
         val id: String,
         val title: String,

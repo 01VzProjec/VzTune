@@ -48,6 +48,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.vztechcore.vztune.core.domain.music.Album
+import com.vztechcore.vztune.core.domain.music.Playlist
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.ui.components.AppBottomBar
 import com.vztechcore.vztune.ui.components.CompactMiniPlayerBar
@@ -55,6 +57,10 @@ import com.vztechcore.vztune.ui.components.EclipseBackground
 import com.vztechcore.vztune.ui.components.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.MiniPlayerBar
 import com.vztechcore.vztune.ui.components.rememberDominantColor
+import com.vztechcore.vztune.ui.screens.artist.ArtistScreen
+import com.vztechcore.vztune.ui.screens.artist.ArtistViewModel
+import com.vztechcore.vztune.ui.screens.artist.list.ArtistListScreen
+import com.vztechcore.vztune.ui.screens.artist.list.ArtistListViewModel
 import com.vztechcore.vztune.ui.screens.main.MiniPlayerViewModel
 import com.vztechcore.vztune.ui.screens.medialist.MediaListScreen
 import com.vztechcore.vztune.ui.screens.medialist.MediaListViewModel
@@ -77,6 +83,10 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     }
 
     val isMediaListScreen = backStackEntry?.destination?.hasRoute<Routes.MediaList>() == true
+    val isArtistScreen = backStackEntry?.destination?.hasRoute<Routes.Artist>() == true
+    val isArtistListScreen = backStackEntry?.destination?.hasRoute<Routes.ArtistList>() == true
+    // Detail screens show only the fixed mini player (no bottom bar)
+    val isDetailScreen = isMediaListScreen || isArtistScreen || isArtistListScreen
     val isTrackInfoScreen = backStackEntry?.destination?.hasRoute<Routes.TrackInfo>() == true
 
     val playback = LocalNowPlaying.current
@@ -138,6 +148,15 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                                         )
                                     )
                                 }
+                                is SearchViewModel.NavigationEvent.OpenArtist -> {
+                                    navController.navigate(
+                                        Routes.Artist(
+                                            id = event.id,
+                                            name = event.name,
+                                            thumbnailUrl = event.thumbnailUrl,
+                                        )
+                                    )
+                                }
                                 is SearchViewModel.NavigationEvent.OpenAlbum -> {
                                     navController.navigate(
                                         Routes.MediaList(
@@ -189,6 +208,50 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     )
                 }
 
+                composable<Routes.Artist> {
+                    val vm: ArtistViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    ArtistScreen(
+                        state = state,
+                        onBackClick = { navController.popBackStack() },
+                        onRandomClick = vm::onRandomClick,
+                        onFollowClick = vm::onFollowClick,
+                        onSongClick = vm::onSongClick,
+                        onVideoClick = vm::onVideoClick,
+                        onTrackInfoClick = { navController.navigateToTrackInfo(it) },
+                        onAlbumClick = { navController.openAlbum(it) },
+                        onPlaylistClick = { navController.openPlaylist(it) },
+                        onArtistClick = { artist ->
+                            navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl))
+                        },
+                        onSeeAllClick = { kind, ref ->
+                            navController.navigate(
+                                Routes.ArtistList(
+                                    artistId = state.artistId,
+                                    artistName = state.name,
+                                    kind = kind.name,
+                                    browseId = ref.browseId,
+                                    params = ref.params,
+                                )
+                            )
+                        },
+                    )
+                }
+
+                composable<Routes.ArtistList> {
+                    val vm: ArtistListViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    ArtistListScreen(
+                        state = state,
+                        onBackClick = { navController.popBackStack() },
+                        onLoadMore = vm::onLoadMore,
+                        onTrackClick = vm::onTrackClick,
+                        onTrackInfoClick = { navController.navigateToTrackInfo(it) },
+                        onAlbumClick = { navController.openAlbum(it) },
+                        onPlaylistClick = { navController.openPlaylist(it) },
+                    )
+                }
+
                 composable<Routes.TrackInfo> {
                     val vm: TrackInfoViewModel = hiltViewModel()
                     val state by vm.uiState.collectAsStateWithLifecycle()
@@ -209,7 +272,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         .imePadding()
                 ) {
                     if (track != null) {
-                        if (isMediaListScreen) {
+                        if (isDetailScreen) {
                             // Na playlist, mostra APENAS o MiniPlayerBar fixo no fundo
                             MiniPlayerBar(
                                 track = track,
@@ -312,7 +375,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             }
                         }
                     } else {
-                        if (!isMediaListScreen) {
+                        if (!isDetailScreen) {
                             AppBottomBar(
                                 selected = currentTab,
                                 onSelect = { tab ->
@@ -335,6 +398,31 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+/** Albums and singles open the album screen (same MediaList screen with isAlbum = true). */
+private fun NavController.openAlbum(album: Album) {
+    navigate(
+        Routes.MediaList(
+            id = album.id,
+            isAlbum = true,
+            title = album.title,
+            subtitle = album.artist,
+            thumbnailUrl = album.thumbnailUrl,
+        )
+    )
+}
+
+private fun NavController.openPlaylist(playlist: Playlist) {
+    navigate(
+        Routes.MediaList(
+            id = playlist.id,
+            isAlbum = false,
+            title = playlist.title,
+            subtitle = playlist.owner,
+            thumbnailUrl = playlist.thumbnailUrl,
+        )
+    )
 }
 
 private fun NavController.navigateToTrackInfo(track: Track) {

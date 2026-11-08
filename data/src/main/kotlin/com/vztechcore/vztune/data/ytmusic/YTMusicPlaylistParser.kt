@@ -245,6 +245,18 @@ internal object YTMusicPlaylistParser {
         return Pair(tracks, continuation)
     }
 
+    /**
+     * Collects every track-like list item found anywhere in a browse / continuation response.
+     * Used by the artist "see all" pages (songs and videos), which come as playlist-like shelves.
+     */
+    fun parseTracksAnywhere(json: JSONObject): List<Track> {
+        val tracks = mutableListOf<Track>()
+        YTMusicTextUtils.walk(json) { node ->
+            node.optJSONObject("musicResponsiveListItemRenderer")?.let { parsePlaylistItem(it, tracks) }
+        }
+        return tracks
+    }
+
     private fun parsePlaylistItem(r: JSONObject, out: MutableList<Track>) {
         val columns = r.optJSONArray("flexColumns") ?: return
         val title = YTMusicTextUtils.flexText(columns, 0) ?: return

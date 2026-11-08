@@ -29,15 +29,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
 import com.vztechcore.vztune.ui.components.LocalNowPlaying
-import com.vztechcore.vztune.ui.components.SkeletonColumn
 import com.vztechcore.vztune.ui.components.VzLoading
-import com.vztechcore.vztune.ui.components.fadeOutBottom
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -143,25 +140,12 @@ fun MediaListScreen(
 
             when {
                 state.isLoading -> item(key = "loading") {
-                    if (state.isAlbum) {
-                        // Albums keep the skeleton rows, fading out at the end
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(560.dp)
-                                .clipToBounds()
-                                .fadeOutBottom(0.55f)
-                        ) {
-                            SkeletonColumn(count = 8, video = false)
-                        }
-                    } else {
-                        // Playlists load with the VzTechCore logo animation
-                        Box(
-                            Modifier.fillMaxWidth().height(280.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            VzLoading(Modifier.size(160.dp))
-                        }
+                    // Playlists and albums load with the VzTechCore logo animation
+                    Box(
+                        Modifier.fillMaxWidth().height(280.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        VzLoading(Modifier.size(160.dp))
                     }
                 }
                 state.errorMessage != null -> item {

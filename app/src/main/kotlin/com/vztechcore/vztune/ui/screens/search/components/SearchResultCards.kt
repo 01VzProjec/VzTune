@@ -30,8 +30,7 @@ import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.ui.components.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.MediaThumbnail
 import com.vztechcore.vztune.ui.components.ThumbnailShape
-import com.vztechcore.vztune.ui.components.TrackRowSkeleton
-import com.vztechcore.vztune.ui.components.VideoCardSkeleton
+import com.vztechcore.vztune.ui.components.VzLoading
 import com.vztechcore.vztune.ui.components.TrackSubtitle
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -94,12 +93,12 @@ fun SearchResultsContent(
 
             if (isLoadingMore) {
                 item(key = "loading_more") {
-                    // Skeleton cards instead of a spinner while the next page loads
-                    Column(Modifier.fillMaxWidth()) {
-                        repeat(2) {
-                            if (isVideoMode) VideoCardSkeleton(horizontalPadding = 0.dp)
-                            else TrackRowSkeleton(horizontalPadding = 8.dp)
-                        }
+                    // VzTechCore logo animation while the next page loads
+                    Box(
+                        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        VzLoading(Modifier.size(96.dp))
                     }
                 }
             }

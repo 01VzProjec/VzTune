@@ -29,6 +29,9 @@ import com.vztechcore.vztune.core.domain.music.Track
  * Standard track card: optional ranking number, thumbnail with the "now playing" equalizer,
  * title, artist (with the explicit badge) and the 3-dots button on the right.
  * Used by the artist screens and the Library.
+ *
+ * Sized to match the compact Search result rows (thumbnail ~52.dp) so the whole app
+ * shows the same visual weight for track lists.
  */
 @Composable
 fun TrackListRow(
@@ -44,26 +47,26 @@ fun TrackListRow(
         modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (number != null) {
             Text(
                 text = number.toString(),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 color = Color.White.copy(alpha = 0.5f),
                 textAlign = TextAlign.Center,
-                modifier = Modifier.width(32.dp),
+                modifier = Modifier.width(26.dp),
             )
         }
         MediaThumbnail(
             imageUrl = track.thumbnailUrl,
-            size = 62.dp,
+            size = 52.dp,
             cornerRadius = 6.dp,
             isPlaying = playback.isPlaying,
             isPaused = playback.isPaused,
         )
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 text = track.title,
@@ -88,7 +91,7 @@ fun TrackListRow(
                 )
             }
         }
-        IconButton(onClick = onMoreClick, modifier = Modifier.size(36.dp)) {
+        IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
             Icon(
                 Icons.Filled.MoreVert,
                 contentDescription = "Mais",

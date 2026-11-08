@@ -125,7 +125,6 @@ fun VzLoading(
         vSegment.reset()
         zSegment.reset()
 
-        // Extract only the visible part of each path
         if (vProgress > 0f) {
             vMeasure.getSegment(
                 startDistance = 0f,
@@ -153,7 +152,6 @@ fun VzLoading(
             )
         }) {
 
-            // Blue/cyan "V"
             if (vProgress > 0f) {
                 drawPath(
                     path = vSegment,
@@ -166,7 +164,6 @@ fun VzLoading(
                 )
             }
 
-            // White "Z"
             if (zProgress > 0f) {
                 drawPath(
                     path = zSegment,
@@ -178,6 +175,73 @@ fun VzLoading(
                     )
                 )
             }
+        }
+    }
+}
+
+/**
+ * Static version of the VzTechCore logo — no animation.
+ * Used as a placeholder (e.g. an empty playlist without a cover).
+ *
+ * It draws the exact same V + Z as [VzLoading], so the brand stays consistent
+ * between the loading screens and the empty cards.
+ */
+@Composable
+fun VzLogoStatic(modifier: Modifier = Modifier) {
+    val vPath = remember {
+        Path().apply {
+            moveTo(180f, 200f)
+            lineTo(240f, 330f)
+            lineTo(270f, 250f)
+        }
+    }
+    val zPath = remember {
+        Path().apply {
+            moveTo(250f, 210f)
+            lineTo(330f, 210f)
+            lineTo(270f, 320f)
+            lineTo(340f, 320f)
+        }
+    }
+    val blueGradient = remember {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF2196F3),
+                Color(0xFF00E5FF)
+            ),
+            start = Offset(180f, 200f),
+            end = Offset(340f, 330f)
+        )
+    }
+
+    Canvas(modifier = modifier) {
+        val canvasSize = minOf(size.width, size.height)
+        val scale = canvasSize / 512f
+        val offsetX = (size.width - canvasSize) / 2f
+        val offsetY = (size.height - canvasSize) / 2f
+
+        withTransform({
+            translate(offsetX, offsetY)
+            scale(scaleX = scale, scaleY = scale, pivot = Offset.Zero)
+        }) {
+            drawPath(
+                path = vPath,
+                brush = blueGradient,
+                style = Stroke(
+                    width = 34f,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round
+                )
+            )
+            drawPath(
+                path = zPath,
+                color = Color.White,
+                style = Stroke(
+                    width = 34f,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round
+                )
+            )
         }
     }
 }

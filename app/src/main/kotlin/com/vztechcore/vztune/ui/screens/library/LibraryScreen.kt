@@ -128,17 +128,17 @@ private fun LibraryTitle() {
         Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
     ) {
         Text(
             text = "Sua Biblioteca",
-            style = MaterialTheme.typography.displaySmall,
+            style = MaterialTheme.typography.headlineMedium,
             color = Color.White,
             fontWeight = FontWeight.ExtraBold,
         )
         Text(
             text = "Tudo que é seu, num só lugar",
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.bodyMedium,
             color = Color.White.copy(alpha = 0.55f),
         )
     }
@@ -154,8 +154,8 @@ private fun LazyListScope.overviewTab(
 ) {
     items(LibraryShortcut.entries.chunked(2), key = { row -> row.first().name }) { row ->
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             row.forEach { shortcut ->
                 ShortcutCard(shortcut, { onShortcutClick(shortcut) }, Modifier.weight(1f))
@@ -183,22 +183,22 @@ private fun LazyListScope.overviewTab(
 
 @Composable
 private fun ShortcutCard(shortcut: LibraryShortcut, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(16.dp)
     Row(
         modifier
-            .height(64.dp)
+            .height(54.dp)
             .clip(shape)
             .background(shortcut.accent.copy(alpha = 0.14f))
             .border(BorderStroke(1.5.dp, shortcut.accent.copy(alpha = 0.55f)), shape)
             .clickable { onClick() }
-            .padding(horizontal = 18.dp),
+            .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(shortcut.icon, contentDescription = null, tint = shortcut.accent, modifier = Modifier.size(26.dp))
-        Spacer(Modifier.width(14.dp))
+        Icon(shortcut.icon, contentDescription = null, tint = shortcut.accent, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(10.dp))
         Text(
             text = shortcut.label,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleSmall,
             color = Color.White,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
@@ -208,7 +208,6 @@ private fun ShortcutCard(shortcut: LibraryShortcut, onClick: () -> Unit, modifie
 
 // ============================== PLAYLIST GRIDS ==============================
 
-/** One cell of a playlist grid: the "new playlist" card or a playlist. */
 private sealed interface GridCell {
     val key: String
 

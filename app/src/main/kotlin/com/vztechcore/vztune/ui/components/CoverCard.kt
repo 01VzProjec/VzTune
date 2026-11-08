@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -25,6 +26,10 @@ import coil.compose.AsyncImage
 /**
  * Square cover with title and subtitle below. Used for albums, singles, playlists
  * (artist screen, "see all" grids and the Library). A mosaic of 4+ thumbnails wins over [imageUrl].
+ *
+ * When there is neither a mosaic nor a cover (a brand-new local playlist with no
+ * tracks and no chosen cover), the card is drawn with a black background and the
+ * static VzTechCore logo — same identity shown on the loading screens.
  */
 @Composable
 fun CoverCard(
@@ -35,6 +40,8 @@ fun CoverCard(
     imageUrl: String? = null,
     mosaic: List<String> = emptyList(),
 ) {
+    val isEmpty = mosaic.isEmpty() && imageUrl == null
+
     Column(
         modifier
             .clip(RoundedCornerShape(12.dp))
@@ -45,17 +52,21 @@ fun CoverCard(
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color.White.copy(alpha = 0.08f)),
+                .background(
+                    if (isEmpty) Color.Black
+                    else Color.White.copy(alpha = 0.08f)
+                ),
+            contentAlignment = Alignment.Center,
         ) {
-            if (mosaic.size >= 4) {
-                PlaylistMosaic(mosaic)
-            } else {
-                AsyncImage(
+            when {
+                mosaic.size >= 4 -> PlaylistMosaic(mosaic)
+                imageUrl != null -> AsyncImage(
                     model = imageUrl,
                     contentDescription = title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
+                else -> VzLogoStatic(Modifier.fillMaxSize(0.9f))
             }
         }
         Spacer(Modifier.height(8.dp))

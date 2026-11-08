@@ -14,7 +14,82 @@
           "line": 36
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/MainActivity.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        },
+        "start": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/VzLoading.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 7011,
+          "line": 246
+        },
+        "start": {
+          "column": 1,
+          "index": 7011,
+          "line": 246
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/CoverCard.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 3260,
+          "line": 90
+        },
+        "start": {
+          "column": 1,
+          "index": 3260,
+          "line": 90
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/TrackListRow.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 3725,
+          "line": 101
+        },
+        "start": {
+          "column": 1,
+          "index": 3725,
+          "line": 101
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/LibraryScreen.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 10939,
+          "line": 301
+        },
+        "start": {
+          "column": 1,
+          "index": 10939,
+          "line": 301
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/LocalNowPlaying.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/LibraryScreen.kt"
 }

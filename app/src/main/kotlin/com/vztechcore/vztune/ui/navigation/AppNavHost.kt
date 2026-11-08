@@ -61,6 +61,11 @@ import com.vztechcore.vztune.ui.screens.artist.ArtistScreen
 import com.vztechcore.vztune.ui.screens.artist.ArtistViewModel
 import com.vztechcore.vztune.ui.screens.artist.list.ArtistListScreen
 import com.vztechcore.vztune.ui.screens.artist.list.ArtistListViewModel
+import com.vztechcore.vztune.ui.screens.library.LibraryScreen
+import com.vztechcore.vztune.ui.screens.library.LibraryViewModel
+import com.vztechcore.vztune.ui.screens.library.list.LibraryListScreen
+import com.vztechcore.vztune.ui.screens.library.list.LibraryListViewModel
+import com.vztechcore.vztune.ui.components.AppCredits
 import com.vztechcore.vztune.ui.screens.main.MiniPlayerViewModel
 import com.vztechcore.vztune.ui.screens.medialist.MediaListScreen
 import com.vztechcore.vztune.ui.screens.medialist.MediaListViewModel
@@ -86,7 +91,8 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val isArtistScreen = backStackEntry?.destination?.hasRoute<Routes.Artist>() == true
     val isArtistListScreen = backStackEntry?.destination?.hasRoute<Routes.ArtistList>() == true
     // Detail screens show only the fixed mini player (no bottom bar)
-    val isDetailScreen = isMediaListScreen || isArtistScreen || isArtistListScreen
+    val isLibraryListScreen = backStackEntry?.destination?.hasRoute<Routes.LibraryList>() == true
+    val isDetailScreen = isMediaListScreen || isArtistScreen || isArtistListScreen || isLibraryListScreen
     val isTrackInfoScreen = backStackEntry?.destination?.hasRoute<Routes.TrackInfo>() == true
 
     val playback = LocalNowPlaying.current
@@ -128,7 +134,43 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             ) {
                 composable<Routes.Home> { Placeholder("Home — coming soon") }
                 composable<Routes.Analytics> { Placeholder("Analytics — coming soon") }
-                composable<Routes.Library> { Placeholder("Library — coming soon") }
+                composable<Routes.Library> {
+                    val vm: LibraryViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    LibraryScreen(
+                        state = state,
+                        onTabSelected = vm::onTabSelected,
+                        onShortcutClick = { navController.navigate(Routes.LibraryList(it.name)) },
+                        onTrackClick = vm::onTrackClick,
+                        onTrackInfoClick = { navController.navigateToTrackInfo(it) },
+                        onPlaylistClick = { item ->
+                            navController.navigate(
+                                Routes.MediaList(
+                                    id = item.id,
+                                    isAlbum = false,
+                                    title = item.title,
+                                    subtitle = item.subtitle,
+                                    thumbnailUrl = item.imageUrl,
+                                )
+                            )
+                        },
+                        onCreatePlaylist = vm::createPlaylist,
+                    )
+                }
+
+                composable<Routes.LibraryList> {
+                    val vm: LibraryListViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    LibraryListScreen(
+                        state = state,
+                        onBackClick = { navController.popBackStack() },
+                        onTrackClick = vm::onTrackClick,
+                        onTrackInfoClick = { navController.navigateToTrackInfo(it) },
+                        onArtistClick = { artist ->
+                            navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl))
+                        },
+                    )
+                }
 
                 composable<Routes.Search> {
                     val vm: SearchViewModel = hiltViewModel()
@@ -205,6 +247,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onStopShuffle = vm::stopShuffle,
                         onPlayNextClick = vm::onPlayNextClick,
                         onTrackInfoClick = { navController.navigateToTrackInfo(it) },
+                        onFavoriteClick = vm::onFavoriteClick,
                     )
                 }
 
@@ -258,6 +301,8 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     TrackInfoScreen(
                         state = state,
                         onBackClick = { navController.popBackStack() },
+                        onFavoriteClick = vm::onFavoriteClick,
+                        onAddToPlaylist = vm::onAddToPlaylist,
                     )
                 }
             }
@@ -441,7 +486,8 @@ private fun NavController.navigateToTrackInfo(track: Track) {
 
 @Composable
 private fun Placeholder(message: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = message, color = VzOnSurface)
+    Box(Modifier.fillMaxSize()) {
+        Text(text = message, color = VzOnSurface, modifier = Modifier.align(Alignment.Center))
+        AppCredits(Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp))
     }
 }

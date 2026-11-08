@@ -30,6 +30,7 @@ import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.ui.components.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.MediaThumbnail
 import com.vztechcore.vztune.ui.components.ThumbnailShape
+import com.vztechcore.vztune.ui.components.AppCredits
 import com.vztechcore.vztune.ui.components.VzLoading
 import com.vztechcore.vztune.ui.components.TrackSubtitle
 
@@ -101,6 +102,9 @@ fun SearchResultsContent(
                         VzLoading(Modifier.size(96.dp))
                     }
                 }
+            }
+            if (!isLoadingMore) {
+                item(key = "credits") { AppCredits() }
             }
         }
     }

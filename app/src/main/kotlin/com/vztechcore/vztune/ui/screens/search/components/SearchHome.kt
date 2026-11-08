@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.ui.components.AppCredits
 
 private val RECENT_CARD_HEIGHT = 120.dp
 
@@ -106,6 +107,8 @@ fun SearchHome(
                 )
             }
         }
+
+        item(key = "credits") { AppCredits() }
 
         if (recentTracks.isEmpty() && history.isEmpty()) {
             item(key = "empty") {

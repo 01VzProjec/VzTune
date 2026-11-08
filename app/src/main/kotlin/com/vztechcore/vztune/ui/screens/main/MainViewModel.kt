@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vztechcore.vztune.core.domain.player.PlaybackState
 import com.vztechcore.vztune.core.domain.settings.AppSettings
+import com.vztechcore.vztune.data.player.PlaybackRecorder
 import com.vztechcore.vztune.data.player.PlayerController
 import com.vztechcore.vztune.data.prefs.AppSettingsStore
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,7 +17,12 @@ import javax.inject.Inject
 class MainViewModel @Inject constructor(
     appSettingsStore: AppSettingsStore,
     private val playerController: PlayerController,
+    playbackRecorder: PlaybackRecorder,
 ) : ViewModel() {
+
+    init {
+        playbackRecorder.start(viewModelScope)
+    }
 
     val settings: StateFlow<AppSettings> = appSettingsStore.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())

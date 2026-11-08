@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.vztechcore.vztune.ui.components.PlaylistMosaic
 import com.vztechcore.vztune.core.domain.search.SortOrder
 
 @Composable
@@ -36,6 +37,7 @@ internal fun MediaListExpandedHeader(
     onSearchClick: () -> Unit,
     onSortClick: () -> Unit,
     onShuffleToggle: () -> Unit,
+    onFavoriteClick: () -> Unit,
 ) {
     Column(
         Modifier
@@ -50,7 +52,7 @@ internal fun MediaListExpandedHeader(
                 .height(320.dp)
         ) {
             if (state.mosaicThumbnails.size >= 4) {
-                PlaylistMosaicLarge(state.mosaicThumbnails)
+                PlaylistMosaic(state.mosaicThumbnails)
             } else {
                 AsyncImage(
                     model = state.thumbnailUrl,
@@ -87,6 +89,13 @@ internal fun MediaListExpandedHeader(
             ) {
                 MediaListCircleButton(Icons.Filled.Close, "Fechar", onBackClick)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (state.showFavorite) {
+                        MediaListCircleButton(
+                            icon = if (state.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            contentDescription = if (state.isFavorite) "Remover dos favoritos" else "Favoritar playlist",
+                            onClick = onFavoriteClick,
+                        )
+                    }
                     MediaListCircleButton(Icons.Filled.Search, "Pesquisar", onSearchClick)
                     MediaListCircleButton(Icons.Filled.MoreVert, "Mais", { })
                 }
@@ -234,7 +243,8 @@ internal fun MediaListCollapsedHeader(
     title: String,
     thumbnailUrl: String?,
     onBackClick: () -> Unit,
-    onSearchClick: () -> Unit,
+    onSearchClick: (() -> Unit)? = null,
+    circularThumbnail: Boolean = false,
 ) {
     Row(
         Modifier
@@ -255,7 +265,7 @@ internal fun MediaListCollapsedHeader(
                 model = thumbnailUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)),
+                modifier = Modifier.size(40.dp).clip(if (circularThumbnail) CircleShape else RoundedCornerShape(6.dp)),
             )
             Spacer(Modifier.width(10.dp))
         }
@@ -268,42 +278,10 @@ internal fun MediaListCollapsedHeader(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        IconButton(onClick = onSearchClick) {
-            Icon(Icons.Filled.Search, contentDescription = "Pesquisar", tint = Color.White)
-        }
-    }
-}
-
-@Composable
-internal fun PlaylistMosaicLarge(thumbnails: List<String>) {
-    Row(Modifier.fillMaxSize()) {
-        Column(Modifier.weight(1f)) {
-            AsyncImage(
-                model = thumbnails.getOrNull(0),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
-            AsyncImage(
-                model = thumbnails.getOrNull(2),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
-        }
-        Column(Modifier.weight(1f)) {
-            AsyncImage(
-                model = thumbnails.getOrNull(1),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
-            AsyncImage(
-                model = thumbnails.getOrNull(3),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
+        if (onSearchClick != null) {
+            IconButton(onClick = onSearchClick) {
+                Icon(Icons.Filled.Search, contentDescription = "Pesquisar", tint = Color.White)
+            }
         }
     }
 }

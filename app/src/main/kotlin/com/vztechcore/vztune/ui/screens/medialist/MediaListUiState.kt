@@ -29,8 +29,14 @@ data class MediaListUiState(
     val sortOrder: SortOrder = SortOrder.OLD_TO_RECENT,
     val manualOrder: List<String> = emptyList(),
     val isShuffling: Boolean = false,
+    val isFavorite: Boolean = false,
+    // Playlist created by the user inside the app (stored on the device).
+    val isLocal: Boolean = false,
 ) {
     val showTabs: Boolean get() = !isAlbum
+
+    // Only YouTube playlists can be favorited (albums and local playlists cannot).
+    val showFavorite: Boolean get() = !isAlbum && !isLocal
     val isSortEnabled: Boolean get() = selectedTab == MediaListTab.ALL
 
     val filteredTracks: List<Track>

@@ -7,6 +7,8 @@ import androidx.navigation.toRoute
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.data.music.MusicRepository
+import com.vztechcore.vztune.data.prefs.FavoriteTracksStore
+import com.vztechcore.vztune.data.prefs.LocalPlaylistsStore
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,6 +24,8 @@ class TrackInfoViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val musicRepository: MusicRepository,
     private val ytMusicRepository: YTMusicRepository,
+    private val favoriteTracksStore: FavoriteTracksStore,
+    private val localPlaylistsStore: LocalPlaylistsStore,
 ) : ViewModel() {
 
     private val route = savedStateHandle.toRoute<Routes.TrackInfo>()
@@ -54,6 +58,24 @@ class TrackInfoViewModel @Inject constructor(
     init {
         loadTechnicalInfo()
         loadInnerTubeDetails()
+        viewModelScope.launch {
+            favoriteTracksStore.containsTrack(track).collect { favorite ->
+                _uiState.update { it.copy(isFavorite = favorite) }
+            }
+        }
+        viewModelScope.launch {
+            localPlaylistsStore.items.collect { playlists ->
+                _uiState.update { it.copy(localPlaylists = playlists) }
+            }
+        }
+    }
+
+    fun onFavoriteClick() {
+        viewModelScope.launch { favoriteTracksStore.toggle(track) }
+    }
+
+    fun onAddToPlaylist(playlistId: String) {
+        viewModelScope.launch { localPlaylistsStore.addTrack(playlistId, track) }
     }
 
     private fun loadTechnicalInfo() {

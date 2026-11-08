@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Album
 import com.vztechcore.vztune.core.domain.music.Artist
@@ -37,13 +40,27 @@ import com.vztechcore.vztune.core.domain.music.ArtistListKind
 import com.vztechcore.vztune.core.domain.music.BrowseRef
 import com.vztechcore.vztune.core.domain.music.Playlist
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.ui.components.AppCredits
+import com.vztechcore.vztune.ui.components.ArtistCircleCard
+import com.vztechcore.vztune.ui.components.CoverCard
+import com.vztechcore.vztune.ui.components.LocalNowPlaying
+import com.vztechcore.vztune.ui.components.SectionHeader
+import com.vztechcore.vztune.ui.components.TrackListRow
 import com.vztechcore.vztune.ui.components.VzLoading
+import com.vztechcore.vztune.ui.components.playbackOf
+import com.vztechcore.vztune.ui.screens.medialist.CollapsedHeaderHost
+import com.vztechcore.vztune.ui.screens.medialist.MediaListCollapsedHeader
+import com.vztechcore.vztune.ui.screens.medialist.MediaListVideoCard
+import com.vztechcore.vztune.ui.screens.medialist.rememberHeaderCollapsed
 
 private val RowPadding = PaddingValues(horizontal = 16.dp)
+private val CoverWidth = 168.dp
+private val VideoWidth = 280.dp
 
 /**
  * Artist profile. Sections (hidden when empty), in order:
  * popular songs, albums, singles, videos, featured, related artists, description, credits.
+ * Once the header scrolls away, a sticky bar (close + photo + name) fades in.
  */
 @Composable
 fun ArtistScreen(
@@ -60,12 +77,20 @@ fun ArtistScreen(
     onSeeAllClick: (ArtistListKind, BrowseRef) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val listState = rememberLazyListState()
+    val isCollapsed by rememberHeaderCollapsed(listState)
+    val nowPlaying = LocalNowPlaying.current
+
+    fun seeAll(kind: ArtistListKind, ref: BrowseRef?): (() -> Unit)? =
+        ref?.let { { onSeeAllClick(kind, it) } }
+
     Box(
         modifier
             .fillMaxSize()
             .background(Color.Black)
     ) {
         LazyColumn(
+            state = listState,
             contentPadding = PaddingValues(bottom = 140.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
@@ -102,13 +127,13 @@ fun ArtistScreen(
                     // ---------- Popular songs (numbered) ----------
                     if (state.topSongs.isNotEmpty()) {
                         item(key = "songs_header") {
-                            ArtistSectionHeader(
+                            SectionHeader(
                                 title = "Músicas populares",
-                                onMoreClick = state.songsMore?.let { ref -> { onSeeAllClick(ArtistListKind.SONGS, ref) } },
+                                onActionClick = seeAll(ArtistListKind.SONGS, state.songsMore),
                             )
                         }
                         itemsIndexed(state.topSongs.take(5), key = { _, t -> "song_${t.id}" }) { index, track ->
-                            ArtistSongRow(
+                            TrackListRow(
                                 track = track,
                                 number = index + 1,
                                 onClick = { onSongClick(track) },
@@ -118,143 +143,106 @@ fun ArtistScreen(
                         item(key = "songs_space") { Spacer(Modifier.height(16.dp)) }
                     }
 
-                    // ---------- Albums ----------
-                    if (state.albums.isNotEmpty()) {
-                        item(key = "albums_header") {
-                            ArtistSectionHeader(
-                                title = "Álbuns",
-                                onMoreClick = state.albumsMore?.let { ref -> { onSeeAllClick(ArtistListKind.ALBUMS, ref) } },
-                            )
-                        }
-                        item(key = "albums_row") {
-                            LazyRow(
-                                contentPadding = RowPadding,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                items(state.albums, key = { it.id }) { album ->
-                                    ArtistSquareCard(
-                                        imageUrl = album.thumbnailUrl,
-                                        title = album.title,
-                                        subtitle = "Álbum",
-                                        onClick = { onAlbumClick(album) },
-                                        modifier = Modifier.width(168.dp),
-                                    )
-                                }
-                            }
-                        }
-                        item(key = "albums_space") { Spacer(Modifier.height(20.dp)) }
+                    rowSection(
+                        key = "albums", title = "Álbuns", items = state.albums,
+                        onMoreClick = seeAll(ArtistListKind.ALBUMS, state.albumsMore),
+                        itemKey = { it.id },
+                    ) { album ->
+                        CoverCard(
+                            title = album.title, subtitle = "Álbum", imageUrl = album.thumbnailUrl,
+                            onClick = { onAlbumClick(album) }, modifier = Modifier.width(CoverWidth),
+                        )
                     }
 
-                    // ---------- Singles ----------
-                    if (state.singles.isNotEmpty()) {
-                        item(key = "singles_header") {
-                            ArtistSectionHeader(
-                                title = "Singles",
-                                onMoreClick = state.singlesMore?.let { ref -> { onSeeAllClick(ArtistListKind.SINGLES, ref) } },
-                            )
-                        }
-                        item(key = "singles_row") {
-                            LazyRow(
-                                contentPadding = RowPadding,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                items(state.singles, key = { it.id }) { single ->
-                                    ArtistSquareCard(
-                                        imageUrl = single.thumbnailUrl,
-                                        title = single.title,
-                                        subtitle = "Single",
-                                        onClick = { onAlbumClick(single) },
-                                        modifier = Modifier.width(168.dp),
-                                    )
-                                }
-                            }
-                        }
-                        item(key = "singles_space") { Spacer(Modifier.height(20.dp)) }
+                    rowSection(
+                        key = "singles", title = "Singles", items = state.singles,
+                        onMoreClick = seeAll(ArtistListKind.SINGLES, state.singlesMore),
+                        itemKey = { it.id },
+                    ) { single ->
+                        CoverCard(
+                            title = single.title, subtitle = "Single", imageUrl = single.thumbnailUrl,
+                            onClick = { onAlbumClick(single) }, modifier = Modifier.width(CoverWidth),
+                        )
                     }
 
-                    // ---------- Videos (16:9) ----------
-                    if (state.videos.isNotEmpty()) {
-                        item(key = "videos_header") {
-                            ArtistSectionHeader(
-                                title = "Vídeos",
-                                onMoreClick = state.videosMore?.let { ref -> { onSeeAllClick(ArtistListKind.VIDEOS, ref) } },
-                            )
-                        }
-                        item(key = "videos_row") {
-                            LazyRow(
-                                contentPadding = RowPadding,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                items(state.videos, key = { it.id }) { video ->
-                                    ArtistVideoCard(
-                                        track = video,
-                                        onClick = { onVideoClick(video) },
-                                        modifier = Modifier.width(264.dp),
-                                    )
-                                }
-                            }
-                        }
-                        item(key = "videos_space") { Spacer(Modifier.height(20.dp)) }
+                    rowSection(
+                        key = "videos", title = "Vídeos", items = state.videos,
+                        onMoreClick = seeAll(ArtistListKind.VIDEOS, state.videosMore),
+                        itemKey = { it.id },
+                    ) { video ->
+                        val playback = nowPlaying.playbackOf(video)
+                        MediaListVideoCard(
+                            track = video,
+                            isPlaying = playback.isPlaying,
+                            isPaused = playback.isPaused,
+                            onClick = { onVideoClick(video) },
+                            onMoreClick = { onTrackInfoClick(video) },
+                            modifier = Modifier.width(VideoWidth),
+                        )
                     }
 
-                    // ---------- Featured ----------
-                    if (state.featured.isNotEmpty()) {
-                        item(key = "featured_header") {
-                            ArtistSectionHeader(
-                                title = "Destacado",
-                                onMoreClick = state.featuredMore?.let { ref -> { onSeeAllClick(ArtistListKind.FEATURED, ref) } },
-                            )
-                        }
-                        item(key = "featured_row") {
-                            LazyRow(
-                                contentPadding = RowPadding,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                items(state.featured, key = { it.id }) { playlist ->
-                                    ArtistSquareCard(
-                                        imageUrl = playlist.thumbnailUrl,
-                                        title = playlist.title,
-                                        subtitle = playlist.owner,
-                                        onClick = { onPlaylistClick(playlist) },
-                                        modifier = Modifier.width(168.dp),
-                                    )
-                                }
-                            }
-                        }
-                        item(key = "featured_space") { Spacer(Modifier.height(20.dp)) }
+                    rowSection(
+                        key = "featured", title = "Destacado", items = state.featured,
+                        onMoreClick = seeAll(ArtistListKind.FEATURED, state.featuredMore),
+                        itemKey = { it.id },
+                    ) { playlist ->
+                        CoverCard(
+                            title = playlist.title, subtitle = playlist.owner, imageUrl = playlist.thumbnailUrl,
+                            onClick = { onPlaylistClick(playlist) }, modifier = Modifier.width(CoverWidth),
+                        )
                     }
 
-                    // ---------- Related artists ----------
-                    if (state.relatedArtists.isNotEmpty()) {
-                        item(key = "related_header") {
-                            ArtistSectionHeader(title = "Artistas relacionados", onMoreClick = null)
-                        }
-                        item(key = "related_row") {
-                            LazyRow(
-                                contentPadding = RowPadding,
-                                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            ) {
-                                items(state.relatedArtists, key = { it.id }) { artist ->
-                                    ArtistCircleCard(artist = artist, onClick = { onArtistClick(artist) })
-                                }
-                            }
-                        }
-                        item(key = "related_space") { Spacer(Modifier.height(24.dp)) }
+                    rowSection(
+                        key = "related", title = "Artistas relacionados", items = state.relatedArtists,
+                        onMoreClick = null, spacing = 16.dp,
+                        itemKey = { it.id },
+                    ) { artist ->
+                        ArtistCircleCard(
+                            name = artist.name, imageUrl = artist.thumbnailUrl,
+                            onClick = { onArtistClick(artist) },
+                        )
                     }
 
-                    // ---------- Description ----------
-                    item(key = "description") {
-                        ArtistDescription(description = state.description)
-                    }
-
-                    // ---------- Credits ----------
-                    item(key = "credits") {
-                        ArtistCredits()
-                    }
+                    item(key = "description") { ArtistDescription(description = state.description) }
                 }
             }
+
+            item(key = "credits") { AppCredits() }
+        }
+
+        CollapsedHeaderHost(visible = isCollapsed) {
+            MediaListCollapsedHeader(
+                title = state.name,
+                thumbnailUrl = state.thumbnailUrl,
+                onBackClick = onBackClick,
+                circularThumbnail = true,
+            )
         }
     }
+}
+
+/** A titled horizontal row ("Álbuns", "Vídeos"...). Nothing is emitted when [items] is empty. */
+private fun <T> LazyListScope.rowSection(
+    key: String,
+    title: String,
+    items: List<T>,
+    onMoreClick: (() -> Unit)?,
+    itemKey: (T) -> Any,
+    spacing: Dp = 12.dp,
+    itemContent: @Composable (T) -> Unit,
+) {
+    if (items.isEmpty()) return
+
+    item(key = "${key}_header") { SectionHeader(title = title, onActionClick = onMoreClick) }
+    item(key = "${key}_row") {
+        LazyRow(
+            contentPadding = RowPadding,
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+        ) {
+            items(items, key = itemKey) { itemContent(it) }
+        }
+    }
+    item(key = "${key}_space") { Spacer(Modifier.height(20.dp)) }
 }
 
 @Composable
@@ -292,28 +280,5 @@ private fun ArtistDescription(description: String?) {
                 modifier = Modifier.clickable { expanded = !expanded },
             )
         }
-    }
-}
-
-@Composable
-private fun ArtistCredits() {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = "Vtzin x - VzTechCore",
-            style = MaterialTheme.typography.labelLarge,
-            color = Color.White.copy(alpha = 0.55f),
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = "@2026 VzTune v1.0.0",
-            style = MaterialTheme.typography.labelMedium,
-            color = Color.White.copy(alpha = 0.35f),
-        )
     }
 }

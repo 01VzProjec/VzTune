@@ -7,7 +7,11 @@ import androidx.navigation.toRoute
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
 import com.vztechcore.vztune.data.player.PlayerController
+import com.vztechcore.vztune.data.prefs.FavoritePlaylistsStore
+import com.vztechcore.vztune.data.prefs.LocalPlaylistsStore
 import com.vztechcore.vztune.data.prefs.MediaListPreferencesStore
+import com.vztechcore.vztune.data.prefs.StoredPlaylist
+import com.vztechcore.vztune.data.prefs.isLocalPlaylistId
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,6 +29,8 @@ class MediaListViewModel @Inject constructor(
     private val ytMusicRepository: YTMusicRepository,
     private val playerController: PlayerController,
     private val store: MediaListPreferencesStore,
+    private val favoritesStore: FavoritePlaylistsStore,
+    private val localStore: LocalPlaylistsStore,
 ) : ViewModel() {
 
     private val route = savedStateHandle.toRoute<Routes.MediaList>()
@@ -35,6 +41,7 @@ class MediaListViewModel @Inject constructor(
             subtitle = route.subtitle,
             thumbnailUrl = route.thumbnailUrl,
             isAlbum = route.isAlbum,
+            isLocal = isLocalPlaylistId(route.id),
         )
     )
     val uiState: StateFlow<MediaListUiState> = _uiState.asStateFlow()
@@ -44,9 +51,42 @@ class MediaListViewModel @Inject constructor(
         val savedManual = store.getManualOrder(route.id)
         _uiState.update { it.copy(sortOrder = savedSort, manualOrder = savedManual) }
         loadContent()
+        viewModelScope.launch {
+            favoritesStore.contains(route.id).collect { favorite ->
+                _uiState.update { it.copy(isFavorite = favorite) }
+            }
+        }
+    }
+
+    /** Local playlists live on the device: follow the store so added tracks show up right away. */
+    private fun observeLocalPlaylist() {
+        viewModelScope.launch {
+            localStore.playlist(route.id).collect { playlist ->
+                _uiState.update {
+                    if (playlist == null) {
+                        it.copy(isLoading = false, errorMessage = "Playlist não encontrada.")
+                    } else {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = null,
+                            title = playlist.name,
+                            owner = "Você",
+                            subtitle = "Você",
+                            thumbnailUrl = playlist.coverPath,
+                            mosaicThumbnails = playlist.mosaic,
+                            allTracks = playlist.tracks.mapNotNull { stored -> stored.toTrack() },
+                        )
+                    }
+                }
+            }
+        }
     }
 
     private fun loadContent() {
+        if (_uiState.value.isLocal) {
+            observeLocalPlaylist()
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             runCatching {
@@ -180,6 +220,22 @@ class MediaListViewModel @Inject constructor(
         val idx = sorted.indexOfFirst { it.id == track.id && it.source == track.source }
         if (idx >= 0) playerController.playQueue(sorted, idx)
         else playerController.playQueue(listOf(track), 0)
+    }
+
+    /** Adds the playlist to the Library favorites, or removes it when already there. */
+    fun onFavoriteClick() {
+        val state = _uiState.value
+        viewModelScope.launch {
+            favoritesStore.toggle(
+                StoredPlaylist(
+                    id = route.id,
+                    title = state.title,
+                    owner = state.owner,
+                    thumbnailUrl = state.thumbnailUrl,
+                    mosaic = state.mosaicThumbnails,
+                )
+            )
+        }
     }
 
     fun onPlayNextClick(track: Track) {

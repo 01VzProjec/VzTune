@@ -32,6 +32,9 @@ object Routes {
         val params: String? = null,
     )
 
+    /** List opened from a Library shortcut card. [kind] is a LibraryShortcut name. */
+    @Serializable data class LibraryList(val kind: String)
+
     @Serializable data class TrackInfo(
         val id: String,
         val title: String,

@@ -1,10 +1,7 @@
 package com.vztechcore.vztune.ui.screens.medialist
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -22,7 +19,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +56,7 @@ fun MediaListScreen(
     onStopShuffle: () -> Unit,
     onPlayNextClick: (Track) -> Unit,
     onTrackInfoClick: (Track) -> Unit,
+    onFavoriteClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -68,11 +65,7 @@ fun MediaListScreen(
     var showSearchOverlay by remember { mutableStateOf(false) }
     var shuffleJob by remember { mutableStateOf<Job?>(null) }
 
-    val isCollapsed by remember {
-        derivedStateOf {
-            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 250
-        }
-    }
+    val isCollapsed by rememberHeaderCollapsed(listState)
 
     val displayedTracks = remember(state.filteredTracks, state.sortOrder, state.manualOrder, state.selectedTab) {
         state.getDisplayTracks()
@@ -135,6 +128,7 @@ fun MediaListScreen(
                     onShuffleToggle = {
                         if (state.isShuffling) onStopShuffle() else onStartShuffle()
                     },
+                    onFavoriteClick = onFavoriteClick,
                 )
             }
 
@@ -215,12 +209,7 @@ fun MediaListScreen(
             item { MediaListFooter(state = state) }
         }
 
-        AnimatedVisibility(
-            visible = isCollapsed,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopCenter),
-        ) {
+        CollapsedHeaderHost(visible = isCollapsed) {
             MediaListCollapsedHeader(
                 title = state.title,
                 thumbnailUrl = state.thumbnailUrl ?: state.mosaicThumbnails.firstOrNull(),

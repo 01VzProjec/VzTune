@@ -21,9 +21,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.ui.components.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.MediaThumbnail
 import com.vztechcore.vztune.ui.components.ThumbnailShape
 import com.vztechcore.vztune.ui.components.TrackSubtitle
+import com.vztechcore.vztune.ui.components.VzChipRow
+import com.vztechcore.vztune.ui.components.playbackOf
 
 @Composable
 internal fun MediaListTrackRow(
@@ -109,14 +112,54 @@ internal fun MediaListVideoCard(
 
 @Composable
 internal fun MediaListTabs(selected: MediaListTab, onSelect: (MediaListTab) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        MediaListTab.entries.forEach { tab ->
-            val isSelected = tab == selected
-            val bg = if (isSelected) Color.White else Color.White.copy(alpha = 0.08f)
-            val fg = if (isSelected) Color.Black else Color.White.copy(alpha = 0.75f)
-            Box(Modifier.clip(RoundedCornerShape(50)).background(bg).clickable { onSelect(tab) }.padding(horizontal = 18.dp, vertical = 8.dp)) {
-                Text(tab.label, style = MaterialTheme.typography.labelMedium, color = fg, fontWeight = FontWeight.Bold)
-            }
-        }
-    }
+    VzChipRow(
+        items = MediaListTab.entries,
+        selected = selected,
+        label = { it.label },
+        onSelect = onSelect,
+    )
+}
+
+/** Standard track row that reads the now-playing state itself (equalizer on the thumbnail). */
+@Composable
+internal fun PlayableTrackRow(
+    track: Track,
+    index: Int?,
+    onClick: () -> Unit,
+    onMoreClick: () -> Unit,
+    onPlayNext: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val playback = LocalNowPlaying.current.playbackOf(track)
+    MediaListTrackRow(
+        track = track,
+        index = index,
+        isPlaying = playback.isPlaying,
+        isPaused = playback.isPaused,
+        onClick = onClick,
+        onMoreClick = onMoreClick,
+        onPlayNext = onPlayNext,
+        showDragHandle = false,
+        dragHandleModifier = Modifier,
+        modifier = modifier,
+    )
+}
+
+/** Standard 16:9 video card that reads the now-playing state itself. */
+@Composable
+internal fun PlayableVideoCard(
+    track: Track,
+    onClick: () -> Unit,
+    onMoreClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val playback = LocalNowPlaying.current.playbackOf(track)
+    MediaListVideoCard(
+        track = track,
+        isPlaying = playback.isPlaying,
+        isPaused = playback.isPaused,
+        onClick = onClick,
+        onMoreClick = onMoreClick,
+        modifier = modifier,
+    )
 }

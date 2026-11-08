@@ -1,5 +1,18 @@
 package com.vztechcore.vztune.ui.screens.trackinfo
 
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.vztechcore.vztune.data.prefs.LocalPlaylist
+import com.vztechcore.vztune.ui.components.AppCredits
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -32,10 +45,24 @@ import android.net.Uri
 fun TrackInfoScreen(
     state: TrackInfoUiState,
     onBackClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
+    onAddToPlaylist: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showPlaylistSheet by remember { mutableStateOf(false) }
     val dominantColor = rememberDominantColor(state.thumbnailUrl)
     val context = LocalContext.current
+
+    if (showPlaylistSheet) {
+        AddToPlaylistSheet(
+            playlists = state.localPlaylists,
+            onPick = { playlist ->
+                onAddToPlaylist(playlist.id)
+                showPlaylistSheet = false
+            },
+            onDismiss = { showPlaylistSheet = false },
+        )
+    }
 
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
         // Gradient from dominant color to black
@@ -149,36 +176,24 @@ fun TrackInfoScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // Download button
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.White.copy(alpha = 0.12f))
-                    .clickable { /* TODO: download */ }
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Download, "Baixar", tint = Color.White, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        "Baixar faixa em alta qualidade no dispositivo",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
+            // Actions
+            TrackInfoAction(
+                icon = if (state.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                label = if (state.isFavorite) "Remover dos favoritos" else "Adicionar aos favoritos",
+                onClick = onFavoriteClick,
+            )
+            TrackInfoAction(
+                icon = Icons.AutoMirrored.Filled.PlaylistAdd,
+                label = "Adicionar à playlist",
+                onClick = { showPlaylistSheet = true },
+            )
+            TrackInfoAction(
+                icon = Icons.Filled.Download,
+                label = "Baixar faixa em alta qualidade no dispositivo",
+                onClick = { /* TODO: download */ },
+            )
 
-            Spacer(Modifier.height(32.dp))
-
-            // Footer
-            Column(Modifier.padding(horizontal = 24.dp)) {
-                Text("Vtzin x", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(2.dp))
-                Text("@2026 VzTune v1.0.0", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.35f))
-            }
+            AppCredits()
 
             Spacer(Modifier.height(40.dp))
         }
@@ -191,5 +206,72 @@ private fun InfoRow(label: String, value: String) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
         Text(value, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+    }
+}
+
+/** Rounded action button of the track info screen. */
+@Composable
+private fun TrackInfoAction(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(50))
+            .background(Color.White.copy(alpha = 0.12f))
+            .clickable { onClick() }
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(10.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+/** Lists the user's local playlists; tapping one adds the track to it. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddToPlaylistSheet(
+    playlists: List<LocalPlaylist>,
+    onPick: (LocalPlaylist) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color(0xFF141414)) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 24.dp)) {
+            Text(
+                "Adicionar à playlist",
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+            )
+            if (playlists.isEmpty()) {
+                Text(
+                    "Você ainda não criou nenhuma playlist. Crie uma na Biblioteca, em \"Suas playlists\".",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                )
+            }
+            playlists.forEach { playlist ->
+                Text(
+                    playlist.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onPick(playlist) }
+                        .padding(horizontal = 24.dp, vertical = 14.dp),
+                )
+            }
+        }
     }
 }

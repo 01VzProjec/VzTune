@@ -44,10 +44,13 @@ import com.vztechcore.vztune.core.domain.music.Album
 import com.vztechcore.vztune.core.domain.music.ArtistListKind
 import com.vztechcore.vztune.core.domain.music.Playlist
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.ui.components.AppCredits
+import com.vztechcore.vztune.ui.components.CoverCard
+import com.vztechcore.vztune.ui.components.DetailTopBar
+import com.vztechcore.vztune.ui.components.LocalNowPlaying
+import com.vztechcore.vztune.ui.components.TrackListRow
 import com.vztechcore.vztune.ui.components.VzLoading
-import com.vztechcore.vztune.ui.screens.artist.ArtistSongRow
-import com.vztechcore.vztune.ui.screens.artist.ArtistSquareCard
-import com.vztechcore.vztune.ui.screens.medialist.MediaListCircleButton
+import com.vztechcore.vztune.ui.components.playbackOf
 import com.vztechcore.vztune.ui.screens.medialist.MediaListVideoCard
 
 /** How many items before the end the next page starts loading. */
@@ -73,34 +76,7 @@ fun ArtistListScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // ---------- Top bar ----------
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MediaListCircleButton(Icons.Filled.Close, "Fechar", onBackClick)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = state.title,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = state.artistName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+        DetailTopBar(title = state.title, subtitle = state.artistName, onBackClick = onBackClick)
 
         // ---------- Content ----------
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -144,9 +120,8 @@ private fun SongsList(
         modifier = Modifier.fillMaxSize(),
     ) {
         items(state.tracks, key = { "${it.source.name}_${it.id}" }) { track ->
-            ArtistSongRow(
+            TrackListRow(
                 track = track,
-                number = null,
                 onClick = { onTrackClick(track) },
                 onMoreClick = { onTrackInfoClick(track) },
             )
@@ -154,6 +129,7 @@ private fun SongsList(
         if (state.isLoadingMore) {
             item(key = "loading_more") { LoadingMoreIndicator() }
         }
+        item(key = "credits") { AppCredits() }
     }
 }
 
@@ -165,6 +141,7 @@ private fun VideosList(
     onTrackInfoClick: (Track) -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val nowPlaying = LocalNowPlaying.current
     LoadMoreEffect(listState, state.itemCount, onLoadMore)
 
     LazyColumn(
@@ -174,10 +151,11 @@ private fun VideosList(
         modifier = Modifier.fillMaxSize(),
     ) {
         items(state.tracks, key = { "${it.source.name}_${it.id}" }) { track ->
+            val playback = nowPlaying.playbackOf(track)
             MediaListVideoCard(
                 track = track,
-                isPlaying = false,
-                isPaused = false,
+                isPlaying = playback.isPlaying,
+                isPaused = playback.isPaused,
                 onClick = { onTrackClick(track) },
                 onMoreClick = { onTrackInfoClick(track) },
             )
@@ -185,6 +163,7 @@ private fun VideosList(
         if (state.isLoadingMore) {
             item(key = "loading_more") { LoadingMoreIndicator() }
         }
+        item(key = "credits") { AppCredits() }
     }
 }
 
@@ -207,7 +186,7 @@ private fun CoversGrid(
         modifier = Modifier.fillMaxSize(),
     ) {
         items(state.albums, key = { "album_${it.id}" }) { album ->
-            ArtistSquareCard(
+            CoverCard(
                 imageUrl = album.thumbnailUrl,
                 title = album.title,
                 subtitle = if (state.kind == ArtistListKind.SINGLES) "Single" else "Álbum",
@@ -216,7 +195,7 @@ private fun CoversGrid(
             )
         }
         items(state.playlists, key = { "playlist_${it.id}" }) { playlist ->
-            ArtistSquareCard(
+            CoverCard(
                 imageUrl = playlist.thumbnailUrl,
                 title = playlist.title,
                 subtitle = playlist.owner,
@@ -227,6 +206,7 @@ private fun CoversGrid(
         if (state.isLoadingMore) {
             item(key = "loading_more", span = { GridItemSpan(maxLineSpan) }) { LoadingMoreIndicator() }
         }
+        item(key = "credits", span = { GridItemSpan(maxLineSpan) }) { AppCredits() }
     }
 }
 

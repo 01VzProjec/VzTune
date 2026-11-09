@@ -8,7 +8,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.vztechcore.vztune.ui.components.LocalNowPlaying
+import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.navigation.AppNavHost
 import com.vztechcore.vztune.ui.screens.main.MainViewModel
 import com.vztechcore.vztune.ui.theme.VzTuneTheme

@@ -21,12 +21,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Track
-import com.vztechcore.vztune.ui.components.LocalNowPlaying
-import com.vztechcore.vztune.ui.components.MediaThumbnail
-import com.vztechcore.vztune.ui.components.ThumbnailShape
-import com.vztechcore.vztune.ui.components.TrackSubtitle
-import com.vztechcore.vztune.ui.components.VzChipRow
-import com.vztechcore.vztune.ui.components.playbackOf
+import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
+import com.vztechcore.vztune.ui.components.player.MediaThumbnail
+import com.vztechcore.vztune.ui.components.player.ThumbnailShape
+import com.vztechcore.vztune.ui.components.text.TrackSubtitle
+import com.vztechcore.vztune.ui.components.text.VzChipRow
+import com.vztechcore.vztune.ui.components.player.playbackOf
 
 @Composable
 internal fun MediaListTrackRow(

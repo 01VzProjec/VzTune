@@ -42,6 +42,54 @@ internal object YTMusicTextUtils {
         RegexOption.IGNORE_CASE,
     )
 
+    // ================= OWNER VALIDATION =================
+    // Rules for deciding whether a string coming from a YTMusic header is a real
+    // account name (channel / playlist creator) and not metadata.
+    //
+    // These used to live inside MediaListViewModel (app layer); moved here so the
+    // parsing/validation logic stays in one place (:data) and the UI never has to
+    // reimplement it.
+
+    private val PLACEHOLDER_OWNERS = setOf(
+        "criador", "creator", "unknown", "desconhecido", "álbum", "album", "playlist",
+    )
+
+    private val NON_OWNER_PATTERNS = listOf(
+        // "20 songs", "12 músicas", "1.2M views", "3 mil visualizações"
+        Regex(
+            "^\\d[\\d.,]*\\s*(k|m|b|mil|mi|bi)?\\s*(músicas?|musicas?|songs?|faixas?|tracks?|itens?|items?|vídeos?|videos?|episódios?|episodes?|views?|visualizações|visualizacoes|reproduções|reproducoes|plays?)\\b.*$",
+            RegexOption.IGNORE_CASE,
+        ),
+        // "1h 30min", "1 hora e 20 minutos total"
+        Regex(
+            "^(\\d+\\s*(h|hr|hrs|hora|horas|hour|hours|min|mins|minuto|minutos|minute|minutes|s|seg|sec)\\b[\\s,.]*(e|and)?[\\s,.]*)+(total)?$",
+            RegexOption.IGNORE_CASE,
+        ),
+    )
+
+    /**
+     * True when [text] looks like a real account name (channel / playlist owner).
+     *
+     * Rejects:
+     *  - counts ("12 songs", "3 vídeos")
+     *  - view counts ("1.2M views", "3 mil visualizações")
+     *  - total durations ("1h 30min")
+     *  - placeholders ("Creator", "Unknown", "Álbum", "Playlist")
+     *  - pure numbers
+     */
+    fun isValidOwnerName(text: String?): Boolean {
+        if (text.isNullOrBlank()) return false
+
+        val trimmed = text.trim()
+        if (trimmed.lowercase() in PLACEHOLDER_OWNERS) return false
+        if (NON_OWNER_PATTERNS.any { it.matches(trimmed) }) return false
+        if (trimmed.toIntOrNull() != null) return false
+
+        return true
+    }
+
+    // ================= PLAYLIST IDS =================
+
     /**
      * Normalizes playlist browse IDs so InnerTube browse endpoint can load their tracks.
      * YouTube playlists (PL...) or regular IDs (YT:PL...) need to be prefixed with VL (VLPL...).
@@ -53,6 +101,8 @@ internal object YTMusicTextUtils {
         }
         return id
     }
+
+    // ================= JSON WALKERS =================
 
     fun walk(node: Any?, block: (JSONObject) -> Unit) {
         when (node) {
@@ -76,6 +126,8 @@ internal object YTMusicTextUtils {
         }
         return null
     }
+
+    // ================= TEXT EXTRACTION =================
 
     fun runsText(container: JSONObject?): String {
         val runs = container?.optJSONObject("text")?.optJSONArray("runs")
@@ -117,6 +169,8 @@ internal object YTMusicTextUtils {
         return null
     }
 
+    // ================= PARSING =================
+
     fun parseDuration(text: String?): Long {
         if (text.isNullOrBlank()) return 0L
         return try {
@@ -133,6 +187,8 @@ internal object YTMusicTextUtils {
             0L
         }
     }
+
+    // ================= CLASSIFIERS =================
 
     fun isDuration(text: String): Boolean = DURATION_REGEX.matches(text)
     fun isYear(text: String): Boolean = YEAR_REGEX.matches(text)

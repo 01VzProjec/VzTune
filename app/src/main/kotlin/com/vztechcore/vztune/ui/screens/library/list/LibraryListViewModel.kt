@@ -6,9 +6,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.data.player.PlayerController
-import com.vztechcore.vztune.data.prefs.FavoriteTracksStore
-import com.vztechcore.vztune.data.prefs.FollowedArtistsStore
-import com.vztechcore.vztune.data.prefs.MostPlayedStore
+import com.vztechcore.vztune.data.prefs.store.FavoriteTracksStore
+import com.vztechcore.vztune.data.prefs.store.FollowedArtistsStore
+import com.vztechcore.vztune.data.prefs.store.MostPlayedStore
 import com.vztechcore.vztune.ui.navigation.Routes
 import com.vztechcore.vztune.ui.screens.library.LibraryShortcut
 import dagger.hilt.android.lifecycle.HiltViewModel

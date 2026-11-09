@@ -1,6 +1,6 @@
 package com.vztechcore.vztune.ui.screens.trackinfo
 
-import com.vztechcore.vztune.data.prefs.LocalPlaylist
+import com.vztechcore.vztune.data.prefs.models.LocalPlaylist
 
 data class TrackInfoUiState(
     val isLoading: Boolean = true,

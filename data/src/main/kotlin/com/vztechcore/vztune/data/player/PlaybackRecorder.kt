@@ -1,7 +1,7 @@
 package com.vztechcore.vztune.data.player
 
-import com.vztechcore.vztune.data.prefs.MostPlayedStore
-import com.vztechcore.vztune.data.prefs.PlayHistoryStore
+import com.vztechcore.vztune.data.prefs.store.MostPlayedStore
+import com.vztechcore.vztune.data.prefs.store.PlayHistoryStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNotNull

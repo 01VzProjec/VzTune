@@ -16,11 +16,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Track
-import com.vztechcore.vztune.data.prefs.FollowedArtist
+import com.vztechcore.vztune.data.prefs.models.FollowedArtist
 import com.vztechcore.vztune.ui.components.AppCredits
-import com.vztechcore.vztune.ui.components.ArtistCircleCard
-import com.vztechcore.vztune.ui.components.DetailTopBar
-import com.vztechcore.vztune.ui.components.TrackListRow
+import com.vztechcore.vztune.ui.components.cards.ArtistCircleCard
+import com.vztechcore.vztune.ui.components.layout.DetailTopBar
+import com.vztechcore.vztune.ui.components.cards.TrackListRow
 import com.vztechcore.vztune.ui.screens.library.EmptyMessage
 
 /** List opened from a Library shortcut card: tracks (favorites, most played) or followed artists. */

@@ -18,12 +18,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,21 +30,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchSuggestions
-import com.vztechcore.vztune.ui.components.NowPlayingThumbnail
+import com.vztechcore.vztune.ui.components.player.MediaThumbnail
+import com.vztechcore.vztune.ui.components.player.ThumbnailShape
 
-/**
- * Suggestions while typing, in this order:
- *   1. first 2 search suggestions
- *   2. up to 3 tracks matching the input
- *   3. the remaining search suggestions
- */
 @Composable
 fun SearchAutocomplete(
     query: String,
@@ -94,10 +83,10 @@ private fun SuggestSongRow(track: Track, onClick: () -> Unit) {
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        NowPlayingThumbnail(
-            model = track.thumbnailUrl,
-            isPlaying = false,
-            modifier = Modifier.size(44.dp),
+        MediaThumbnail(
+            imageUrl = track.thumbnailUrl,
+            shape = ThumbnailShape.SQUARE,
+            size = 44.dp,
             cornerRadius = 6.dp,
         )
         Spacer(Modifier.width(12.dp))
@@ -139,7 +128,6 @@ private fun SuggestQueryRow(query: String, currentInput: String, onPick: () -> U
         )
         Spacer(Modifier.width(12.dp))
 
-        // Highlight matching text (bold)
         val annotated = buildAnnotatedString {
             val start = query.indexOf(currentInput, ignoreCase = true)
             if (start != -1 && currentInput.isNotBlank()) {

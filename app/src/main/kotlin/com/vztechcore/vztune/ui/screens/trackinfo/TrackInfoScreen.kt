@@ -10,7 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.graphics.vector.ImageVector
-import com.vztechcore.vztune.data.prefs.LocalPlaylist
+import com.vztechcore.vztune.data.prefs.models.LocalPlaylist
 import com.vztechcore.vztune.ui.components.AppCredits
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.background
@@ -36,7 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.vztechcore.vztune.ui.components.rememberDominantColor
+import com.vztechcore.vztune.ui.components.feedback.rememberDominantColor
 import android.content.Intent
 import android.net.Uri
 

@@ -20,19 +20,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchHit
-import com.vztechcore.vztune.ui.components.LocalNowPlaying
-import com.vztechcore.vztune.ui.components.MediaThumbnail
-import com.vztechcore.vztune.ui.components.ThumbnailShape
 import com.vztechcore.vztune.ui.components.AppCredits
-import com.vztechcore.vztune.ui.components.VzLoading
-import com.vztechcore.vztune.ui.components.TrackSubtitle
+import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
+import com.vztechcore.vztune.ui.components.player.MediaThumbnail
+import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
+import com.vztechcore.vztune.ui.components.player.ThumbnailShape
+import com.vztechcore.vztune.ui.components.text.TrackSubtitle
+import com.vztechcore.vztune.ui.components.feedback.VzLoading
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -283,8 +282,12 @@ private fun RowCard(
     onMoreClick: () -> Unit, showMoreButton: Boolean, mosaic: List<String> = emptyList(),
 ) {
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onClick() }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (mosaic.size >= 4) PlaylistMosaic(mosaic)
-        else MediaThumbnail(imageUrl = imageUrl, shape = shape, size = 56.dp, cornerRadius = 8.dp, isPlaying = isPlaying, isPaused = isPaused)
+        if (mosaic.size >= 4) {
+            // PlaylistMosaic (shared component) doesn't fix its own size — the caller defines it.
+            Box(Modifier.size(56.dp)) { PlaylistMosaic(mosaic) }
+        } else {
+            MediaThumbnail(imageUrl = imageUrl, shape = shape, size = 56.dp, cornerRadius = 8.dp, isPlaying = isPlaying, isPaused = isPaused)
+        }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleSmall, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -298,22 +301,6 @@ private fun RowCard(
         if (showMoreButton) {
             IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlaylistMosaic(thumbnails: List<String>) {
-    Box(Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.06f))) {
-        Row(Modifier.fillMaxSize()) {
-            Column(Modifier.weight(1f)) {
-                AsyncImage(model = thumbnails.getOrNull(0), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
-                AsyncImage(model = thumbnails.getOrNull(2), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
-            }
-            Column(Modifier.weight(1f)) {
-                AsyncImage(model = thumbnails.getOrNull(1), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
-                AsyncImage(model = thumbnails.getOrNull(3), null, contentScale = ContentScale.Crop, modifier = Modifier.weight(1f).fillMaxWidth())
             }
         }
     }

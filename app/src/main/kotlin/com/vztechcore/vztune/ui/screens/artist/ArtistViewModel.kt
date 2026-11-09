@@ -6,8 +6,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.data.player.PlayerController
-import com.vztechcore.vztune.data.prefs.FollowedArtist
-import com.vztechcore.vztune.data.prefs.FollowedArtistsStore
+import com.vztechcore.vztune.data.prefs.models.FollowedArtist
+import com.vztechcore.vztune.data.prefs.store.FollowedArtistsStore
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel

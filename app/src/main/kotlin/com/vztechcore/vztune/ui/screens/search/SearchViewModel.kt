@@ -9,8 +9,8 @@ import com.vztechcore.vztune.core.domain.search.SearchResult
 import com.vztechcore.vztune.core.domain.search.SearchSuggestions
 import com.vztechcore.vztune.data.music.MusicRepository
 import com.vztechcore.vztune.data.player.PlayerController
-import com.vztechcore.vztune.data.prefs.RecentPlayedStore
-import com.vztechcore.vztune.data.prefs.SearchHistoryStore
+import com.vztechcore.vztune.data.prefs.store.RecentPlayedStore
+import com.vztechcore.vztune.data.prefs.store.SearchHistoryStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay

@@ -24,7 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.vztechcore.vztune.ui.components.PlaylistMosaic
+import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
 import com.vztechcore.vztune.core.domain.search.SortOrder
 
 @Composable

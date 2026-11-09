@@ -7,11 +7,12 @@ import androidx.navigation.toRoute
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
 import com.vztechcore.vztune.data.player.PlayerController
-import com.vztechcore.vztune.data.prefs.FavoritePlaylistsStore
-import com.vztechcore.vztune.data.prefs.LocalPlaylistsStore
-import com.vztechcore.vztune.data.prefs.MediaListPreferencesStore
-import com.vztechcore.vztune.data.prefs.StoredPlaylist
-import com.vztechcore.vztune.data.prefs.isLocalPlaylistId
+import com.vztechcore.vztune.data.prefs.store.FavoritePlaylistsStore
+import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
+import com.vztechcore.vztune.data.prefs.store.MediaListPreferencesStore
+import com.vztechcore.vztune.data.prefs.models.StoredPlaylist
+import com.vztechcore.vztune.data.prefs.models.isLocalPlaylistId
+import com.vztechcore.vztune.data.ytmusic.YTMusicOwnerValidator
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -58,7 +59,6 @@ class MediaListViewModel @Inject constructor(
         }
     }
 
-    /** Local playlists live on the device: follow the store so added tracks show up right away. */
     private fun observeLocalPlaylist() {
         viewModelScope.launch {
             localStore.playlist(route.id).collect { playlist ->
@@ -93,12 +93,11 @@ class MediaListViewModel @Inject constructor(
                 if (route.isAlbum) {
                     val album = ytMusicRepository.browseAlbum(route.id)
 
-                    // Reject numbers and junk, prefer the subtitle coming from the card
                     val resolvedArtist = listOfNotNull(
                         album.artist,
                         route.subtitle,
-                        _uiState.value.subtitle
-                    ).firstOrNull { isValidOwner(it) }
+                        _uiState.value.subtitle,
+                    ).firstOrNull { YTMusicOwnerValidator.isValidOwnerName(it) }
 
                     _uiState.update {
                         it.copy(
@@ -120,15 +119,11 @@ class MediaListViewModel @Inject constructor(
                         playlist = ytMusicRepository.browsePlaylist(route.id)
                     }
 
-                    // Same here: pick the first candidate that is a REAL account name.
-                    // If YTM returns "20 songs" or "1.2M views", isValidOwner rejects it.
-                    // The owner coming from the card (same name shown in the list) wins over
-                    // the parsed header, which may contain labels such as "21 itens".
                     val resolvedOwner = listOfNotNull(
                         route.subtitle,
                         playlist.owner,
-                        _uiState.value.subtitle
-                    ).firstOrNull { isValidOwner(it) }
+                        _uiState.value.subtitle,
+                    ).firstOrNull { YTMusicOwnerValidator.isValidOwnerName(it) }
 
                     _uiState.update {
                         it.copy(
@@ -156,24 +151,6 @@ class MediaListViewModel @Inject constructor(
                 _uiState.update { it.copy(isLoading = false, errorMessage = "Erro: ${e.message}") }
             }
         }
-    }
-
-    /**
-     * Checks whether a string looks like a real account/channel name.
-     * Rejects counts ("12 songs"), view counts ("1.2M views"), total durations
-     * ("1h 30min") and placeholders ("Creator", "Unknown").
-     * Uses whole-string patterns so real names containing "min", "hora", "total"
-     * or "track" (e.g. "Admin Music", "Total Tracks") are no longer discarded.
-     */
-    private fun isValidOwner(text: String?): Boolean {
-        if (text.isNullOrBlank()) return false
-
-        val trimmed = text.trim()
-        if (trimmed.lowercase() in PLACEHOLDER_OWNERS) return false
-        if (NON_OWNER_PATTERNS.any { it.matches(trimmed) }) return false
-        if (trimmed.toIntOrNull() != null) return false
-
-        return true
     }
 
     fun onTabSelected(tab: MediaListTab) {
@@ -222,7 +199,6 @@ class MediaListViewModel @Inject constructor(
         else playerController.playQueue(listOf(track), 0)
     }
 
-    /** Adds the playlist to the Library favorites, or removes it when already there. */
     fun onFavoriteClick() {
         val state = _uiState.value
         viewModelScope.launch {
@@ -238,9 +214,7 @@ class MediaListViewModel @Inject constructor(
         }
     }
 
-    fun onPlayNextClick(track: Track) {
-        playerController.addToQueueNext(track)
-    }
+    fun onPlayNextClick(track: Track) { playerController.addToQueueNext(track) }
 
     fun onPlayAll() {
         val sorted = _uiState.value.getDisplayTracks()
@@ -252,20 +226,3 @@ class MediaListViewModel @Inject constructor(
         if (shuffled.isNotEmpty()) playerController.playQueue(shuffled, 0)
     }
 }
-
-private val PLACEHOLDER_OWNERS = setOf(
-    "criador", "creator", "unknown", "desconhecido", "álbum", "album", "playlist",
-)
-
-private val NON_OWNER_PATTERNS = listOf(
-    // "20 songs", "12 músicas", "1.2M views", "3 mil visualizações"
-    Regex(
-        "^\\d[\\d.,]*\\s*(k|m|b|mil|mi|bi)?\\s*(músicas?|musicas?|songs?|faixas?|tracks?|itens?|items?|vídeos?|videos?|episódios?|episodes?|views?|visualizações|visualizacoes|reproduções|reproducoes|plays?)\\b.*$",
-        RegexOption.IGNORE_CASE,
-    ),
-    // "1h 30min", "1 hora e 20 minutos total"
-    Regex(
-        "^(\\d+\\s*(h|hr|hrs|hora|horas|hour|hours|min|mins|minuto|minutos|minute|minutes|s|seg|sec)\\b[\\s,.]*(e|and)?[\\s,.]*)+(total)?$",
-        RegexOption.IGNORE_CASE,
-    ),
-)

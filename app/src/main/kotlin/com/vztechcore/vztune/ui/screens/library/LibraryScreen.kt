@@ -43,10 +43,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.ui.components.AppCredits
-import com.vztechcore.vztune.ui.components.CoverCard
-import com.vztechcore.vztune.ui.components.SectionHeader
-import com.vztechcore.vztune.ui.components.TrackListRow
-import com.vztechcore.vztune.ui.components.VzChipRow
+import com.vztechcore.vztune.ui.components.cards.CoverCard
+import com.vztechcore.vztune.ui.components.layout.SectionHeader
+import com.vztechcore.vztune.ui.components.cards.TrackListRow
+import com.vztechcore.vztune.ui.components.text.VzChipRow
 
 /** Library: 5 tabs (overview, VzTune playlists, own playlists, favorites, downloads). */
 @Composable

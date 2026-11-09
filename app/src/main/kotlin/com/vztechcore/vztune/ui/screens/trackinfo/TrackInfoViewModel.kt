@@ -7,8 +7,8 @@ import androidx.navigation.toRoute
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.data.music.MusicRepository
-import com.vztechcore.vztune.data.prefs.FavoriteTracksStore
-import com.vztechcore.vztune.data.prefs.LocalPlaylistsStore
+import com.vztechcore.vztune.data.prefs.store.FavoriteTracksStore
+import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel

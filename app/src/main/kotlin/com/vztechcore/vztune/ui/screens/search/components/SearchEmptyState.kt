@@ -24,8 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.vztechcore.vztune.ui.components.SkeletonColumn
-import com.vztechcore.vztune.ui.components.fadeOutBottom
+import com.vztechcore.vztune.ui.components.feedback.SkeletonColumn
+import com.vztechcore.vztune.ui.components.feedback.fadeOutBottom
 
 /** Loading state: skeleton cards (like YouTube / YT Music) that fade out at the bottom. */
 @Composable

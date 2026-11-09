@@ -45,12 +45,12 @@ import com.vztechcore.vztune.core.domain.music.ArtistListKind
 import com.vztechcore.vztune.core.domain.music.Playlist
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.ui.components.AppCredits
-import com.vztechcore.vztune.ui.components.CoverCard
-import com.vztechcore.vztune.ui.components.DetailTopBar
-import com.vztechcore.vztune.ui.components.LocalNowPlaying
-import com.vztechcore.vztune.ui.components.TrackListRow
-import com.vztechcore.vztune.ui.components.VzLoading
-import com.vztechcore.vztune.ui.components.playbackOf
+import com.vztechcore.vztune.ui.components.cards.CoverCard
+import com.vztechcore.vztune.ui.components.layout.DetailTopBar
+import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
+import com.vztechcore.vztune.ui.components.cards.TrackListRow
+import com.vztechcore.vztune.ui.components.feedback.VzLoading
+import com.vztechcore.vztune.ui.components.player.playbackOf
 import com.vztechcore.vztune.ui.screens.medialist.MediaListVideoCard
 
 /** How many items before the end the next page starts loading. */

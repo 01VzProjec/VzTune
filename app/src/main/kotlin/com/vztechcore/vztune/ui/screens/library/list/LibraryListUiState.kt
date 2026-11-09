@@ -1,7 +1,7 @@
 package com.vztechcore.vztune.ui.screens.library.list
 
 import com.vztechcore.vztune.core.domain.music.Track
-import com.vztechcore.vztune.data.prefs.FollowedArtist
+import com.vztechcore.vztune.data.prefs.models.FollowedArtist
 import com.vztechcore.vztune.ui.screens.library.LibraryShortcut
 
 data class LibraryListUiState(

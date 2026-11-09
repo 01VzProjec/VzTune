@@ -1,6 +1,8 @@
 package com.vztechcore.vztune.data.player
 
 import android.content.Context
+import android.content.Intent
+import android.os.Build
 import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -110,6 +112,13 @@ class PlayerController @Inject constructor(
     private var preloadedUrl: String? = null
     private var preloadedIndex: Int = -1
 
+    /**
+     * How many consecutive stream resolutions failed.
+     * After [MAX_CONSECUTIVE_FAILURES] we stop auto-skipping to avoid
+     * hammering YouTube on a totally broken network.
+     */
+    private var consecutiveFailures = 0
+
     init {
         scope.launch {
             while (true) {
@@ -129,6 +138,7 @@ class PlayerController @Inject constructor(
 
     fun playQueue(tracks: List<Track>, startIndex: Int) {
         if (tracks.isEmpty()) return
+        consecutiveFailures = 0
         val safeIndex = startIndex.coerceIn(0, tracks.lastIndex)
         queue = tracks
         currentIndex = safeIndex
@@ -199,7 +209,14 @@ class PlayerController @Inject constructor(
     }
 
     private fun playAtIndex(idx: Int) {
-        val track = queue.getOrNull(idx) ?: return
+        if (idx !in queue.indices) {
+            _state.update {
+                it.copy(isLoading = false, isPlaying = false, error = "Fim da fila.")
+            }
+            return
+        }
+
+        val track = queue[idx]
         val cachedUrl = if (preloadedIndex == idx) preloadedUrl else null
         preloadedUrl = null
         preloadedIndex = -1
@@ -220,9 +237,25 @@ class PlayerController @Inject constructor(
         loadJob = scope.launch {
             val url = cachedUrl ?: musicRepository.getStreamUrl(track)
             if (url.isNullOrBlank()) {
-                _state.update { it.copy(isLoading = false, error = "Falha ao carregar áudio.") }
+                consecutiveFailures++
+                if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                    Log.e(TAG, "Too many consecutive failures (${consecutiveFailures}), stopping")
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            isPlaying = false,
+                            error = "Falha ao carregar áudio (${consecutiveFailures} tentativas).",
+                        )
+                    }
+                    return@launch
+                }
+                Log.w(TAG, "Stream URL null for ${track.id} '${track.title}', auto-skipping")
+                scope.launch { playAtIndex(idx + 1) }
                 return@launch
             }
+
+            consecutiveFailures = 0
+            ensureForegroundService()
             try {
                 player.stop()
                 player.clearMediaItems()
@@ -232,6 +265,24 @@ class PlayerController @Inject constructor(
             } catch (e: Exception) {
                 _state.update { it.copy(isLoading = false, error = e.message) }
             }
+        }
+    }
+
+    /**
+     * Boots [PlaybackService] as a foreground service. Without this, Android
+     * will kill the process a few seconds after the app leaves the foreground,
+     * and audio stops silently — no notification, no playback.
+     */
+    private fun ensureForegroundService() {
+        runCatching {
+            val intent = Intent(context, PlaybackService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }.onFailure { e ->
+            Log.w(TAG, "Failed to start PlaybackService: ${e.message}")
         }
     }
 
@@ -256,5 +307,6 @@ class PlayerController @Inject constructor(
         const val TAG = "VzTunePlayer"
         const val CACHE_SIZE_BYTES = 200L * 1024 * 1024
         const val PRELOAD_WINDOW_MS = 10_000L
+        const val MAX_CONSECUTIVE_FAILURES = 3
     }
 }

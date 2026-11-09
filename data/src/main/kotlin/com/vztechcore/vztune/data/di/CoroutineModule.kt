@@ -1,4 +1,4 @@
-package com.vztechcore.vztune.di
+package com.vztechcore.vztune.data.di
 
 import dagger.Module
 import dagger.Provides
@@ -14,6 +14,9 @@ import javax.inject.Singleton
  * Marks a CoroutineScope that lives for the entire process lifetime.
  * Use this for singletons that must keep running even when every ViewModel
  * and Activity is destroyed (e.g. [com.vztechcore.vztune.data.player.PlaybackRecorder]).
+ *
+ * Lives in :data (not :app) because its only consumer is a :data singleton.
+ * :app is not allowed to depend on :data internals, and :data cannot see :app.
  */
 @Qualifier
 @Retention(AnnotationRetention.BINARY)

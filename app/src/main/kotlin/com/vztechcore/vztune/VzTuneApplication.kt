@@ -12,7 +12,6 @@ class VzTuneApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // Lives for the whole process — survives Activity / ViewModel destruction.
         playbackRecorder.start()
     }
 }

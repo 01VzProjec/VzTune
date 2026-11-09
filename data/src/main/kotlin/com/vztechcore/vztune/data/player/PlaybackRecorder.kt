@@ -1,9 +1,9 @@
 package com.vztechcore.vztune.data.player
 
 import com.vztechcore.vztune.core.domain.player.PlaybackState
+import com.vztechcore.vztune.data.di.ApplicationScope
 import com.vztechcore.vztune.data.prefs.store.MostPlayedStore
 import com.vztechcore.vztune.data.prefs.store.PlayHistoryStore
-import com.vztechcore.vztune.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import javax.inject.Inject

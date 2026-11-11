@@ -1,7 +1,9 @@
 package com.vztechcore.vztune.ui.components.layout
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -20,13 +22,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.ui.screens.medialist.MediaListCircleButton
 
-/** Top bar of the simple detail screens: close button, title and optional subtitle. */
+/** Top bar of the simple detail screens: close button, title, optional subtitle and trailing actions. */
 @Composable
 fun DetailTopBar(
     title: String,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    actions: @Composable RowScope.() -> Unit = {},
 ) {
     Row(
         modifier
@@ -56,5 +59,10 @@ fun DetailTopBar(
                 )
             }
         }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            content = actions,
+        )
     }
 }

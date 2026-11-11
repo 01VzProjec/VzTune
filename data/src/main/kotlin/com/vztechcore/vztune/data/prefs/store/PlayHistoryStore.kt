@@ -9,4 +9,4 @@ import javax.inject.Singleton
 @Singleton
 class PlayHistoryStore @Inject constructor(
     @ApplicationContext context: Context,
-) : TrackListStore(context, storeName = "vztune_play_history", maxItems = 50)
+) : TrackListStore(context, storeName = "vztune_play_history", maxItems = 30)

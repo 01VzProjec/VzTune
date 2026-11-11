@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
@@ -38,7 +37,6 @@ class LibraryListViewModel @Inject constructor(
     private val tracksFlow: Flow<List<Track>> = when (shortcut) {
         LibraryShortcut.FAVORITES -> favoriteTracksStore.tracks
         LibraryShortcut.MOST_PLAYED -> mostPlayedStore.tracks
-        // Downloads are not implemented yet, and followed artists have no tracks.
         LibraryShortcut.FOLLOWED, LibraryShortcut.DOWNLOADS -> flowOf(emptyList())
     }
 
@@ -54,5 +52,18 @@ class LibraryListViewModel @Inject constructor(
         val index = tracks.indexOfFirst { it.id == track.id && it.source == track.source }
         if (index >= 0) playerController.playQueue(tracks, index)
         else playerController.playQueue(listOf(track), 0)
+    }
+
+    /** Shuffle icon — plays a random track from the list. */
+    fun onShuffleClick() {
+        val tracks = uiState.value.tracks
+        if (tracks.isEmpty()) return
+        playerController.playQueue(tracks.shuffled(), 0)
+    }
+
+    /** Blue Play pill — plays from the first track. */
+    fun onPlayAllClick() {
+        val tracks = uiState.value.tracks
+        if (tracks.isNotEmpty()) playerController.playQueue(tracks, 0)
     }
 }

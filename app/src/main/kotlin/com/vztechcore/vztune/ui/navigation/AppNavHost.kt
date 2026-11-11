@@ -134,6 +134,8 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onArtistClick = { artist ->
                             navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl))
                         },
+                        onShuffleClick = vm::onShuffleClick,
+                        onPlayAllClick = vm::onPlayAllClick,
                     )
                 }
 

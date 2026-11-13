@@ -22,11 +22,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -43,6 +45,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 
+// Same navy background used by MediaListSortSheet / other submenus
+private val SheetBackground = Color(0xFF141B30)
+private val AccentBlue = Color(0xFF60A5FA)
+
 /** Bottom sheet to create a local playlist: cover picker + name input + confirm/cancel. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,7 +63,11 @@ fun CreatePlaylistSheet(
         if (uri != null) cover = uri
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color(0xFF141414)) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = SheetBackground,
+        contentColor = Color.White,
+    ) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -79,9 +89,11 @@ fun CreatePlaylistSheet(
                     Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(alpha = 0.1f))
+                        .background(Color.White.copy(alpha = 0.08f))
                         .clickable {
-                            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            picker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
                         },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -93,15 +105,28 @@ fun CreatePlaylistSheet(
                             modifier = Modifier.size(56.dp),
                         )
                     } else {
-                        Icon(Icons.Filled.AddPhotoAlternate, contentDescription = "Escolher capa", tint = Color.White)
+                        Icon(
+                            Icons.Filled.AddPhotoAlternate,
+                            contentDescription = "Escolher capa",
+                            tint = Color.White.copy(alpha = 0.8f),
+                        )
                     }
                 }
                 Spacer(Modifier.width(12.dp))
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    placeholder = { Text("Nome da playlist") },
+                    placeholder = { Text("Nome da playlist", color = Color.White.copy(alpha = 0.5f)) },
                     singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedBorderColor = AccentBlue,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
+                        cursorColor = Color.White,
+                    ),
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -115,9 +140,22 @@ fun CreatePlaylistSheet(
 
             Spacer(Modifier.height(20.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) { Text("Cancelar") }
+                TextButton(onClick = onDismiss) {
+                    Text("Cancelar", color = Color.White.copy(alpha = 0.75f))
+                }
                 Spacer(Modifier.width(8.dp))
-                Button(onClick = { onConfirm(name, cover) }, enabled = name.isNotBlank()) { Text("Confirmar") }
+                Button(
+                    onClick = { onConfirm(name, cover) },
+                    enabled = name.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentBlue,
+                        contentColor = Color(0xFF0A0F1E),
+                        disabledContainerColor = Color.White.copy(alpha = 0.12f),
+                        disabledContentColor = Color.White.copy(alpha = 0.4f),
+                    ),
+                ) {
+                    Text("Confirmar", fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

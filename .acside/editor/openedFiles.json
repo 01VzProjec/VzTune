@@ -119,7 +119,37 @@
           "line": 134
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/LibraryScreen.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 10870,
+          "line": 304
+        },
+        "start": {
+          "column": 1,
+          "index": 10870,
+          "line": 304
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/CreatePlaylistSheet.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 6837,
+          "line": 161
+        },
+        "start": {
+          "column": 1,
+          "index": 6837,
+          "line": 161
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/CreatePlaylistSheet.kt"
 }

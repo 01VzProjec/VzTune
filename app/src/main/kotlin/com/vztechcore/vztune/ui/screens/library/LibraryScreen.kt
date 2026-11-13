@@ -206,6 +206,7 @@ private fun ShortcutCard(shortcut: LibraryShortcut, onClick: () -> Unit, modifie
     }
 }
 
+
 // ============================== PLAYLIST GRIDS ==============================
 
 private sealed interface GridCell {
@@ -221,7 +222,7 @@ private sealed interface GridCell {
 }
 
 /**
- * Grid of playlists, 2 per row. Shared by "Suas playlists" (with the create card),
+ * Grid of playlists, now 3 per row. Shared by "Suas playlists" (with the create card),
  * "Playlists favoritas" and "Playlists baixadas".
  */
 private fun LazyListScope.playlistGrid(
@@ -236,10 +237,15 @@ private fun LazyListScope.playlistGrid(
         items.forEach { add(GridCell.Playlist(it)) }
     }
 
-    items(cells.chunked(2), key = { row -> row.joinToString("|") { it.key } }) { row ->
+    // 3 columns per row
+    val columns = 3
+
+    items(cells.chunked(columns), key = { row -> row.joinToString("|") { it.key } }) { row ->
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             row.forEach { cell ->
                 Box(Modifier.weight(1f)) {
@@ -255,7 +261,10 @@ private fun LazyListScope.playlistGrid(
                     }
                 }
             }
-            if (row.size == 1) Spacer(Modifier.weight(1f))
+            // Fill the remaining slots so the last row keeps the same card width
+            repeat(columns - row.size) {
+                Spacer(Modifier.weight(1f))
+            }
         }
     }
 
@@ -266,25 +275,31 @@ private fun LazyListScope.playlistGrid(
 private fun CreatePlaylistCard(onClick: () -> Unit) {
     Column(
         Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .clickable { onClick() },
     ) {
         Box(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .background(Color.White.copy(alpha = 0.08f)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(48.dp))
+            Icon(
+                Icons.Filled.Add,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(32.dp),
+            )
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             text = "Nova playlist",
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.labelMedium,
             color = Color.White,
             fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
         )
     }
 }

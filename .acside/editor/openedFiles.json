@@ -155,12 +155,12 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 11520,
+          "index": 11511,
           "line": 331
         },
         "start": {
           "column": 1,
-          "index": 11520,
+          "index": 11511,
           "line": 331
         }
       }
@@ -215,13 +215,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 8761,
-          "line": 225
+          "index": 2298,
+          "line": 68
         },
         "start": {
           "column": 1,
-          "index": 8761,
-          "line": 225
+          "index": 2298,
+          "line": 68
         }
       }
     },
@@ -230,12 +230,12 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 2784,
+          "index": 2761,
           "line": 74
         },
         "start": {
           "column": 1,
-          "index": 2784,
+          "index": 2761,
           "line": 74
         }
       }
@@ -260,13 +260,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 8524,
-          "line": 217
+          "index": 8734,
+          "line": 225
         },
         "start": {
           "column": 1,
-          "index": 8524,
-          "line": 217
+          "index": 8734,
+          "line": 225
         }
       }
     },
@@ -389,7 +389,22 @@
           "line": 268
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/download/DownloadState.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 702,
+          "line": 26
+        },
+        "start": {
+          "column": 1,
+          "index": 702,
+          "line": 26
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/prefs/models/DownloadedTrack.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/player/PlayerController.kt"
 }

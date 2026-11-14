@@ -249,7 +249,7 @@ class PlayerController @Inject constructor(
 
         loadJob?.cancel()
         loadJob = scope.launch {
-            // Prioriza o arquivo local baixado (funciona 100% offline e instantâneo)
+            // Prioritize local downloaded file for instant offline playback
             val localFile = downloadedTracksStore.getLocalFile(track)
             val mediaUri: Uri? = if (localFile != null) {
                 Uri.fromFile(localFile)

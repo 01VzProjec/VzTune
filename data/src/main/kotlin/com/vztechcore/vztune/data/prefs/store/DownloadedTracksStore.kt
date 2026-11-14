@@ -13,8 +13,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Gerencia o registro persistente das faixas baixadas no dispositivo
- * e sincroniza com os arquivos físicos salvos em [filesDir/downloads].
+ * Manages the persistent registry of downloaded tracks on the device
+ * and synchronizes with physical audio files stored under [filesDir/downloads].
  */
 @Singleton
 class DownloadedTracksStore @Inject constructor(
@@ -26,27 +26,27 @@ class DownloadedTracksStore @Inject constructor(
     serializer = DownloadedTrack.serializer(),
     idOf = { it.key },
 ) {
-    /** Pasta privada do app onde os áudios offline são armazenados. */
+    /** Private app directory where offline audio files are saved. */
     val downloadsDir: File
         get() = File(context.filesDir, "downloads").apply {
             if (!exists()) mkdirs()
         }
 
-    /** Chaves de todas as faixas já baixadas (e com arquivo físico válido). */
+    /** Keys of all tracks currently downloaded and valid on disk. */
     val downloadedKeys: Flow<Set<String>> = items.map { list ->
         list.filter { File(it.filePath).exists() }
             .map { it.key }
             .toSet()
     }
 
-    /** Faixas baixadas nos últimos 7 dias (exibidas com destaque de conclusão). */
+    /** Tracks completed within the last 7 days. */
     val recentCompleted7Days: Flow<List<DownloadedTrack>> = items.map { list ->
         val now = System.currentTimeMillis()
         list.filter { File(it.filePath).exists() && it.isWithinSevenDays(now) }
             .sortedByDescending { it.downloadedAtMs }
     }
 
-    /** Retorna o arquivo local da faixa se ela estiver baixada e existir no disco. */
+    /** Returns the local audio file if the track is downloaded and non-empty on disk. */
     suspend fun getLocalFile(track: Track): File? {
         val key = StoredTrack.from(track).key
         val entry = items.first().firstOrNull { it.key == key } ?: return null
@@ -54,12 +54,12 @@ class DownloadedTracksStore @Inject constructor(
         return if (file.exists() && file.length() > 0L) file else null
     }
 
-    /** Salva ou atualiza o registro de uma faixa baixada no topo da lista. */
+    /** Saves or updates a downloaded track record at the top of the list. */
     suspend fun saveDownload(downloadedTrack: DownloadedTrack) {
         addFirst(downloadedTrack)
     }
 
-    /** Remove o registro do DataStore e apaga o arquivo físico do aparelho. */
+    /** Removes the DataStore record and deletes the physical audio file from storage. */
     suspend fun deleteDownload(track: Track) {
         val key = StoredTrack.from(track).key
         deleteByKey(key)

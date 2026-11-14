@@ -24,27 +24,35 @@ import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Gerenciador central de downloads do VzTune.
- * Extrai o fluxo de áudio via [MusicRepository] (NewPipe) e faz o download em streaming
- * com [OkHttpClient], salvando de forma atômica (.tmp -> arquivo final) no armazenamento interno.
+ * Central download manager for VzTune.
+ * Extracts the audio stream via [MusicRepository] (NewPipe) and streams bytes
+ * with [OkHttpClient], atomically renaming (.tmp -> final file) in internal storage.
  */
 @Singleton
 class TrackDownloader @Inject constructor(
     private val musicRepository: MusicRepository,
     private val downloadedTracksStore: DownloadedTracksStore,
-    private val okHttpClient: OkHttpClient,
 ) {
+    private val okHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .build()
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val activeJobs = ConcurrentHashMap<String, Job>()
 
     private val _downloads = MutableStateFlow<Map<String, TrackDownloadItem>>(emptyMap())
     val downloads: StateFlow<Map<String, TrackDownloadItem>> = _downloads.asStateFlow()
 
-    /** Emite a faixa sempre que um novo download é iniciado (para exibir o banner na UI). */
+    /** Emits the track whenever a new download starts so the UI can show a floating banner. */
     private val _startedEvent = MutableSharedFlow<Track>(extraBufferCapacity = 8)
     val startedEvent: SharedFlow<Track> = _startedEvent.asSharedFlow()
 
@@ -92,7 +100,7 @@ class TrackDownloader @Inject constructor(
                 it.copy(status = DownloadStatus.DOWNLOADING, progress = 0f, errorMessage = null)
             }
 
-            // 1. Extrai URL direta e tipo MIME via NewPipe
+            // 1. Resolve direct stream URL and MIME type via NewPipe
             val streamUrl = track.streamUrl?.takeIf { it.isNotBlank() }
                 ?: musicRepository.getStreamUrl(track)
                 ?: throw IllegalStateException("Não foi possível obter o link de áudio.")
@@ -105,7 +113,7 @@ class TrackDownloader @Inject constructor(
             val finalFile = File(dir, "$key.$extension")
             tempFile = File(dir, "$key.$extension.tmp").apply { if (exists()) delete() }
 
-            // 2. Baixa o stream via OkHttp em blocos de 8KB
+            // 2. Download stream via OkHttp in 8KB chunks
             val request = Request.Builder()
                 .url(streamUrl)
                 .header("User-Agent", "Mozilla/5.0")
@@ -167,14 +175,14 @@ class TrackDownloader @Inject constructor(
                 )
                 downloadedTracksStore.saveDownload(savedRecord)
 
-                // Remove dos downloads ativos pois agora já consta na lista de baixados (7 dias)
+                // Remove from active downloads once saved to the 7-day completed store
                 _downloads.update { it - key }
             }
         } catch (ce: CancellationException) {
             tempFile?.delete()
             throw ce
         } catch (e: Exception) {
-            Log.e(TAG, "Falha ao baixar '${track.title}': ${e.message}", e)
+            Log.e(TAG, "Failed to download '${track.title}': ${e.message}", e)
             tempFile?.delete()
             updateItem(key) {
                 it.copy(

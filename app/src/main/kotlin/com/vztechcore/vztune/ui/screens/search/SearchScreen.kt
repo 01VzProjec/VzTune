@@ -23,6 +23,7 @@ import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchFilter
 import com.vztechcore.vztune.core.domain.search.SearchHit
+import com.vztechcore.vztune.data.download.TrackDownloadItem
 import com.vztechcore.vztune.data.prefs.models.LocalPlaylist
 import com.vztechcore.vztune.data.prefs.models.StoredTrack
 import com.vztechcore.vztune.ui.components.sheets.TrackOptionsSheet
@@ -41,6 +42,7 @@ fun SearchScreen(
     state: SearchUiState,
     favoriteKeys: Set<String> = emptySet(),
     downloadedKeys: Set<String> = emptySet(),
+    activeDownloads: Map<String, TrackDownloadItem> = emptyMap(),
     localPlaylists: List<LocalPlaylist> = emptyList(),
     onQueryChange: (String) -> Unit,
     onFocusChanged: (Boolean) -> Unit,
@@ -56,6 +58,7 @@ fun SearchScreen(
     onToggleFavorite: (Track) -> Unit = {},
     onAddToPlaylist: (playlistId: String, track: Track) -> Unit = { _, _ -> },
     onDownloadClick: (Track) -> Unit = {},
+    onOpenDownloadsScreen: () -> Unit = {},
     onOpenArtistByName: (String) -> Unit = {},
     onTrackInfoClick: (Track) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -67,10 +70,12 @@ fun SearchScreen(
         val key = StoredTrack.from(track).key
         val isFav = key in favoriteKeys
         val isDownloaded = key in downloadedKeys
+        val downloadItem = activeDownloads[key]
         TrackOptionsSheet(
             track = track,
             isFavorite = isFav,
             isDownloaded = isDownloaded,
+            downloadItem = downloadItem,
             localPlaylists = localPlaylists,
             onDismiss = { selectedTrackForMenu = null },
             onToggleFavorite = { onToggleFavorite(track) },
@@ -78,6 +83,7 @@ fun SearchScreen(
             onPlayNext = { onPlayNextClick(track) },
             onAddToQueue = { onAddToQueueClick(track) },
             onDownloadClick = { onDownloadClick(track) },
+            onOpenDownloadsScreen = onOpenDownloadsScreen,
             onOpenArtist = { artistName -> onOpenArtistByName(artistName) },
             onTrackInfoClick = { onTrackInfoClick(track) },
         )

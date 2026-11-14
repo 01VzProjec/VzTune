@@ -164,6 +164,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     val state by vm.uiState.collectAsStateWithLifecycle()
                     val favoriteKeys by vm.favoriteKeys.collectAsStateWithLifecycle()
                     val downloadedKeys by vm.downloadedKeys.collectAsStateWithLifecycle()
+                    val activeDownloads by vm.activeDownloads.collectAsStateWithLifecycle()
                     val localPlaylists by vm.localPlaylists.collectAsStateWithLifecycle()
 
                     LaunchedEffect(Unit) {
@@ -202,6 +203,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         state = state,
                         favoriteKeys = favoriteKeys,
                         downloadedKeys = downloadedKeys,
+                        activeDownloads = activeDownloads,
                         localPlaylists = localPlaylists,
                         onQueryChange = vm::onQueryChange,
                         onFocusChanged = vm::onFocusChanged,
@@ -217,6 +219,11 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onToggleFavorite = vm::onToggleFavorite,
                         onAddToPlaylist = vm::onAddToPlaylist,
                         onDownloadClick = vm::onDownloadClick,
+                        onOpenDownloadsScreen = {
+                            if (!isDownloadsScreen) {
+                                navController.navigate(Routes.Downloads)
+                            }
+                        },
                         onOpenArtistByName = vm::onOpenArtistByName,
                         onTrackInfoClick = { navController.navigateToTrackInfo(it) },
                     )

@@ -7,6 +7,7 @@ import com.vztechcore.vztune.core.domain.search.SearchFilter
 import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.core.domain.search.SearchResult
 import com.vztechcore.vztune.core.domain.search.SearchSuggestions
+import com.vztechcore.vztune.data.download.TrackDownloadItem
 import com.vztechcore.vztune.data.download.TrackDownloader
 import com.vztechcore.vztune.data.music.MusicRepository
 import com.vztechcore.vztune.data.player.PlayerController
@@ -68,6 +69,8 @@ class SearchViewModel @Inject constructor(
 
     val downloadedKeys: StateFlow<Set<String>> = downloadedTracksStore.downloadedKeys
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    val activeDownloads: StateFlow<Map<String, TrackDownloadItem>> = trackDownloader.downloads
 
     val localPlaylists: StateFlow<List<LocalPlaylist>> = localPlaylistsStore.items
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -199,7 +202,15 @@ class SearchViewModel @Inject constructor(
     }
 
     fun onToggleFavorite(track: Track) {
-        viewModelScope.launch { favoriteTracksStore.toggle(track) }
+        val key = StoredTrack.from(track).key
+        val wasFavorite = key in favoriteKeys.value
+        viewModelScope.launch {
+            favoriteTracksStore.toggle(track)
+            // Automatically save offline on device when favoriting a track
+            if (!wasFavorite && key !in downloadedKeys.value) {
+                trackDownloader.download(track)
+            }
+        }
     }
 
     fun onAddToPlaylist(playlistId: String, track: Track) {

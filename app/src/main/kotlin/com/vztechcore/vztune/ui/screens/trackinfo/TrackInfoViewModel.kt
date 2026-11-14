@@ -84,7 +84,13 @@ class TrackInfoViewModel @Inject constructor(
     }
 
     fun onFavoriteClick() {
-        viewModelScope.launch { favoriteTracksStore.toggle(track) }
+        val wasFavorite = _uiState.value.isFavorite
+        viewModelScope.launch {
+            favoriteTracksStore.toggle(track)
+            if (!wasFavorite && !isDownloaded.value) {
+                trackDownloader.download(track)
+            }
+        }
     }
 
     fun onAddToPlaylist(playlistId: String) {

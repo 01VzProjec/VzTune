@@ -18,6 +18,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.data.download.DownloadStatus
+import com.vztechcore.vztune.data.download.TrackDownloadItem
 import com.vztechcore.vztune.data.prefs.models.LocalPlaylist
 import com.vztechcore.vztune.ui.components.player.MediaThumbnail
 import com.vztechcore.vztune.ui.components.player.ThumbnailShape
@@ -35,12 +37,25 @@ import com.vztechcore.vztune.ui.icons.media.PlaylistAdd
 import com.vztechcore.vztune.ui.icons.media.QueueMusic
 import com.vztechcore.vztune.ui.icons.player.PlayCircleFilled
 
+private val DownloadGreen = Color(0xFF4ADE80)
+
+private val ShareTaglines = listOf(
+    "Ouvindo no VzTune 🎧",
+    "Escuta essa no VzTune ✨",
+    "Essa tá batendo forte no VzTune 🔥",
+    "Descobri essa no VzTune 🎵",
+    "Dá o play no VzTune 🎶",
+    "Som pesado direto do VzTune 🚀",
+    "Recomendo ouvir no VzTune 💜",
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrackOptionsSheet(
     track: Track,
     isFavorite: Boolean,
     isDownloaded: Boolean = false,
+    downloadItem: TrackDownloadItem? = null,
     localPlaylists: List<LocalPlaylist> = emptyList(),
     onDismiss: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -48,6 +63,7 @@ fun TrackOptionsSheet(
     onPlayNext: () -> Unit,
     onAddToQueue: () -> Unit,
     onDownloadClick: () -> Unit = {},
+    onOpenDownloadsScreen: () -> Unit = {},
     onOpenArtist: (artistName: String) -> Unit = {},
     onTrackInfoClick: () -> Unit,
 ) {
@@ -94,7 +110,7 @@ fun TrackOptionsSheet(
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp),
         ) {
-            // Cabeçalho com capa, título e subtítulo da faixa
+            // Header with thumbnail, title and artist subtitle
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -132,7 +148,7 @@ fun TrackOptionsSheet(
                 color = Color.White.copy(alpha = 0.08f),
             )
 
-            // 1. Favoritar / Desfavoritar
+            // 1. Favorite / Unfavorite (also auto-downloads when favorited)
             OptionItem(
                 icon = if (isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
                 iconTint = if (isFavorite) Color(0xFFEF4444) else Color.White,
@@ -143,14 +159,14 @@ fun TrackOptionsSheet(
                 },
             )
 
-            // 2. Adicionar à playlist
+            // 2. Add to playlist
             OptionItem(
                 icon = VzIcons.PlaylistAdd,
                 label = "Adicionar à playlist",
                 onClick = { showPlaylistPicker = true },
             )
 
-            // 3. Reproduzir como próxima faixa
+            // 3. Play next
             OptionItem(
                 icon = VzIcons.PlayCircleFilled,
                 label = "Reproduzir como próxima faixa",
@@ -160,7 +176,7 @@ fun TrackOptionsSheet(
                 },
             )
 
-            // 4. Adicionar à fila
+            // 4. Add to queue
             OptionItem(
                 icon = VzIcons.QueueMusic,
                 label = "Adicionar à fila",
@@ -170,18 +186,23 @@ fun TrackOptionsSheet(
                 },
             )
 
-            // 5. Baixar faixa
-            OptionItem(
-                icon = if (isDownloaded) VzIcons.DownloadDone else VzIcons.Download,
-                iconTint = if (isDownloaded) Color(0xFF4ADE80) else Color.White,
-                label = if (isDownloaded) "Faixa baixada" else "Baixar faixa",
+            // 5. Download track (Idle / Downloading with circular green ring / Completed with check)
+            DownloadOptionItem(
+                isDownloaded = isDownloaded,
+                downloadItem = downloadItem,
                 onClick = {
-                    onDownloadClick()
+                    val isInProgress = downloadItem?.status == DownloadStatus.DOWNLOADING ||
+                        downloadItem?.status == DownloadStatus.QUEUED
                     onDismiss()
+                    if (isInProgress) {
+                        onOpenDownloadsScreen()
+                    } else {
+                        onDownloadClick()
+                    }
                 },
             )
 
-            // 6. Compartilhar faixa
+            // 6. Share track with random VzTune tagline + official YouTube / YT Music link
             OptionItem(
                 icon = VzIcons.Share,
                 label = "Compartilhar",
@@ -191,10 +212,12 @@ fun TrackOptionsSheet(
                     } else {
                         "https://music.youtube.com/watch?v=${track.id}"
                     }
+                    val tagline = ShareTaglines.random()
+                    val shareBody = "$tagline\n${track.title} — ${track.artist}\n$url"
                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
                         putExtra(Intent.EXTRA_SUBJECT, track.title)
-                        putExtra(Intent.EXTRA_TEXT, "${track.title} - ${track.artist}\n$url")
+                        putExtra(Intent.EXTRA_TEXT, shareBody)
                     }
                     val shareIntent = Intent.createChooser(sendIntent, "Compartilhar faixa")
                     context.startActivity(shareIntent)
@@ -202,7 +225,7 @@ fun TrackOptionsSheet(
                 },
             )
 
-            // 7. Ir para o artista / Ir para os artistas
+            // 7. Go to artist(s)
             if (artists.isNotEmpty()) {
                 val hasMultipleArtists = artists.size > 1
                 OptionItem(
@@ -219,7 +242,7 @@ fun TrackOptionsSheet(
                 )
             }
 
-            // 8. Ver informações da faixa (tela existente)
+            // 8. Track details screen
             OptionItem(
                 icon = VzIcons.MoreHoriz,
                 label = "Ver informações da faixa",
@@ -233,10 +256,107 @@ fun TrackOptionsSheet(
 }
 
 @Composable
+private fun DownloadOptionItem(
+    isDownloaded: Boolean,
+    downloadItem: TrackDownloadItem?,
+    onClick: () -> Unit,
+) {
+    val isInProgress = downloadItem?.status == DownloadStatus.DOWNLOADING ||
+        downloadItem?.status == DownloadStatus.QUEUED
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 20.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        when {
+            isInProgress && downloadItem != null -> {
+                Box(
+                    modifier = Modifier.size(26.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (downloadItem.status == DownloadStatus.QUEUED || downloadItem.totalBytes <= 0L) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.fillMaxSize(),
+                            color = DownloadGreen,
+                            trackColor = DownloadGreen.copy(alpha = 0.2f),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        CircularProgressIndicator(
+                            progress = { downloadItem.progress.coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxSize(),
+                            color = DownloadGreen,
+                            trackColor = DownloadGreen.copy(alpha = 0.2f),
+                            strokeWidth = 2.dp,
+                        )
+                    }
+                    Icon(
+                        imageVector = VzIcons.Download,
+                        contentDescription = null,
+                        tint = DownloadGreen,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+                Spacer(Modifier.width(14.dp))
+                Text(
+                    text = if (downloadItem.totalBytes > 0L) {
+                        "Baixando faixa (${downloadItem.progressPercent}%)"
+                    } else {
+                        "Baixando faixa"
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White.copy(alpha = 0.55f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            isDownloaded -> {
+                Icon(
+                    imageVector = VzIcons.DownloadDone,
+                    contentDescription = null,
+                    tint = DownloadGreen,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(16.dp))
+                Text(
+                    text = "Faixa baixada",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            else -> {
+                Icon(
+                    imageVector = VzIcons.Download,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(16.dp))
+                Text(
+                    text = "Baixar faixa",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun OptionItem(
     icon: ImageVector,
     label: String,
     iconTint: Color = Color.White,
+    textColor: Color = Color.White,
     onClick: () -> Unit,
 ) {
     Row(
@@ -256,7 +376,7 @@ private fun OptionItem(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
-            color = Color.White,
+            color = textColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

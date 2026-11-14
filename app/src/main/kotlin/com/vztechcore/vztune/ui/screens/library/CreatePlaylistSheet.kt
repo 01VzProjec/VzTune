@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,12 +42,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.AddPhotoAlternate
 
-// Same navy background used by MediaListSortSheet / other submenus
 private val SheetBackground = Color(0xFF141B30)
 private val AccentBlue = Color(0xFF60A5FA)
 
-/** Bottom sheet to create a local playlist: cover picker + name input + confirm/cancel. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreatePlaylistSheet(
@@ -106,7 +104,7 @@ fun CreatePlaylistSheet(
                         )
                     } else {
                         Icon(
-                            Icons.Filled.AddPhotoAlternate,
+                            VzIcons.AddPhotoAlternate,
                             contentDescription = "Escolher capa",
                             tint = Color.White.copy(alpha = 0.8f),
                         )

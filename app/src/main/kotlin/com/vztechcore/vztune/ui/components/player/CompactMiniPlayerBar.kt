@@ -174,7 +174,7 @@ fun CompactMiniPlayerBar(
                 )
             } else {
                 Icon(
-                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    imageVector = if (isPlaying) VzIcons.Pause else VzIcons.Play,
                     contentDescription = if (isPlaying) "Pausar" else "Tocar",
                     tint = Color.White,
                     modifier = Modifier.size(24.dp),
@@ -184,7 +184,7 @@ fun CompactMiniPlayerBar(
 
         IconButton(onClick = onNextClick, modifier = Modifier.size(36.dp)) {
             Icon(
-                imageVector = Icons.Filled.SkipNext,
+                imageVector = VzIcons.SkipNext,
                 contentDescription = "Próxima",
                 tint = Color.White,
                 modifier = Modifier.size(24.dp),

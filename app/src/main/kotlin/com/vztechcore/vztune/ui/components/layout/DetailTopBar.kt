@@ -38,7 +38,7 @@ fun DetailTopBar(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MediaListCircleButton(Icons.Filled.Close, "Fechar", onBackClick)
+        MediaListCircleButton(VzIcons.Close, "Fechar", onBackClick)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(

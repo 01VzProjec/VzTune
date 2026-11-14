@@ -103,7 +103,7 @@ internal fun MediaListSearchOverlay(
                     )
                     if (query.isNotEmpty()) {
                         Box(Modifier.size(24.dp).clip(CircleShape).clickable { query = "" }, contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Close, contentDescription = "Limpar", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                            Icon(VzIcons.Close, contentDescription = "Limpar", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                         }
                     }
                 }
@@ -113,7 +113,7 @@ internal fun MediaListSearchOverlay(
                         .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape).clickable { onClose() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Close, contentDescription = "Fechar busca", tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(VzIcons.Close, contentDescription = "Fechar busca", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
             }
 

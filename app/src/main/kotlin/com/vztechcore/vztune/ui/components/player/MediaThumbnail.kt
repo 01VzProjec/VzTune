@@ -128,7 +128,7 @@ internal fun PlayingOverlayPaused(clipShape: Shape) {
             .background(Color.Black.copy(alpha = 0.5f)),
     ) {
         Icon(
-            imageVector = Icons.Filled.Pause,
+            imageVector = VzIcons.Pause,
             contentDescription = "Pausado",
             tint = Color.White,
             modifier = Modifier

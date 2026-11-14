@@ -99,7 +99,7 @@ fun SearchBar(
                         textFieldValue = TextFieldValue("")
                         onQueryChange("")
                     }, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Filled.Close, "Limpar", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                        Icon(VzIcons.Close, "Limpar", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                     }
                 }
             }

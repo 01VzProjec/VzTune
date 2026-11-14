@@ -93,7 +93,7 @@ fun TrackInfoScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBackClick) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Voltar", tint = Color.White)
+                    Icon(VzIcons.ArrowBack, "Voltar", tint = Color.White)
                 }
                 Spacer(Modifier.width(8.dp))
                 Text("Sobre a faixa", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
@@ -178,17 +178,17 @@ fun TrackInfoScreen(
 
             // Actions
             TrackInfoAction(
-                icon = if (state.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                icon = if (state.isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteFilledBorder,
                 label = if (state.isFavorite) "Remover dos favoritos" else "Adicionar aos favoritos",
                 onClick = onFavoriteClick,
             )
             TrackInfoAction(
-                icon = Icons.AutoMirrored.Filled.PlaylistAdd,
+                icon = VzIcons.PlaylistAdd,
                 label = "Adicionar à playlist",
                 onClick = { showPlaylistSheet = true },
             )
             TrackInfoAction(
-                icon = Icons.Filled.Download,
+                icon = VzIcons.Download,
                 label = "Baixar faixa em alta qualidade no dispositivo",
                 onClick = { /* TODO: download */ },
             )

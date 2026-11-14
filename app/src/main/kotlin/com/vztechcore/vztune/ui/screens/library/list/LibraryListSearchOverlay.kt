@@ -211,7 +211,7 @@ private fun SearchInputBar(
                     Modifier.size(24.dp).clip(CircleShape).clickable { onQueryChange("") },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Close, "Limpar", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                    Icon(VzIcons.Close, "Limpar", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -221,7 +221,7 @@ private fun SearchInputBar(
                 .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape).clickable { onClose() },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.Close, "Fechar busca", tint = Color.White, modifier = Modifier.size(22.dp))
+            Icon(VzIcons.Close, "Fechar busca", tint = Color.White, modifier = Modifier.size(22.dp))
         }
     }
 }

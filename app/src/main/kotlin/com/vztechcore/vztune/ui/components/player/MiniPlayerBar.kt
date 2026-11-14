@@ -116,17 +116,17 @@ fun MiniPlayerBar(
         Spacer(Modifier.width(4.dp))
 
         IconButton(onClick = onPrevClick, modifier = Modifier.size(34.dp)) {
-            Icon(Icons.Filled.SkipPrevious, "Anterior", tint = Color.White, modifier = Modifier.size(22.dp))
+            Icon(VzIcons.SkipPrevious, "Anterior", tint = Color.White, modifier = Modifier.size(22.dp))
         }
         IconButton(onClick = onPlayPauseClick, modifier = Modifier.size(38.dp)) {
             if (isLoading) {
                 CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
             } else {
-                Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (isPlaying) "Pausar" else "Tocar", tint = Color.White, modifier = Modifier.size(26.dp))
+                Icon(if (isPlaying) VzIcons.Pause else VzIcons.Play, if (isPlaying) "Pausar" else "Tocar", tint = Color.White, modifier = Modifier.size(26.dp))
             }
         }
         IconButton(onClick = onNextClick, modifier = Modifier.size(34.dp)) {
-            Icon(Icons.Filled.SkipNext, "Próxima", tint = Color.White, modifier = Modifier.size(22.dp))
+            Icon(VzIcons.SkipNext, "Próxima", tint = Color.White, modifier = Modifier.size(22.dp))
         }
     }
 }

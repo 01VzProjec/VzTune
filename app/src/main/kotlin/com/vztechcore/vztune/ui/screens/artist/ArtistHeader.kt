@@ -99,7 +99,7 @@ internal fun ArtistHeader(
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                MediaListCircleButton(Icons.Filled.Close, "Fechar", onBackClick)
+                MediaListCircleButton(VzIcons.Close, "Fechar", onBackClick)
             }
 
             // Circular artist photo
@@ -165,7 +165,7 @@ internal fun ArtistHeader(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    Icons.Filled.Shuffle,
+                    VzIcons.Shuffle,
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(20.dp),
@@ -191,7 +191,7 @@ internal fun ArtistHeader(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = if (state.isFollowing) Icons.Filled.Check else Icons.Filled.PersonAdd,
+                    imageVector = if (state.isFollowing) VzIcons.Check else Icons.Filled.PersonAdd,
                     contentDescription = if (state.isFollowing) "Deixar de seguir" else "Seguir artista",
                     tint = Color.White,
                     modifier = Modifier.size(20.dp),

@@ -1,137 +1,32 @@
 {
   "allFiles": [
     {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/player/PlaybackService.kt",
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppTab.kt",
       "selection": {
         "end": {
           "column": 1,
-          "index": 2780,
-          "line": 80
+          "index": 896,
+          "line": 20
         },
         "start": {
           "column": 1,
-          "index": 2780,
-          "line": 80
+          "index": 896,
+          "line": 20
         }
       }
     },
     {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/layout/DetailTopBar.kt",
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/LibraryUiState.kt",
       "selection": {
         "end": {
           "column": 1,
-          "index": 2555,
-          "line": 67
+          "index": 2211,
+          "line": 48
         },
         "start": {
           "column": 1,
-          "index": 2555,
-          "line": 67
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/list/LibraryListSearchOverlay.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 9918,
-          "line": 226
-        },
-        "start": {
-          "column": 1,
-          "index": 9918,
-          "line": 226
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/list/LibraryListScreen.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 6950,
-          "line": 178
-        },
-        "start": {
-          "column": 1,
-          "index": 6950,
-          "line": 178
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/list/LibraryListViewModel.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 2871,
-          "line": 68
-        },
-        "start": {
-          "column": 1,
-          "index": 2871,
-          "line": 68
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/prefs/store/TrackListStore.kt",
-      "selection": {
-        "end": {
-          "column": 0,
-          "index": 1089,
-          "line": 31
-        },
-        "start": {
-          "column": 0,
-          "index": 1089,
-          "line": 31
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/prefs/store/PlayHistoryStore.kt",
-      "selection": {
-        "end": {
-          "column": 77,
-          "index": 456,
-          "line": 11
-        },
-        "start": {
-          "column": 77,
-          "index": 456,
-          "line": 11
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt",
-      "selection": {
-        "end": {
-          "column": 7,
-          "index": 6709,
-          "line": 134
-        },
-        "start": {
-          "column": 7,
-          "index": 6709,
-          "line": 134
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/LibraryScreen.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 10870,
-          "line": 304
-        },
-        "start": {
-          "column": 1,
-          "index": 10870,
-          "line": 304
+          "index": 2211,
+          "line": 48
         }
       }
     },
@@ -140,13 +35,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 6837,
-          "line": 161
+          "index": 6673,
+          "line": 159
         },
         "start": {
           "column": 1,
-          "index": 6837,
-          "line": 161
+          "index": 6673,
+          "line": 159
         }
       }
     }

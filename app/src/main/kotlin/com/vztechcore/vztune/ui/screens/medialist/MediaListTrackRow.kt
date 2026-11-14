@@ -40,7 +40,7 @@ internal fun MediaListTrackRow(
         if (dragOffset > 0f) {
             val iconAlpha = (dragOffset / 100f).coerceIn(0.4f, 1f)
             Box(Modifier.fillMaxHeight().width(dragOffset.dp.coerceAtMost(80.dp)).padding(start = 16.dp), contentAlignment = Alignment.CenterStart) {
-                Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Tocar em seguida", tint = Color.White.copy(alpha = iconAlpha), modifier = Modifier.size(24.dp))
+                Icon(VzIcons.QueueMusic, contentDescription = "Tocar em seguida", tint = Color.White.copy(alpha = iconAlpha), modifier = Modifier.size(24.dp))
             }
         }
         Row(
@@ -78,10 +78,10 @@ internal fun MediaListTrackRow(
                 TrackSubtitle(track = track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
             }
             IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
+                Icon(VzIcons.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
             }
             if (showDragHandle) {
-                Icon(Icons.Filled.DragHandle, contentDescription = "Arrastar", tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(32.dp).padding(4.dp).then(dragHandleModifier))
+                Icon(VzIcons.DragHandle, contentDescription = "Arrastar", tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(32.dp).padding(4.dp).then(dragHandleModifier))
             }
         }
     }
@@ -104,7 +104,7 @@ internal fun MediaListVideoCard(
                 TrackSubtitle(track = track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
             }
             IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
+                Icon(VzIcons.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
             }
         }
     }

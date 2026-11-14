@@ -203,7 +203,7 @@ private fun HistoryRow(
         )
         IconButton(onClick = onRemove, modifier = Modifier.size(36.dp)) {
             Icon(
-                imageVector = Icons.Filled.Close,
+                imageVector = VzIcons.Close,
                 contentDescription = "Remover",
                 tint = Color.White.copy(alpha = 0.35f),
                 modifier = Modifier.size(16.dp),

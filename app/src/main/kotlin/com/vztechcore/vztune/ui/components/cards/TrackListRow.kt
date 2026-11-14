@@ -97,7 +97,7 @@ fun TrackListRow(
         }
         IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
             Icon(
-                Icons.Filled.MoreVert,
+                VzIcons.MoreVert,
                 contentDescription = "Mais",
                 tint = Color.White.copy(alpha = 0.7f),
             )

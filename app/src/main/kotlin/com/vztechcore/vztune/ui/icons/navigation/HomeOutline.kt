@@ -1,0 +1,4 @@
+package com.vztechcore.vztune.ui.icons.navigation
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.vztechcore.vztune.ui.icons.VzIcons
+val VzIcons.HomeOutline: ImageVector get() = VzIcons.icon("HomeOutline", "M6,19H9V14q0-0.43 0.29-0.71Q9.58,13 10,13h4q0.43,0 0.71,0.29T15,14v5h3V10L12,5.5L6,10v9ZM4,19V10Q4,9.52 4.21,9.1Q4.43,8.67 4.8,8.4l6-4.5Q11.33,3.5 12,3.5t1.2,0.4l6,4.5q0.38,0.28 0.59,0.7Q20,9.52 20,10v9q0,0.82-0.59,1.41T18,21H14q-0.42,0-0.71-0.29Q13,20.43 13,20V15H11v5q0,0.43-0.29,0.71T10,21H6q-0.82,0-1.41-0.59T4,19Zm8-6.75Z")

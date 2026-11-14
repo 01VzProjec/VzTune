@@ -227,7 +227,7 @@ fun VideoResultCard(hit: SearchHit.VideoHit, onClick: () -> Unit, onMoreClick: (
                 TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
             }
             IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
+                Icon(VzIcons.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
             }
         }
     }
@@ -248,7 +248,7 @@ private fun SwipeableRow(
                 contentAlignment = Alignment.CenterStart,
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                    imageVector = VzIcons.QueueMusic,
                     contentDescription = "Tocar em seguida",
                     tint = Color.White.copy(alpha = iconAlpha),
                     modifier = Modifier.size(24.dp),
@@ -300,7 +300,7 @@ private fun RowCard(
         }
         if (showMoreButton) {
             IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
+                Icon(VzIcons.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
             }
         }
     }

@@ -79,7 +79,7 @@ fun LibraryListScreen(
                 } else {
                     // Favoritos / Mais ouvidas / Baixadas:
                     // aleatório + Play (balão azul) + lupa
-                    TopBarCircleButton(Icons.Filled.Shuffle, "Tocar faixa aleatória", onShuffleClick)
+                    TopBarCircleButton(VzIcons.Shuffle, "Tocar faixa aleatória", onShuffleClick)
                     TopBarPlayPill(onClick = onPlayAllClick)
                     TopBarCircleButton(Icons.Filled.Search, "Pesquisar") { showSearchOverlay = true }
                 }
@@ -167,7 +167,7 @@ private fun TopBarPlayPill(onClick: () -> Unit) {
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(18.dp))
+        Icon(VzIcons.Play, null, tint = Color.White, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(3.dp))
         Text(
             "Play",

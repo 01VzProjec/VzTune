@@ -287,7 +287,7 @@ private fun CreatePlaylistCard(onClick: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Filled.Add,
+                VzIcons.Add,
                 contentDescription = null,
                 tint = Color.White,
                 modifier = Modifier.size(32.dp),

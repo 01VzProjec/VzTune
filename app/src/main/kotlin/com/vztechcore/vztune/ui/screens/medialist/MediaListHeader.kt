@@ -87,17 +87,17 @@ internal fun MediaListExpandedHeader(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                MediaListCircleButton(Icons.Filled.Close, "Fechar", onBackClick)
+                MediaListCircleButton(VzIcons.Close, "Fechar", onBackClick)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (state.showFavorite) {
                         MediaListCircleButton(
-                            icon = if (state.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            icon = if (state.isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteFilledBorder,
                             contentDescription = if (state.isFavorite) "Remover dos favoritos" else "Favoritar playlist",
                             onClick = onFavoriteClick,
                         )
                     }
                     MediaListCircleButton(Icons.Filled.Search, "Pesquisar", onSearchClick)
-                    MediaListCircleButton(Icons.Filled.MoreVert, "Mais", { })
+                    MediaListCircleButton(VzIcons.MoreVert, "Mais", { })
                 }
             }
         }
@@ -179,7 +179,7 @@ internal fun MediaListExpandedHeader(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    Icons.Filled.PlayArrow,
+                    VzIcons.Play,
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(20.dp),
@@ -204,7 +204,7 @@ internal fun MediaListExpandedHeader(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    Icons.Filled.Shuffle,
+                    VzIcons.Shuffle,
                     contentDescription = "Aleatório",
                     tint = Color.White,
                     modifier = Modifier.size(20.dp),
@@ -216,7 +216,7 @@ internal fun MediaListExpandedHeader(
             if (state.isSortEnabled && state.sortOrder == SortOrder.SHUFFLE) {
                 IconButton(onClick = onShuffleToggle) {
                     Icon(
-                        imageVector = if (state.isShuffling) Icons.Filled.Stop else Icons.Filled.Sync,
+                        imageVector = if (state.isShuffling) VzIcons.StopCircle else VzIcons.Sync,
                         contentDescription = "Sortear animado",
                         tint = if (state.isShuffling) Color(0xFF1E40AF) else Color.White,
                     )
@@ -226,7 +226,7 @@ internal fun MediaListExpandedHeader(
             if (state.isSortEnabled) {
                 IconButton(onClick = onSortClick) {
                     Icon(
-                        Icons.AutoMirrored.Filled.Sort,
+                        VzIcons.Sort,
                         contentDescription = "Ordenar",
                         tint = Color.White,
                     )
@@ -258,7 +258,7 @@ internal fun MediaListCollapsedHeader(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MediaListCircleButton(Icons.Filled.Close, "Fechar", onBackClick)
+        MediaListCircleButton(VzIcons.Close, "Fechar", onBackClick)
         Spacer(Modifier.width(12.dp))
         if (!thumbnailUrl.isNullOrBlank()) {
             AsyncImage(

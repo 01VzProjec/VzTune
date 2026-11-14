@@ -6,15 +6,21 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.data.download.TrackDownloader
 import com.vztechcore.vztune.data.music.MusicRepository
+import com.vztechcore.vztune.data.prefs.models.StoredTrack
+import com.vztechcore.vztune.data.prefs.store.DownloadedTracksStore
 import com.vztechcore.vztune.data.prefs.store.FavoriteTracksStore
 import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -26,6 +32,8 @@ class TrackInfoViewModel @Inject constructor(
     private val ytMusicRepository: YTMusicRepository,
     private val favoriteTracksStore: FavoriteTracksStore,
     private val localPlaylistsStore: LocalPlaylistsStore,
+    private val downloadedTracksStore: DownloadedTracksStore,
+    private val trackDownloader: TrackDownloader,
 ) : ViewModel() {
 
     private val route = savedStateHandle.toRoute<Routes.TrackInfo>()
@@ -40,6 +48,11 @@ class TrackInfoViewModel @Inject constructor(
         durationSeconds = route.durationSeconds,
         source = source,
     )
+    private val trackKey = StoredTrack.from(track).key
+
+    val isDownloaded: StateFlow<Boolean> = downloadedTracksStore.downloadedKeys
+        .map { keys -> trackKey in keys }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     private val _uiState = MutableStateFlow(
         TrackInfoUiState(
@@ -76,6 +89,14 @@ class TrackInfoViewModel @Inject constructor(
 
     fun onAddToPlaylist(playlistId: String) {
         viewModelScope.launch { localPlaylistsStore.addTrack(playlistId, track) }
+    }
+
+    fun onDownloadClick() {
+        if (isDownloaded.value) {
+            trackDownloader.deleteDownload(track)
+        } else {
+            trackDownloader.download(track)
+        }
     }
 
     private fun loadTechnicalInfo() {

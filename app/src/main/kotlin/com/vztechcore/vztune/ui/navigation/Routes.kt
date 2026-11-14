@@ -7,6 +7,7 @@ object Routes {
     @Serializable data object Analytics
     @Serializable data object Library
     @Serializable data object Search
+    @Serializable data object Downloads
 
     @Serializable data class MediaList(
         val id: String,

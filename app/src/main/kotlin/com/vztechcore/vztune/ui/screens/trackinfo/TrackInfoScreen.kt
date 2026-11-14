@@ -30,15 +30,18 @@ import com.vztechcore.vztune.ui.icons.actions.ArrowBack
 import com.vztechcore.vztune.ui.icons.actions.FavoriteFilled
 import com.vztechcore.vztune.ui.icons.actions.FavoriteOutline
 import com.vztechcore.vztune.ui.icons.media.Download
+import com.vztechcore.vztune.ui.icons.media.DownloadDone
 import com.vztechcore.vztune.ui.icons.media.PlaylistAdd
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrackInfoScreen(
     state: TrackInfoUiState,
+    isDownloaded: Boolean = false,
     onBackClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     onAddToPlaylist: (String) -> Unit,
+    onDownloadClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var showPlaylistSheet by remember { mutableStateOf(false) }
@@ -173,9 +176,10 @@ fun TrackInfoScreen(
                 onClick = { showPlaylistSheet = true },
             )
             TrackInfoAction(
-                icon = VzIcons.Download,
-                label = "Baixar faixa em alta qualidade no dispositivo",
-                onClick = { /* TODO: download */ },
+                icon = if (isDownloaded) VzIcons.DownloadDone else VzIcons.Download,
+                iconTint = if (isDownloaded) Color(0xFF4ADE80) else Color.White,
+                label = if (isDownloaded) "Faixa baixada (toque para remover)" else "Baixar faixa em alta qualidade no dispositivo",
+                onClick = onDownloadClick,
             )
 
             AppCredits()
@@ -195,7 +199,12 @@ private fun InfoRow(label: String, value: String) {
 }
 
 @Composable
-private fun TrackInfoAction(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun TrackInfoAction(
+    icon: ImageVector,
+    label: String,
+    iconTint: Color = Color.White,
+    onClick: () -> Unit,
+) {
     Box(
         Modifier
             .fillMaxWidth()
@@ -206,7 +215,7 @@ private fun TrackInfoAction(icon: ImageVector, label: String, onClick: () -> Uni
             .padding(horizontal = 20.dp, vertical = 14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(10.dp))
             Text(
                 label,

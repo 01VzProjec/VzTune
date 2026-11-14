@@ -7,10 +7,12 @@ import com.vztechcore.vztune.core.domain.search.SearchFilter
 import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.core.domain.search.SearchResult
 import com.vztechcore.vztune.core.domain.search.SearchSuggestions
+import com.vztechcore.vztune.data.download.TrackDownloader
 import com.vztechcore.vztune.data.music.MusicRepository
 import com.vztechcore.vztune.data.player.PlayerController
 import com.vztechcore.vztune.data.prefs.models.LocalPlaylist
 import com.vztechcore.vztune.data.prefs.models.StoredTrack
+import com.vztechcore.vztune.data.prefs.store.DownloadedTracksStore
 import com.vztechcore.vztune.data.prefs.store.FavoriteTracksStore
 import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
 import com.vztechcore.vztune.data.prefs.store.RecentPlayedStore
@@ -38,6 +40,8 @@ class SearchViewModel @Inject constructor(
     private val recentPlayedStore: RecentPlayedStore,
     private val favoriteTracksStore: FavoriteTracksStore,
     private val localPlaylistsStore: LocalPlaylistsStore,
+    private val downloadedTracksStore: DownloadedTracksStore,
+    private val trackDownloader: TrackDownloader,
     private val playerController: PlayerController,
 ) : ViewModel() {
 
@@ -60,6 +64,9 @@ class SearchViewModel @Inject constructor(
 
     val favoriteKeys: StateFlow<Set<String>> = favoriteTracksStore.tracks
         .map { list -> list.map { StoredTrack.from(it).key }.toSet() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    val downloadedKeys: StateFlow<Set<String>> = downloadedTracksStore.downloadedKeys
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     val localPlaylists: StateFlow<List<LocalPlaylist>> = localPlaylistsStore.items
@@ -197,6 +204,15 @@ class SearchViewModel @Inject constructor(
 
     fun onAddToPlaylist(playlistId: String, track: Track) {
         viewModelScope.launch { localPlaylistsStore.addTrack(playlistId, track) }
+    }
+
+    fun onDownloadClick(track: Track) {
+        val key = StoredTrack.from(track).key
+        if (key in downloadedKeys.value) {
+            trackDownloader.deleteDownload(track)
+        } else {
+            trackDownloader.download(track)
+        }
     }
 
     fun onOpenArtistByName(artistName: String) {

@@ -30,6 +30,9 @@ import com.vztechcore.vztune.ui.screens.artist.ArtistScreen
 import com.vztechcore.vztune.ui.screens.artist.ArtistViewModel
 import com.vztechcore.vztune.ui.screens.artist.list.ArtistListScreen
 import com.vztechcore.vztune.ui.screens.artist.list.ArtistListViewModel
+import com.vztechcore.vztune.ui.screens.downloads.DownloadBannerViewModel
+import com.vztechcore.vztune.ui.screens.downloads.DownloadsScreen
+import com.vztechcore.vztune.ui.screens.downloads.DownloadsViewModel
 import com.vztechcore.vztune.ui.screens.library.LibraryScreen
 import com.vztechcore.vztune.ui.screens.library.LibraryViewModel
 import com.vztechcore.vztune.ui.screens.library.list.LibraryListScreen
@@ -59,15 +62,18 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val isArtistScreen = backStackEntry?.destination?.hasRoute<Routes.Artist>() == true
     val isArtistListScreen = backStackEntry?.destination?.hasRoute<Routes.ArtistList>() == true
     val isLibraryListScreen = backStackEntry?.destination?.hasRoute<Routes.LibraryList>() == true
-    val isDetailScreen = isMediaListScreen || isArtistScreen || isArtistListScreen || isLibraryListScreen
+    val isDownloadsScreen = backStackEntry?.destination?.hasRoute<Routes.Downloads>() == true
+    val isDetailScreen = isMediaListScreen || isArtistScreen || isArtistListScreen || isLibraryListScreen || isDownloadsScreen
     val isTrackInfoScreen = backStackEntry?.destination?.hasRoute<Routes.TrackInfo>() == true
 
     val playback = LocalNowPlaying.current
     val track = playback.currentTrack
 
     val miniPlayerVm: MiniPlayerViewModel = hiltViewModel()
+    val downloadBannerVm: DownloadBannerViewModel = hiltViewModel()
     val dominantColor = rememberDominantColor(track?.thumbnailUrl)
     val isMinimized by miniPlayerVm.isMinimized.collectAsStateWithLifecycle()
+    val bannerTrack by downloadBannerVm.bannerTrack.collectAsStateWithLifecycle()
 
     // Minimize the player when the user lands on the Search tab
     LaunchedEffect(backStackEntry?.destination?.route) {
@@ -98,6 +104,20 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             ) {
                 composable<Routes.Home> { Placeholder("Home — coming soon") }
                 composable<Routes.Analytics> { Placeholder("Analytics — coming soon") }
+
+                composable<Routes.Downloads> {
+                    val vm: DownloadsViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    DownloadsScreen(
+                        state = state,
+                        onBackClick = { navController.popBackStack() },
+                        onPlayTrack = vm::onPlayTrack,
+                        onCancelDownload = vm::onCancelDownload,
+                        onRetryDownload = vm::onRetryDownload,
+                        onDismissFailed = vm::onDismissFailed,
+                        onDeleteDownloaded = vm::onDeleteDownloaded,
+                    )
+                }
 
                 composable<Routes.Library> {
                     val vm: LibraryViewModel = hiltViewModel()
@@ -142,6 +162,9 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 composable<Routes.Search> {
                     val vm: SearchViewModel = hiltViewModel()
                     val state by vm.uiState.collectAsStateWithLifecycle()
+                    val favoriteKeys by vm.favoriteKeys.collectAsStateWithLifecycle()
+                    val downloadedKeys by vm.downloadedKeys.collectAsStateWithLifecycle()
+                    val localPlaylists by vm.localPlaylists.collectAsStateWithLifecycle()
 
                     LaunchedEffect(Unit) {
                         vm.navigationEvent.collect { event ->
@@ -177,6 +200,9 @@ fun AppNavHost(modifier: Modifier = Modifier) {
 
                     SearchScreen(
                         state = state,
+                        favoriteKeys = favoriteKeys,
+                        downloadedKeys = downloadedKeys,
+                        localPlaylists = localPlaylists,
                         onQueryChange = vm::onQueryChange,
                         onFocusChanged = vm::onFocusChanged,
                         onFilterSelect = vm::onFilterSelect,
@@ -187,6 +213,11 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onLoadMore = vm::onLoadMore,
                         onHitClick = vm::onHitClick,
                         onPlayNextClick = vm::onPlayNextClick,
+                        onAddToQueueClick = vm::onAddToQueueClick,
+                        onToggleFavorite = vm::onToggleFavorite,
+                        onAddToPlaylist = vm::onAddToPlaylist,
+                        onDownloadClick = vm::onDownloadClick,
+                        onOpenArtistByName = vm::onOpenArtistByName,
                         onTrackInfoClick = { navController.navigateToTrackInfo(it) },
                     )
                 }
@@ -259,11 +290,14 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 composable<Routes.TrackInfo> {
                     val vm: TrackInfoViewModel = hiltViewModel()
                     val state by vm.uiState.collectAsStateWithLifecycle()
+                    val isDownloaded by vm.isDownloaded.collectAsStateWithLifecycle()
                     TrackInfoScreen(
                         state = state,
+                        isDownloaded = isDownloaded,
                         onBackClick = { navController.popBackStack() },
                         onFavoriteClick = vm::onFavoriteClick,
                         onAddToPlaylist = vm::onAddToPlaylist,
+                        onDownloadClick = vm::onDownloadClick,
                     )
                 }
             }
@@ -278,6 +312,13 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 isMinimized = isMinimized,
                 isDetailScreen = isDetailScreen,
                 isTrackInfoScreen = isTrackInfoScreen,
+                bannerTrack = bannerTrack,
+                onDismissBanner = downloadBannerVm::dismissBanner,
+                onViewDownloadsClick = {
+                    if (!isDownloadsScreen) {
+                        navController.navigate(Routes.Downloads)
+                    }
+                },
             )
         }
     }

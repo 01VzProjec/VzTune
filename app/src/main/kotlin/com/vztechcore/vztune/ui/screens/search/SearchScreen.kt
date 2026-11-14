@@ -40,6 +40,7 @@ import com.vztechcore.vztune.ui.screens.search.components.SearchResultsContent
 fun SearchScreen(
     state: SearchUiState,
     favoriteKeys: Set<String> = emptySet(),
+    downloadedKeys: Set<String> = emptySet(),
     localPlaylists: List<LocalPlaylist> = emptyList(),
     onQueryChange: (String) -> Unit,
     onFocusChanged: (Boolean) -> Unit,
@@ -54,6 +55,7 @@ fun SearchScreen(
     onAddToQueueClick: (Track) -> Unit = {},
     onToggleFavorite: (Track) -> Unit = {},
     onAddToPlaylist: (playlistId: String, track: Track) -> Unit = { _, _ -> },
+    onDownloadClick: (Track) -> Unit = {},
     onOpenArtistByName: (String) -> Unit = {},
     onTrackInfoClick: (Track) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -62,16 +64,20 @@ fun SearchScreen(
     var selectedTrackForMenu by remember { mutableStateOf<Track?>(null) }
 
     selectedTrackForMenu?.let { track ->
-        val isFav = StoredTrack.from(track).key in favoriteKeys
+        val key = StoredTrack.from(track).key
+        val isFav = key in favoriteKeys
+        val isDownloaded = key in downloadedKeys
         TrackOptionsSheet(
             track = track,
             isFavorite = isFav,
+            isDownloaded = isDownloaded,
             localPlaylists = localPlaylists,
             onDismiss = { selectedTrackForMenu = null },
             onToggleFavorite = { onToggleFavorite(track) },
             onAddToPlaylist = { playlistId -> onAddToPlaylist(playlistId, track) },
             onPlayNext = { onPlayNextClick(track) },
             onAddToQueue = { onAddToQueueClick(track) },
+            onDownloadClick = { onDownloadClick(track) },
             onOpenArtist = { artistName -> onOpenArtistByName(artistName) },
             onTrackInfoClick = { onTrackInfoClick(track) },
         )

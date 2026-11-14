@@ -2,6 +2,7 @@ package com.vztechcore.vztune.data.player
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.media3.common.AudioAttributes
@@ -20,6 +21,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.player.PlaybackState
 import com.vztechcore.vztune.data.music.MusicRepository
+import com.vztechcore.vztune.data.prefs.store.DownloadedTracksStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +42,7 @@ import javax.inject.Singleton
 class PlayerController @Inject constructor(
     @ApplicationContext private val context: Context,
     private val musicRepository: MusicRepository,
+    private val downloadedTracksStore: DownloadedTracksStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -246,8 +249,16 @@ class PlayerController @Inject constructor(
 
         loadJob?.cancel()
         loadJob = scope.launch {
-            val url = cachedUrl ?: musicRepository.getStreamUrl(track)
-            if (url.isNullOrBlank()) {
+            // Prioriza o arquivo local baixado (funciona 100% offline e instantâneo)
+            val localFile = downloadedTracksStore.getLocalFile(track)
+            val mediaUri: Uri? = if (localFile != null) {
+                Uri.fromFile(localFile)
+            } else {
+                val url = cachedUrl ?: musicRepository.getStreamUrl(track)
+                url?.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
+            }
+
+            if (mediaUri == null) {
                 consecutiveFailures++
                 if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
                     Log.e(TAG, "Too many consecutive failures (${consecutiveFailures}), stopping")
@@ -270,7 +281,7 @@ class PlayerController @Inject constructor(
             try {
                 player.stop()
                 player.clearMediaItems()
-                player.setMediaItem(MediaItem.fromUri(url))
+                player.setMediaItem(MediaItem.fromUri(mediaUri))
                 player.prepare()
                 player.playWhenReady = true
             } catch (e: Exception) {
@@ -305,7 +316,10 @@ class PlayerController @Inject constructor(
         preloadedUrl = null
         preloadJob?.cancel()
         preloadJob = scope.launch {
-            preloadedUrl = musicRepository.getStreamUrl(queue[nextIdx])
+            val nextTrack = queue[nextIdx]
+            if (downloadedTracksStore.getLocalFile(nextTrack) == null) {
+                preloadedUrl = musicRepository.getStreamUrl(nextTrack)
+            }
         }
     }
 

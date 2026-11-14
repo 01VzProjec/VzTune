@@ -41,7 +41,7 @@ class DownloadsViewModel @Inject constructor(
         trackDownloader.downloads,
         downloadedTracksStore.items,
     ) { tab, downloadsMap, storedList ->
-        // Ordena da maior porcentagem para a menor; em caso de empate, mantém a ordem fixa de criação (createdAtMs)
+        // Sort highest progress first; tie-break by fixed creation timestamp so items never jump around
         val sortedActive = downloadsMap.values.sortedWith(
             compareByDescending<TrackDownloadItem> { it.percentage }
                 .thenBy { it.createdAtMs }

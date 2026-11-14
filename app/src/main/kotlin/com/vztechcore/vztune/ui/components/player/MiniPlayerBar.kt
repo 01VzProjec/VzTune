@@ -10,11 +10,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,8 +39,13 @@ import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.ui.components.text.TrackSubtitle
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.player.Pause
+import com.vztechcore.vztune.ui.icons.player.Play
+import com.vztechcore.vztune.ui.icons.player.SkipNext
+import com.vztechcore.vztune.ui.icons.player.SkipPrevious
 
-private val GlassFill = Color.Black.copy(alpha = 0.75f) // Mais escuro e menos transparente
+private val GlassFill = Color.Black.copy(alpha = 0.75f)
 private val GlassBorder = Color.White.copy(alpha = 0.15f)
 
 @Composable

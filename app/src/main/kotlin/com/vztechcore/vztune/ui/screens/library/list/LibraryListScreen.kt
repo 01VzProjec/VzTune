@@ -21,10 +21,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,11 +42,14 @@ import com.vztechcore.vztune.ui.components.AppCredits
 import com.vztechcore.vztune.ui.components.cards.ArtistCircleCard
 import com.vztechcore.vztune.ui.components.cards.TrackListRow
 import com.vztechcore.vztune.ui.components.layout.DetailTopBar
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.navigation.Search
+import com.vztechcore.vztune.ui.icons.player.Play
+import com.vztechcore.vztune.ui.icons.player.Shuffle
 import com.vztechcore.vztune.ui.screens.library.EmptyMessage
 
 private val ActionBlue = Color(0xFF1E40AF)
 
-/** List opened from a Library shortcut card: tracks (favorites, most played, downloads) or followed artists. */
 @Composable
 fun LibraryListScreen(
     state: LibraryListUiState,
@@ -74,14 +73,11 @@ fun LibraryListScreen(
             onBackClick = onBackClick,
             actions = {
                 if (state.isArtistList) {
-                    // Seguindo: só a lupa
-                    TopBarCircleButton(Icons.Filled.Search, "Pesquisar") { showSearchOverlay = true }
+                    TopBarCircleButton(VzIcons.Search, "Pesquisar") { showSearchOverlay = true }
                 } else {
-                    // Favoritos / Mais ouvidas / Baixadas:
-                    // aleatório + Play (balão azul) + lupa
                     TopBarCircleButton(VzIcons.Shuffle, "Tocar faixa aleatória", onShuffleClick)
                     TopBarPlayPill(onClick = onPlayAllClick)
-                    TopBarCircleButton(Icons.Filled.Search, "Pesquisar") { showSearchOverlay = true }
+                    TopBarCircleButton(VzIcons.Search, "Pesquisar") { showSearchOverlay = true }
                 }
             },
         )
@@ -136,7 +132,6 @@ fun LibraryListScreen(
     }
 }
 
-/** Small circular icon button used in the DetailTopBar actions slot. */
 @Composable
 private fun TopBarCircleButton(
     icon: ImageVector,
@@ -155,7 +150,6 @@ private fun TopBarCircleButton(
     }
 }
 
-/** Blue pill "Play" button — starts playing from the first track. */
 @Composable
 private fun TopBarPlayPill(onClick: () -> Unit) {
     Row(

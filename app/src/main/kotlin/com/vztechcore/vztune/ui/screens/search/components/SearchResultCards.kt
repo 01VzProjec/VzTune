@@ -8,9 +8,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -32,6 +29,9 @@ import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
 import com.vztechcore.vztune.ui.components.player.ThumbnailShape
 import com.vztechcore.vztune.ui.components.text.TrackSubtitle
 import com.vztechcore.vztune.ui.components.feedback.VzLoading
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.MoreVert
+import com.vztechcore.vztune.ui.icons.media.QueueMusic
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,7 +93,6 @@ fun SearchResultsContent(
 
             if (isLoadingMore) {
                 item(key = "loading_more") {
-                    // VzTechCore logo animation while the next page loads
                     Box(
                         Modifier.fillMaxWidth().padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center,
@@ -212,7 +211,6 @@ fun VideoResultCard(hit: SearchHit.VideoHit, onClick: () -> Unit, onMoreClick: (
     val nowPlaying = LocalNowPlaying.current
     val isCurrent = nowPlaying.isCurrent(hit.track.id, hit.track.source)
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onClick() }) {
-        // 16:9 thumbnail only — the "more" button now lives next to the title/channel
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
             MediaThumbnail(
                 imageUrl = hit.track.thumbnailUrl, shape = ThumbnailShape.WIDE, cornerRadius = 12.dp,
@@ -283,7 +281,6 @@ private fun RowCard(
 ) {
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onClick() }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (mosaic.size >= 4) {
-            // PlaylistMosaic (shared component) doesn't fix its own size — the caller defines it.
             Box(Modifier.size(56.dp)) { PlaylistMosaic(mosaic) }
         } else {
             MediaThumbnail(imageUrl = imageUrl, shape = shape, size = 56.dp, cornerRadius = 8.dp, isPlaying = isPlaying, isPaused = isPaused)

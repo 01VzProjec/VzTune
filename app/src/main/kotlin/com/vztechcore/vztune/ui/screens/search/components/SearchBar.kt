@@ -10,9 +10,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +29,9 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vztechcore.vztune.core.domain.search.SearchFilter
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.Close
+import com.vztechcore.vztune.ui.icons.navigation.Search
 
 @Composable
 fun SearchBar(
@@ -71,7 +71,7 @@ fun SearchBar(
                     .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Filled.Search, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
+                Icon(VzIcons.Search, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
                 BasicTextField(
                     value = textFieldValue,

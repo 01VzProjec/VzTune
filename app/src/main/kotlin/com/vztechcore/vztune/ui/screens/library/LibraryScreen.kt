@@ -24,8 +24,6 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -47,8 +45,9 @@ import com.vztechcore.vztune.ui.components.cards.CoverCard
 import com.vztechcore.vztune.ui.components.layout.SectionHeader
 import com.vztechcore.vztune.ui.components.cards.TrackListRow
 import com.vztechcore.vztune.ui.components.text.VzChipRow
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.Add
 
-/** Library: 5 tabs (overview, VzTune playlists, own playlists, favorites, downloads). */
 @Composable
 fun LibraryScreen(
     state: LibraryUiState,
@@ -144,8 +143,6 @@ private fun LibraryTitle() {
     }
 }
 
-// ============================== OVERVIEW TAB ==============================
-
 private fun LazyListScope.overviewTab(
     recentTracks: List<Track>,
     onShortcutClick: (LibraryShortcut) -> Unit,
@@ -207,24 +204,12 @@ private fun ShortcutCard(shortcut: LibraryShortcut, onClick: () -> Unit, modifie
 }
 
 
-// ============================== PLAYLIST GRIDS ==============================
-
 private sealed interface GridCell {
     val key: String
-
-    data object Create : GridCell {
-        override val key = "create"
-    }
-
-    data class Playlist(val item: LibraryPlaylistItem) : GridCell {
-        override val key get() = item.id
-    }
+    data object Create : GridCell { override val key = "create" }
+    data class Playlist(val item: LibraryPlaylistItem) : GridCell { override val key get() = item.id }
 }
 
-/**
- * Grid of playlists, now 3 per row. Shared by "Suas playlists" (with the create card),
- * "Playlists favoritas" and "Playlists baixadas".
- */
 private fun LazyListScope.playlistGrid(
     items: List<LibraryPlaylistItem>,
     emptyText: String,
@@ -236,8 +221,6 @@ private fun LazyListScope.playlistGrid(
         if (showCreateCard) add(GridCell.Create)
         items.forEach { add(GridCell.Playlist(it)) }
     }
-
-    // 3 columns per row
     val columns = 3
 
     items(cells.chunked(columns), key = { row -> row.joinToString("|") { it.key } }) { row ->
@@ -261,7 +244,6 @@ private fun LazyListScope.playlistGrid(
                     }
                 }
             }
-            // Fill the remaining slots so the last row keeps the same card width
             repeat(columns - row.size) {
                 Spacer(Modifier.weight(1f))
             }

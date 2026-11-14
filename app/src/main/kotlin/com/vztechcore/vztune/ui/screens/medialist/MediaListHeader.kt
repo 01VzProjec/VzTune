@@ -5,9 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +23,17 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
 import com.vztechcore.vztune.core.domain.search.SortOrder
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.Close
+import com.vztechcore.vztune.ui.icons.actions.FavoriteFilled
+import com.vztechcore.vztune.ui.icons.actions.FavoriteOutline
+import com.vztechcore.vztune.ui.icons.actions.MoreVert
+import com.vztechcore.vztune.ui.icons.actions.Sort
+import com.vztechcore.vztune.ui.icons.actions.StopCircle
+import com.vztechcore.vztune.ui.icons.actions.Sync
+import com.vztechcore.vztune.ui.icons.navigation.Search
+import com.vztechcore.vztune.ui.icons.player.Play
+import com.vztechcore.vztune.ui.icons.player.Shuffle
 
 @Composable
 internal fun MediaListExpandedHeader(
@@ -45,7 +53,6 @@ internal fun MediaListExpandedHeader(
             .background(Color.Black),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // ================= HERO COVER =================
         Box(
             Modifier
                 .fillMaxWidth()
@@ -62,7 +69,6 @@ internal fun MediaListExpandedHeader(
                 )
             }
 
-            // Dark gradient — top for icons, bottom for the fade into the list
             Box(
                 Modifier
                     .fillMaxSize()
@@ -78,7 +84,6 @@ internal fun MediaListExpandedHeader(
                     )
             )
 
-            // Top action buttons
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -91,18 +96,17 @@ internal fun MediaListExpandedHeader(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (state.showFavorite) {
                         MediaListCircleButton(
-                            icon = if (state.isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteFilledBorder,
+                            icon = if (state.isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
                             contentDescription = if (state.isFavorite) "Remover dos favoritos" else "Favoritar playlist",
                             onClick = onFavoriteClick,
                         )
                     }
-                    MediaListCircleButton(Icons.Filled.Search, "Pesquisar", onSearchClick)
+                    MediaListCircleButton(VzIcons.Search, "Pesquisar", onSearchClick)
                     MediaListCircleButton(VzIcons.MoreVert, "Mais", { })
                 }
             }
         }
 
-        // ================= CENTERED TITLE & CREATOR DETAILS =================
         Column(
             Modifier
                 .fillMaxWidth()
@@ -122,7 +126,6 @@ internal fun MediaListExpandedHeader(
 
             Spacer(Modifier.height(8.dp))
 
-            // Creator name — plain text, no icon. Never falls back to counts or card subtitles.
             val ownerName = state.owner?.takeIf { it.isNotBlank() }
             if (!ownerName.isNullOrBlank()) {
                 Text(
@@ -137,7 +140,6 @@ internal fun MediaListExpandedHeader(
                 Spacer(Modifier.height(6.dp))
             }
 
-            // Stats row: "<views> • <total duration>" (no track count on purpose)
             val statsText = buildString {
                 if (!state.views.isNullOrBlank()) append(state.views)
                 if (state.totalDurationLabel.isNotBlank()) {
@@ -163,7 +165,6 @@ internal fun MediaListExpandedHeader(
             Spacer(Modifier.height(12.dp))
         }
 
-        // ================= ACTION BUTTONS =================
         Row(
             Modifier
                 .fillMaxWidth()
@@ -280,7 +281,7 @@ internal fun MediaListCollapsedHeader(
         )
         if (onSearchClick != null) {
             IconButton(onClick = onSearchClick) {
-                Icon(Icons.Filled.Search, contentDescription = "Pesquisar", tint = Color.White)
+                Icon(VzIcons.Search, contentDescription = "Pesquisar", tint = Color.White)
             }
         }
     }

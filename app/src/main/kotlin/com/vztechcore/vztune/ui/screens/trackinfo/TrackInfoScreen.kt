@@ -1,44 +1,36 @@
 package com.vztechcore.vztune.ui.screens.trackinfo
 
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.ui.graphics.vector.ImageVector
-import com.vztechcore.vztune.data.prefs.models.LocalPlaylist
-import com.vztechcore.vztune.ui.components.AppCredits
-import androidx.compose.material3.ExperimentalMaterial3Api
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.vztechcore.vztune.data.prefs.models.LocalPlaylist
+import com.vztechcore.vztune.ui.components.AppCredits
 import com.vztechcore.vztune.ui.components.feedback.rememberDominantColor
-import android.content.Intent
-import android.net.Uri
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.ArrowBack
+import com.vztechcore.vztune.ui.icons.actions.FavoriteFilled
+import com.vztechcore.vztune.ui.icons.actions.FavoriteOutline
+import com.vztechcore.vztune.ui.icons.media.Download
+import com.vztechcore.vztune.ui.icons.media.PlaylistAdd
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,7 +57,6 @@ fun TrackInfoScreen(
     }
 
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
-        // Gradient from dominant color to black
         Box(
             Modifier
                 .fillMaxWidth()
@@ -87,7 +78,6 @@ fun TrackInfoScreen(
                 .verticalScroll(rememberScrollState())
                 .statusBarsPadding(),
         ) {
-            // Top bar
             Row(
                 Modifier.fillMaxWidth().padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -101,7 +91,6 @@ fun TrackInfoScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // Thumbnail
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -122,7 +111,6 @@ fun TrackInfoScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            // Title
             Text(
                 state.title,
                 style = MaterialTheme.typography.headlineSmall,
@@ -135,7 +123,6 @@ fun TrackInfoScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            // Info rows
             InfoRow("Título", state.title)
             InfoRow(if (state.isVideo) "Canal" else "Artistas", state.artist)
             if (!state.isVideo) {
@@ -156,7 +143,6 @@ fun TrackInfoScreen(
                 state.description?.let { InfoRow("Descrição", it) }
             }
 
-            // Source URL (clickable)
             if (state.sourceUrl.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
                 Column(Modifier.padding(horizontal = 24.dp, vertical = 12.dp)) {
@@ -176,9 +162,8 @@ fun TrackInfoScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // Actions
             TrackInfoAction(
-                icon = if (state.isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteFilledBorder,
+                icon = if (state.isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
                 label = if (state.isFavorite) "Remover dos favoritos" else "Adicionar aos favoritos",
                 onClick = onFavoriteClick,
             )
@@ -209,7 +194,6 @@ private fun InfoRow(label: String, value: String) {
     }
 }
 
-/** Rounded action button of the track info screen. */
 @Composable
 private fun TrackInfoAction(icon: ImageVector, label: String, onClick: () -> Unit) {
     Box(
@@ -234,7 +218,6 @@ private fun TrackInfoAction(icon: ImageVector, label: String, onClick: () -> Uni
     }
 }
 
-/** Lists the user's local playlists; tapping one adds the track to it. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddToPlaylistSheet(
@@ -242,7 +225,7 @@ private fun AddToPlaylistSheet(
     onPick: (LocalPlaylist) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color(0xFF141414)) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color(0xFF141B32)) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 24.dp)) {
             Text(
                 "Adicionar à playlist",

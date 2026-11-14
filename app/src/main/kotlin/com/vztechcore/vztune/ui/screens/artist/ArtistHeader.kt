@@ -17,11 +17,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,14 +34,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.Check
+import com.vztechcore.vztune.ui.icons.actions.Close
+import com.vztechcore.vztune.ui.icons.actions.PersonAdd
+import com.vztechcore.vztune.ui.icons.player.Shuffle
 import com.vztechcore.vztune.ui.screens.medialist.MediaListCircleButton
 
 private val ActionBlue = Color(0xFF1E40AF)
 
-/**
- * Artist page header: blurred banner, circular photo, name, stats line
- * ("subscribers • views") and the action buttons (random play + follow).
- */
 @Composable
 internal fun ArtistHeader(
     state: ArtistUiState,
@@ -60,13 +56,11 @@ internal fun ArtistHeader(
             .background(Color.Black),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // ================= HERO =================
         Box(
             Modifier
                 .fillMaxWidth()
                 .height(360.dp)
         ) {
-            // Blurred banner (blur is a no-op on Android < 12, the gradient still keeps it readable)
             AsyncImage(
                 model = state.thumbnailUrl,
                 contentDescription = null,
@@ -102,7 +96,6 @@ internal fun ArtistHeader(
                 MediaListCircleButton(VzIcons.Close, "Fechar", onBackClick)
             }
 
-            // Circular artist photo
             AsyncImage(
                 model = state.thumbnailUrl,
                 contentDescription = state.name,
@@ -117,7 +110,6 @@ internal fun ArtistHeader(
             )
         }
 
-        // ================= NAME + STATS =================
         Column(
             Modifier
                 .fillMaxWidth()
@@ -148,14 +140,12 @@ internal fun ArtistHeader(
 
         Spacer(Modifier.height(16.dp))
 
-        // ================= ACTION BUTTONS =================
         Row(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Same pill as playlists/albums, but with the shuffle icon (plays a random track)
             Row(
                 Modifier
                     .clip(RoundedCornerShape(50))
@@ -181,7 +171,6 @@ internal fun ArtistHeader(
 
             Spacer(Modifier.width(8.dp))
 
-            // Follow the artist inside the app
             Box(
                 Modifier
                     .size(40.dp)
@@ -191,7 +180,7 @@ internal fun ArtistHeader(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = if (state.isFollowing) VzIcons.Check else Icons.Filled.PersonAdd,
+                    imageVector = if (state.isFollowing) VzIcons.Check else VzIcons.PersonAdd,
                     contentDescription = if (state.isFollowing) "Deixar de seguir" else "Seguir artista",
                     tint = Color.White,
                     modifier = Modifier.size(20.dp),

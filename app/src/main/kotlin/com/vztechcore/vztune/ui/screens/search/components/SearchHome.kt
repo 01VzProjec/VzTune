@@ -18,9 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,14 +37,12 @@ import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.ui.components.AppCredits
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.Close
+import com.vztechcore.vztune.ui.icons.navigation.Search
 
 private val RECENT_CARD_HEIGHT = 120.dp
 
-/**
- * Home of the Search screen (shown while the input is empty, focused or not):
- *   1. horizontal row with tracks already played from Search
- *   2. search history, each row with the "search again" icon
- */
 @Composable
 fun SearchHome(
     recentTracks: List<Track>,
@@ -137,10 +132,6 @@ private fun SectionTitle(text: String, horizontalPadding: Int = 16) {
     )
 }
 
-/**
- * Songs get a square thumbnail, videos a 16:9 one — both with the same height
- * (the video card is simply wider), title below.
- */
 @Composable
 private fun RecentTrackCard(track: Track, onClick: () -> Unit) {
     val isVideo = track.source == Source.YOUTUBE
@@ -185,9 +176,8 @@ private fun HistoryRow(
             .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Search icon = tap to search this term again
         Icon(
-            imageVector = Icons.Filled.Search,
+            imageVector = VzIcons.Search,
             contentDescription = "Pesquisar novamente",
             tint = Color.White.copy(alpha = 0.5f),
             modifier = Modifier.size(20.dp),

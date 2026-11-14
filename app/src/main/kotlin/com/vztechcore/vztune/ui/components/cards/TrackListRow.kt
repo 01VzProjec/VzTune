@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,15 +26,9 @@ import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.player.MediaThumbnail
 import com.vztechcore.vztune.ui.components.player.playbackOf
 import com.vztechcore.vztune.ui.components.text.ExplicitBadge
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.MoreVert
 
-/**
- * Standard track card: optional ranking number, thumbnail with the "now playing" equalizer,
- * title, artist (with the explicit badge) and the 3-dots button on the right.
- * Used by the artist screens and the Library.
- *
- * Sized to match the compact Search result rows (thumbnail ~52.dp) so the whole app
- * shows the same visual weight for track lists.
- */
 @Composable
 fun TrackListRow(
     track: Track,

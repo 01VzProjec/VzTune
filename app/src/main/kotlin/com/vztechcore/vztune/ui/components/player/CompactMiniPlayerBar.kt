@@ -19,10 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,6 +39,10 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.player.Pause
+import com.vztechcore.vztune.ui.icons.player.Play
+import com.vztechcore.vztune.ui.icons.player.SkipNext
 
 private val GlassFill = Color.Black.copy(alpha = 0.75f)
 private val GlassBorder = Color.White.copy(alpha = 0.15f)
@@ -62,7 +62,6 @@ fun CompactMiniPlayerBar(
 
     val discRotation = remember { Animatable(0f) }
 
-    // Spin the disc if it's a song and is playing or loading
     LaunchedEffect(isPlaying, isVideo, isLoading) {
         if ((isPlaying || isLoading) && !isVideo) {
             while (true) {
@@ -102,7 +101,6 @@ fun CompactMiniPlayerBar(
                         .clip(RoundedCornerShape(6.dp))
                 )
             } else {
-                // Spinning disc for songs
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -116,7 +114,6 @@ fun CompactMiniPlayerBar(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxWidth().aspectRatio(1f)
                     )
-                    // Center hole for the vinyl look
                     Box(
                         Modifier
                             .align(Alignment.Center)

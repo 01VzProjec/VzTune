@@ -5,10 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
-import androidx.compose.material.icons.filled.DragHandle
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +23,10 @@ import com.vztechcore.vztune.ui.components.player.ThumbnailShape
 import com.vztechcore.vztune.ui.components.text.TrackSubtitle
 import com.vztechcore.vztune.ui.components.text.VzChipRow
 import com.vztechcore.vztune.ui.components.player.playbackOf
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.DragHandle
+import com.vztechcore.vztune.ui.icons.actions.MoreVert
+import com.vztechcore.vztune.ui.icons.media.QueueMusic
 
 @Composable
 internal fun MediaListTrackRow(
@@ -92,7 +92,6 @@ internal fun MediaListVideoCard(
     track: Track, isPlaying: Boolean, isPaused: Boolean, onClick: () -> Unit, onMoreClick: () -> Unit, modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 12.dp, vertical = 8.dp)) {
-        // 16:9 thumbnail only — the "more" button now lives next to the title/channel
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
             MediaThumbnail(imageUrl = track.thumbnailUrl, shape = ThumbnailShape.WIDE, cornerRadius = 10.dp, isPlaying = isPlaying, isPaused = isPaused)
         }
@@ -120,7 +119,6 @@ internal fun MediaListTabs(selected: MediaListTab, onSelect: (MediaListTab) -> U
     )
 }
 
-/** Standard track row that reads the now-playing state itself (equalizer on the thumbnail). */
 @Composable
 internal fun PlayableTrackRow(
     track: Track,
@@ -145,7 +143,6 @@ internal fun PlayableTrackRow(
     )
 }
 
-/** Standard 16:9 video card that reads the now-playing state itself. */
 @Composable
 internal fun PlayableVideoCard(
     track: Track,

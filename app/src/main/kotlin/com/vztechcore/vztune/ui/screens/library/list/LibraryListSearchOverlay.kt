@@ -27,9 +27,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -56,12 +53,10 @@ import com.vztechcore.vztune.data.prefs.models.FollowedArtist
 import com.vztechcore.vztune.ui.components.AppCredits
 import com.vztechcore.vztune.ui.components.cards.ArtistCircleCard
 import com.vztechcore.vztune.ui.components.cards.TrackListRow
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.Close
+import com.vztechcore.vztune.ui.icons.navigation.Search
 
-/**
- * Full-screen search overlay for the Library shortcut lists.
- * If [isArtistMode] is true it searches/filters artists (Followed tab);
- * otherwise it searches/filters tracks (Favorites, Most Played, Downloads).
- */
 @Composable
 internal fun LibraryListSearchOverlay(
     tracks: List<Track>,
@@ -186,7 +181,7 @@ private fun SearchInputBar(
                 .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.Search, null, tint = Color.White.copy(alpha = 0.55f), modifier = Modifier.size(20.dp))
+            Icon(VzIcons.Search, null, tint = Color.White.copy(alpha = 0.55f), modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(10.dp))
             BasicTextField(
                 value = query,

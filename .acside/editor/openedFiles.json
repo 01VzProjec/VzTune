@@ -389,22 +389,7 @@
           "line": 268
         }
       }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/download/DownloadState.kt",
-      "selection": {
-        "end": {
-          "column": 1,
-          "index": 702,
-          "line": 26
-        },
-        "start": {
-          "column": 1,
-          "index": 702,
-          "line": 26
-        }
-      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/player/PlayerController.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/download/DownloadStatus.kt"
 }

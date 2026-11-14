@@ -11,7 +11,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -24,6 +23,9 @@ import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchFilter
 import com.vztechcore.vztune.core.domain.search.SearchHit
+import com.vztechcore.vztune.data.prefs.models.LocalPlaylist
+import com.vztechcore.vztune.data.prefs.models.StoredTrack
+import com.vztechcore.vztune.ui.components.sheets.TrackOptionsSheet
 import com.vztechcore.vztune.ui.screens.search.components.PlaylistFilterType
 import com.vztechcore.vztune.ui.screens.search.components.SearchAutocomplete
 import com.vztechcore.vztune.ui.screens.search.components.SearchBar
@@ -37,6 +39,8 @@ import com.vztechcore.vztune.ui.screens.search.components.SearchResultsContent
 @Composable
 fun SearchScreen(
     state: SearchUiState,
+    favoriteKeys: Set<String> = emptySet(),
+    localPlaylists: List<LocalPlaylist> = emptyList(),
     onQueryChange: (String) -> Unit,
     onFocusChanged: (Boolean) -> Unit,
     onFilterSelect: (SearchFilter) -> Unit,
@@ -47,10 +51,31 @@ fun SearchScreen(
     onLoadMore: () -> Unit,
     onHitClick: (SearchHit) -> Unit = {},
     onPlayNextClick: (Track) -> Unit = {},
+    onAddToQueueClick: (Track) -> Unit = {},
+    onToggleFavorite: (Track) -> Unit = {},
+    onAddToPlaylist: (playlistId: String, track: Track) -> Unit = { _, _ -> },
+    onOpenArtistByName: (String) -> Unit = {},
     onTrackInfoClick: (Track) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var playlistFilter by remember { mutableStateOf(PlaylistFilterType.ALL) }
+    var selectedTrackForMenu by remember { mutableStateOf<Track?>(null) }
+
+    selectedTrackForMenu?.let { track ->
+        val isFav = StoredTrack.from(track).key in favoriteKeys
+        TrackOptionsSheet(
+            track = track,
+            isFavorite = isFav,
+            localPlaylists = localPlaylists,
+            onDismiss = { selectedTrackForMenu = null },
+            onToggleFavorite = { onToggleFavorite(track) },
+            onAddToPlaylist = { playlistId -> onAddToPlaylist(playlistId, track) },
+            onPlayNext = { onPlayNextClick(track) },
+            onAddToQueue = { onAddToQueueClick(track) },
+            onOpenArtist = { artistName -> onOpenArtistByName(artistName) },
+            onTrackInfoClick = { onTrackInfoClick(track) },
+        )
+    }
 
     val displayedHits = remember(state.hits, state.selectedFilter, playlistFilter) {
         if (state.selectedFilter == SearchFilter.PLAYLISTS) {
@@ -139,7 +164,7 @@ fun SearchScreen(
                 onLoadMore = onLoadMore,
                 onHitClick = onHitClick,
                 onPlayNextClick = onPlayNextClick,
-                onTrackInfoClick = onTrackInfoClick,
+                onTrackMoreClick = { track -> selectedTrackForMenu = track },
             )
         }
     }

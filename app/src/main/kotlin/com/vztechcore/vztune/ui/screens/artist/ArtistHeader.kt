@@ -3,18 +3,7 @@ package com.vztechcore.vztune.ui.screens.artist
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -23,171 +12,177 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.vztechcore.vztune.ui.icons.VzIcons
-import com.vztechcore.vztune.ui.icons.actions.Check
-import com.vztechcore.vztune.ui.icons.actions.Close
 import com.vztechcore.vztune.ui.icons.actions.PersonAdd
+import com.vztechcore.vztune.ui.icons.actions.PersonCheck
+import com.vztechcore.vztune.ui.icons.player.Play
 import com.vztechcore.vztune.ui.icons.player.Shuffle
-import com.vztechcore.vztune.ui.screens.medialist.MediaListCircleButton
-
-private val ActionBlue = Color(0xFF1E40AF)
 
 @Composable
-internal fun ArtistHeader(
-    state: ArtistUiState,
-    onBackClick: () -> Unit,
-    onRandomClick: () -> Unit,
+fun ArtistHeader(
+    name: String,
+    thumbnailUrl: String?,
+    subscribers: String?,
+    isFollowing: Boolean,
+    dominantColor: Color,
+    hasSongs: Boolean,
     onFollowClick: () -> Unit,
+    onPlayClick: () -> Unit,
+    onShuffleClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(Color.Black),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+    Column(modifier = modifier.fillMaxWidth()) {
         Box(
-            Modifier
+            modifier = Modifier
                 .fillMaxWidth()
-                .height(360.dp)
+                .height(320.dp),
         ) {
-            AsyncImage(
-                model = state.thumbnailUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .blur(18.dp)
-                    .alpha(0.85f),
-            )
+            if (thumbnailUrl != null) {
+                AsyncImage(
+                    model = thumbnailUrl,
+                    contentDescription = name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(dominantColor.copy(alpha = 0.6f), Color.Black)
+                            )
+                        )
+                )
+            }
 
             Box(
                 Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            colorStops = arrayOf(
-                                0.0f to Color.Black.copy(alpha = 0.45f),
-                                0.45f to Color.Black.copy(alpha = 0.15f),
-                                0.85f to Color.Black.copy(alpha = 0.85f),
-                                1.0f to Color.Black,
-                            )
+                            0f to Color.Black.copy(alpha = 0.25f),
+                            0.55f to Color.Transparent,
+                            1f to Color.Black,
                         )
                     )
             )
 
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                MediaListCircleButton(VzIcons.Close, "Fechar", onBackClick)
-            }
-
-            AsyncImage(
-                model = state.thumbnailUrl,
-                contentDescription = state.name,
-                contentScale = ContentScale.Crop,
+            Column(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 24.dp)
-                    .size(168.dp)
-                    .clip(CircleShape)
-                    .border(2.dp, Color.White.copy(alpha = 0.15f), CircleShape)
-                    .background(Color.White.copy(alpha = 0.08f)),
-            )
-        }
-
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .offset(y = (-4).dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = state.name,
-                style = MaterialTheme.typography.headlineLarge,
-                color = Color.White,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-
-            if (state.statsLabel.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
+                    .align(Alignment.BottomStart)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+            ) {
                 Text(
-                    text = state.statsLabel,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.6f),
-                    textAlign = TextAlign.Center,
+                    name,
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                if (!subscribers.isNullOrBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        subscribers,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.7f),
+                    )
+                }
             }
         }
-
-        Spacer(Modifier.height(16.dp))
 
         Row(
-            Modifier
+            modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Row(
-                Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(ActionBlue)
-                    .clickable { onRandomClick() }
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    VzIcons.Shuffle,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    "Play",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.labelLarge,
-                )
-            }
+            FollowButton(
+                isFollowing = isFollowing,
+                accent = dominantColor,
+                onClick = onFollowClick,
+            )
 
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.weight(1f))
 
-            Box(
-                Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(if (state.isFollowing) ActionBlue else Color.White.copy(alpha = 0.12f))
-                    .clickable { onFollowClick() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = if (state.isFollowing) VzIcons.Check else VzIcons.PersonAdd,
-                    contentDescription = if (state.isFollowing) "Deixar de seguir" else "Seguir artista",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp),
-                )
+            if (hasSongs) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.1f))
+                        .clickable { onShuffleClick() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = VzIcons.Shuffle,
+                        contentDescription = "Aleatório",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(dominantColor)
+                        .clickable { onPlayClick() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = VzIcons.Play,
+                        contentDescription = "Tocar",
+                        tint = Color.Black,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
             }
         }
+    }
+}
 
-        Spacer(Modifier.height(12.dp))
+@Composable
+private fun FollowButton(
+    isFollowing: Boolean,
+    accent: Color,
+    onClick: () -> Unit,
+) {
+    val bg = if (isFollowing) accent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.08f)
+    val border = if (isFollowing) accent.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.22f)
+    val content = if (isFollowing) accent else Color.White
+
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(bg)
+            .border(1.dp, border, RoundedCornerShape(50))
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = if (isFollowing) VzIcons.PersonCheck else VzIcons.PersonAdd,
+            contentDescription = null,
+            tint = content,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            if (isFollowing) "Seguindo" else "Seguir",
+            style = MaterialTheme.typography.labelLarge,
+            color = content,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }

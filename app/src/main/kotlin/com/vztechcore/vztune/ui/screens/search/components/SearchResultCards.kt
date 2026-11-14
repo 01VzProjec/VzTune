@@ -1,6 +1,5 @@
 package com.vztechcore.vztune.ui.screens.search.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
@@ -23,12 +22,12 @@ import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.ui.components.AppCredits
+import com.vztechcore.vztune.ui.components.feedback.VzLoading
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.player.MediaThumbnail
 import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
 import com.vztechcore.vztune.ui.components.player.ThumbnailShape
 import com.vztechcore.vztune.ui.components.text.TrackSubtitle
-import com.vztechcore.vztune.ui.components.feedback.VzLoading
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.MoreVert
 import com.vztechcore.vztune.ui.icons.media.QueueMusic
@@ -43,7 +42,7 @@ fun SearchResultsContent(
     onLoadMore: () -> Unit,
     onHitClick: (SearchHit) -> Unit,
     onPlayNextClick: (Track) -> Unit,
-    onTrackInfoClick: (Track) -> Unit,
+    onTrackMoreClick: (Track) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val isVideoMode = hits.all { it is SearchHit.VideoHit } && hits.isNotEmpty()
@@ -72,7 +71,7 @@ fun SearchResultsContent(
                     VideoResultCard(
                         hit = hit,
                         onClick = { onHitClick(hit) },
-                        onMoreClick = { onTrackInfoClick(hit.track) },
+                        onMoreClick = { onTrackMoreClick(hit.track) },
                     )
                 } else {
                     SearchResultCard(
@@ -84,7 +83,7 @@ fun SearchResultsContent(
                                 is SearchHit.VideoHit -> hit.track
                                 else -> null
                             }
-                            if (track != null) onTrackInfoClick(track)
+                            if (track != null) onTrackMoreClick(track)
                         },
                         onPlayNextClick = onPlayNextClick,
                     )

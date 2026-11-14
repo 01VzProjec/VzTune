@@ -112,11 +112,6 @@ class PlayerController @Inject constructor(
     private var preloadedUrl: String? = null
     private var preloadedIndex: Int = -1
 
-    /**
-     * How many consecutive stream resolutions failed.
-     * After [MAX_CONSECUTIVE_FAILURES] we stop auto-skipping to avoid
-     * hammering YouTube on a totally broken network.
-     */
     private var consecutiveFailures = 0
 
     init {
@@ -167,9 +162,25 @@ class PlayerController @Inject constructor(
         val insertIndex = (currentIndex + 1).coerceIn(0, mutableQueue.size)
         mutableQueue.add(insertIndex, track)
         queue = mutableQueue
+        if (preloadedIndex == insertIndex) {
+            preloadedIndex = -1
+            preloadedUrl = null
+        }
         if (currentIndex == -1 && queue.isNotEmpty()) {
             currentIndex = 0
             playAtIndex(0)
+        }
+    }
+
+    fun addToQueueEnd(track: Track) {
+        if (queue.isEmpty()) {
+            playQueue(listOf(track), 0)
+            return
+        }
+        val mutableQueue = queue.toMutableList()
+        if (mutableQueue.none { it.id == track.id && it.source == track.source }) {
+            mutableQueue.add(track)
+            queue = mutableQueue
         }
     }
 
@@ -268,11 +279,6 @@ class PlayerController @Inject constructor(
         }
     }
 
-    /**
-     * Boots [PlaybackService] as a foreground service. Without this, Android
-     * will kill the process a few seconds after the app leaves the foreground,
-     * and audio stops silently — no notification, no playback.
-     */
     private fun ensureForegroundService() {
         runCatching {
             val intent = Intent(context, PlaybackService::class.java)

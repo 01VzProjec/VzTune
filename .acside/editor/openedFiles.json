@@ -59,7 +59,157 @@
           "line": 165
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/icons/actions/PersonCheck.kt",
+      "selection": {
+        "end": {
+          "column": 5,
+          "index": 721,
+          "line": 9
+        },
+        "start": {
+          "column": 5,
+          "index": 721,
+          "line": 9
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/icons/actions/Share.kt",
+      "selection": {
+        "end": {
+          "column": 5,
+          "index": 647,
+          "line": 9
+        },
+        "start": {
+          "column": 5,
+          "index": 647,
+          "line": 9
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/icons/media/DownloadDone.kt",
+      "selection": {
+        "end": {
+          "column": 5,
+          "index": 554,
+          "line": 9
+        },
+        "start": {
+          "column": 5,
+          "index": 554,
+          "line": 9
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/icons/player/PlayCircleFilled.kt",
+      "selection": {
+        "end": {
+          "column": 5,
+          "index": 626,
+          "line": 9
+        },
+        "start": {
+          "column": 5,
+          "index": 626,
+          "line": 9
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistHeader.kt",
+      "selection": {
+        "end": {
+          "column": 47,
+          "index": 47,
+          "line": 0
+        },
+        "start": {
+          "column": 47,
+          "index": 47,
+          "line": 0
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/sheets/TrackOptionsSheet.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 14749,
+          "line": 401
+        },
+        "start": {
+          "column": 1,
+          "index": 14749,
+          "line": 401
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/player/PlayerController.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 10871,
+          "line": 317
+        },
+        "start": {
+          "column": 1,
+          "index": 10871,
+          "line": 317
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchViewModel.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 10496,
+          "line": 246
+        },
+        "start": {
+          "column": 1,
+          "index": 10496,
+          "line": 246
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchScreen.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 8994,
+          "line": 216
+        },
+        "start": {
+          "column": 1,
+          "index": 8994,
+          "line": 216
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/components/SearchResultCards.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 13692,
+          "line": 309
+        },
+        "start": {
+          "column": 1,
+          "index": 13692,
+          "line": 309
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/PlaybackChrome.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchScreen.kt"
 }

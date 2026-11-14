@@ -284,7 +284,97 @@
           "line": 259
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/icons/actions/Add.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 406,
+          "line": 4
+        },
+        "start": {
+          "column": 0,
+          "index": 406,
+          "line": 4
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/icons/actions/StopCircle.kt",
+      "selection": {
+        "end": {
+          "column": 45,
+          "index": 147,
+          "line": 2
+        },
+        "start": {
+          "column": 45,
+          "index": 147,
+          "line": 2
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/icons/VzIcons.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 895,
+          "line": 28
+        },
+        "start": {
+          "column": 0,
+          "index": 895,
+          "line": 28
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/icons/media/TrendingUp.kt",
+      "selection": {
+        "end": {
+          "column": 5,
+          "index": 638,
+          "line": 9
+        },
+        "start": {
+          "column": 5,
+          "index": 638,
+          "line": 9
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/icons/media/CloudDownload.kt",
+      "selection": {
+        "end": {
+          "column": 5,
+          "index": 870,
+          "line": 9
+        },
+        "start": {
+          "column": 5,
+          "index": 870,
+          "line": 9
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/icons/navigation/Insights.kt",
+      "selection": {
+        "end": {
+          "column": 5,
+          "index": 798,
+          "line": 9
+        },
+        "start": {
+          "column": 5,
+          "index": 798,
+          "line": 9
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/trackinfo/TrackInfoScreen.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/icons/navigation/Insights.kt"
 }

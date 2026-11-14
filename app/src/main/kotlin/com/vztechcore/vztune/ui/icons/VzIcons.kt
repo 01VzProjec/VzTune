@@ -7,18 +7,22 @@ import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
 
 object VzIcons {
+    private val cache = HashMap<String, ImageVector>()
+
     fun icon(name: String, pathData: String): ImageVector {
-        return ImageVector.Builder(
-            name = name,
-            defaultWidth = 24.dp,
-            defaultHeight = 24.dp,
-            viewportWidth = 24f,
-            viewportHeight = 24f
-        ).apply {
-            addPath(
-                pathData = PathParser().parsePathString(pathData).toNodes(),
-                fill = SolidColor(Color.Black)
-            )
-        }.build()
+        return cache.getOrPut(name) {
+            ImageVector.Builder(
+                name = name,
+                defaultWidth = 24.dp,
+                defaultHeight = 24.dp,
+                viewportWidth = 24f,
+                viewportHeight = 24f
+            ).apply {
+                addPath(
+                    pathData = PathParser().parsePathString(pathData).toNodes(),
+                    fill = SolidColor(Color.Black)
+                )
+            }.build()
+        }
     }
 }

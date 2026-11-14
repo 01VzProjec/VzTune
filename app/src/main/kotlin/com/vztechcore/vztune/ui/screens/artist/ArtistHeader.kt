@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,35 +21,34 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.vztechcore.vztune.ui.components.feedback.rememberDominantColor
 import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.ArrowBack
 import com.vztechcore.vztune.ui.icons.actions.PersonAdd
 import com.vztechcore.vztune.ui.icons.actions.PersonCheck
-import com.vztechcore.vztune.ui.icons.player.Play
 import com.vztechcore.vztune.ui.icons.player.Shuffle
 
 @Composable
 fun ArtistHeader(
-    name: String,
-    thumbnailUrl: String?,
-    subscribers: String?,
-    isFollowing: Boolean,
-    dominantColor: Color,
-    hasSongs: Boolean,
+    state: ArtistUiState,
+    onBackClick: () -> Unit,
+    onRandomClick: () -> Unit,
     onFollowClick: () -> Unit,
-    onPlayClick: () -> Unit,
-    onShuffleClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val dominantColor = rememberDominantColor(state.thumbnailUrl)
+    val hasPlayableItems = state.topSongs.isNotEmpty() || state.videos.isNotEmpty()
+
     Column(modifier = modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(320.dp),
+                .height(340.dp),
         ) {
-            if (thumbnailUrl != null) {
+            if (state.thumbnailUrl != null) {
                 AsyncImage(
-                    model = thumbnailUrl,
-                    contentDescription = name,
+                    model = state.thumbnailUrl,
+                    contentDescription = state.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -69,37 +69,58 @@ fun ArtistHeader(
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            0f to Color.Black.copy(alpha = 0.25f),
+                            0f to Color.Black.copy(alpha = 0.35f),
                             0.55f to Color.Transparent,
                             1f to Color.Black,
                         )
                     )
             )
 
+            // Botão voltar no topo
+            IconButton(
+                onClick = onBackClick,
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(12.dp)
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.45f)),
+            ) {
+                Icon(
+                    imageVector = VzIcons.ArrowBack,
+                    contentDescription = "Voltar",
+                    tint = Color.White,
+                )
+            }
+
+            // Nome e inscritos/visualizações
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(horizontal = 20.dp, vertical = 12.dp),
             ) {
                 Text(
-                    name,
+                    text = state.name,
                     style = MaterialTheme.typography.headlineLarge,
                     color = Color.White,
                     fontWeight = FontWeight.ExtraBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (!subscribers.isNullOrBlank()) {
+                if (state.statsLabel.isNotBlank()) {
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        subscribers,
+                        text = state.statsLabel,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.7f),
+                        color = Color.White.copy(alpha = 0.72f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
         }
 
+        // Barra de ações: Seguir / Seguindo + Aleatório
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -108,43 +129,34 @@ fun ArtistHeader(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             FollowButton(
-                isFollowing = isFollowing,
+                isFollowing = state.isFollowing,
                 accent = dominantColor,
                 onClick = onFollowClick,
             )
 
             Spacer(Modifier.weight(1f))
 
-            if (hasSongs) {
-                Box(
+            if (hasPlayableItems) {
+                Row(
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
+                        .clip(RoundedCornerShape(50))
                         .background(Color.White.copy(alpha = 0.1f))
-                        .clickable { onShuffleClick() },
-                    contentAlignment = Alignment.Center,
+                        .clickable { onRandomClick() }
+                        .padding(horizontal = 16.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
                         imageVector = VzIcons.Shuffle,
-                        contentDescription = "Aleatório",
+                        contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(18.dp),
                     )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(dominantColor)
-                        .clickable { onPlayClick() },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = VzIcons.Play,
-                        contentDescription = "Tocar",
-                        tint = Color.Black,
-                        modifier = Modifier.size(26.dp),
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Aleatório",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             }
@@ -179,7 +191,7 @@ private fun FollowButton(
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            if (isFollowing) "Seguindo" else "Seguir",
+            text = if (isFollowing) "Seguindo" else "Seguir",
             style = MaterialTheme.typography.labelLarge,
             color = content,
             fontWeight = FontWeight.Bold,

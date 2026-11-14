@@ -124,14 +124,14 @@
       "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistHeader.kt",
       "selection": {
         "end": {
-          "column": 47,
-          "index": 47,
-          "line": 0
+          "column": 1,
+          "index": 7246,
+          "line": 199
         },
         "start": {
-          "column": 47,
-          "index": 47,
-          "line": 0
+          "column": 1,
+          "index": 7246,
+          "line": 199
         }
       }
     },
@@ -211,5 +211,5 @@
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchScreen.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistHeader.kt"
 }

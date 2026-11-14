@@ -1,346 +1,418 @@
 package com.vztechcore.vztune.ui.screens.downloads
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.data.download.DownloadStatus
 import com.vztechcore.vztune.data.download.TrackDownloadItem
 import com.vztechcore.vztune.data.prefs.models.DownloadedTrack
 import com.vztechcore.vztune.ui.components.AppCredits
 import com.vztechcore.vztune.ui.components.layout.DetailTopBar
-import com.vztechcore.vztune.ui.components.player.MediaThumbnail
-import com.vztechcore.vztune.ui.components.player.ThumbnailShape
+import com.vztechcore.vztune.ui.components.sheets.RemoveDownloadSheet
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Close
 import com.vztechcore.vztune.ui.icons.actions.Delete
-import com.vztechcore.vztune.ui.icons.actions.Sync
-import com.vztechcore.vztune.ui.icons.media.DownloadDone
+import com.vztechcore.vztune.ui.icons.player.Pause
+import com.vztechcore.vztune.ui.icons.player.Play
+
+private val NavyBorder = Color(0xFF1E3A8A)
+private val ProgressBlue = Color(0xFF3B82F6)
+private val DownloadGreen = Color(0xFF4ADE80)
+private val DangerRed = Color(0xFFF87171)
 
 @Composable
 fun DownloadsScreen(
     state: DownloadsUiState,
     onBackClick: () -> Unit,
-    onPlayTrack: (Track) -> Unit,
+    onTabSelected: (DownloadsTab) -> Unit,
+    onTogglePauseResume: (Track) -> Unit,
     onCancelDownload: (Track) -> Unit,
-    onRetryDownload: (Track) -> Unit,
-    onDismissFailed: (Track) -> Unit,
-    onDeleteDownloaded: (Track) -> Unit,
+    onDeleteDownload: (Track) -> Unit,
+    onPlayTrack: (Track) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var trackPendingDeletion by remember { mutableStateOf<Track?>(null) }
+
+    trackPendingDeletion?.let { targetTrack ->
+        RemoveDownloadSheet(
+            track = targetTrack,
+            onConfirmRemove = {
+                onDeleteDownload(targetTrack)
+                trackPendingDeletion = null
+            },
+            onDismiss = { trackPendingDeletion = null },
+        )
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        DetailTopBar(
-            title = "Downloads",
-            subtitle = "Gerenciador offline",
-            onBackClick = onBackClick,
+        DetailTopBar(title = "Histórico de downloads", onBackClick = onBackClick)
+
+        DownloadsTabBar(
+            selectedTab = state.selectedTab,
+            inProgressCount = state.activeDownloads.size,
+            completedCount = state.completedDownloads.size,
+            onTabSelected = onTabSelected,
         )
 
-        val isEmpty = state.activeDownloads.isEmpty() &&
-            state.recentCompleted7Days.isEmpty() &&
-            state.allDownloaded.isEmpty()
+        Spacer(Modifier.height(12.dp))
 
-        if (isEmpty) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "Nenhum download em andamento ou concluído no momento.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.6f),
-                )
+        when (state.selectedTab) {
+            DownloadsTab.IN_PROGRESS -> {
+                if (state.activeDownloads.isEmpty()) {
+                    EmptyDownloadsState(message = "Nenhum download em andamento no momento.")
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 140.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        items(
+                            items = state.activeDownloads,
+                            key = { "${it.track.source.name}_${it.track.id}" },
+                        ) { item ->
+                            ActiveDownloadCard(
+                                item = item,
+                                onTogglePauseResume = { onTogglePauseResume(item.track) },
+                                onCancel = { onCancelDownload(item.track) },
+                            )
+                        }
+                        item(key = "credits_active") { AppCredits() }
+                    }
+                }
             }
-        } else {
-            LazyColumn(
-                contentPadding = PaddingValues(bottom = 140.dp, top = 8.dp, start = 16.dp, end = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.weight(1f),
-            ) {
-                // 1. Downloads em andamento (mostra porcentagem em tempo real)
-                if (state.activeDownloads.isNotEmpty()) {
-                    item(key = "header_active") {
-                        SectionTitle("Em andamento")
-                    }
-                    items(state.activeDownloads, key = { "active_${it.key}" }) { item ->
-                        ActiveDownloadCard(
-                            item = item,
-                            onCancelClick = { onCancelDownload(item.track) },
-                            onRetryClick = { onRetryDownload(item.track) },
-                            onDismissClick = { onDismissFailed(item.track) },
-                        )
+
+            DownloadsTab.COMPLETED -> {
+                if (state.completedDownloads.isEmpty()) {
+                    EmptyDownloadsState(message = "Nenhuma faixa baixada ainda.")
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 140.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        items(
+                            items = state.completedDownloads,
+                            key = { it.key },
+                        ) { downloaded ->
+                            val track = downloaded.toTrack()
+                            CompletedDownloadCard(
+                                downloaded = downloaded,
+                                onClick = { onPlayTrack(track) },
+                                onDeleteClick = { trackPendingDeletion = track },
+                            )
+                        }
+                        item(key = "credits_completed") { AppCredits() }
                     }
                 }
-
-                // 2. Concluídos nos últimos 7 dias ("Faixa {título} baixada")
-                if (state.recentCompleted7Days.isNotEmpty()) {
-                    item(key = "header_recent") {
-                        Spacer(Modifier.height(4.dp))
-                        SectionTitle("Concluídos recentemente (7 dias)")
-                    }
-                    items(state.recentCompleted7Days, key = { "recent_${it.key}" }) { downloaded ->
-                        RecentCompletedCard(
-                            item = downloaded,
-                            onClick = { onPlayTrack(downloaded.toTrack()) },
-                            onDeleteClick = { onDeleteDownloaded(downloaded.toTrack()) },
-                        )
-                    }
-                }
-
-                // 3. Todas as faixas salvas no dispositivo
-                if (state.allDownloaded.isNotEmpty()) {
-                    item(key = "header_all") {
-                        Spacer(Modifier.height(4.dp))
-                        SectionTitle("Todas as faixas baixadas (${state.allDownloaded.size})")
-                    }
-                    items(state.allDownloaded, key = { "all_${it.key}" }) { downloaded ->
-                        SavedTrackRow(
-                            item = downloaded,
-                            onClick = { onPlayTrack(downloaded.toTrack()) },
-                            onDeleteClick = { onDeleteDownloaded(downloaded.toTrack()) },
-                        )
-                    }
-                }
-
-                item(key = "credits") { AppCredits() }
             }
         }
     }
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        color = Color.White,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(vertical = 4.dp),
-    )
+private fun DownloadsTabBar(
+    selectedTab: DownloadsTab,
+    inProgressCount: Int,
+    completedCount: Int,
+    onTabSelected: (DownloadsTab) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .border(BorderStroke(1.dp, NavyBorder), RoundedCornerShape(14.dp))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        DownloadsTab.entries.forEach { tab ->
+            val isSelected = tab == selectedTab
+            val count = if (tab == DownloadsTab.IN_PROGRESS) inProgressCount else completedCount
+            val labelText = if (count > 0) "${tab.label} ($count)" else tab.label
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (isSelected) NavyBorder.copy(alpha = 0.65f) else Color.Transparent)
+                    .clickable { onTabSelected(tab) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = labelText,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.6f),
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
 }
 
 @Composable
 private fun ActiveDownloadCard(
     item: TrackDownloadItem,
-    onCancelClick: () -> Unit,
-    onRetryClick: () -> Unit,
-    onDismissClick: () -> Unit,
+    onTogglePauseResume: () -> Unit,
+    onCancel: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(14.dp)
+    val isPaused = item.status == DownloadStatus.PAUSED
     val isFailed = item.status == DownloadStatus.FAILED
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF121829))
+            .clip(shape)
+            .background(Color.Transparent)
+            .border(BorderStroke(1.5.dp, NavyBorder), shape)
             .padding(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            MediaThumbnail(
-                imageUrl = item.track.thumbnailUrl,
-                shape = ThumbnailShape.SQUARE,
-                size = 48.dp,
-                cornerRadius = 8.dp,
-            )
+            Box(
+                modifier = Modifier
+                    .size(50.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.White.copy(alpha = 0.08f)),
+            ) {
+                if (item.track.thumbnailUrl != null) {
+                    AsyncImage(
+                        model = item.track.thumbnailUrl,
+                        contentDescription = item.track.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+
             Spacer(Modifier.width(12.dp))
+
             Column(Modifier.weight(1f)) {
                 Text(
                     text = item.track.title,
                     style = MaterialTheme.typography.titleSmall,
                     color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = when (item.status) {
-                        DownloadStatus.QUEUED -> "Na fila..."
-                        DownloadStatus.DOWNLOADING -> {
-                            val sizeInfo = formatBytesProgress(item.bytesDownloaded, item.totalBytes)
-                            if (sizeInfo != null) "${item.progressPercent}% • $sizeInfo"
-                            else "${item.progressPercent}%"
-                        }
-                        DownloadStatus.FAILED -> item.errorMessage ?: "Falha no download"
-                        DownloadStatus.COMPLETED -> "Concluído"
-                    },
+                    text = item.track.artist,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isFailed) Color(0xFFF87171) else Color(0xFF60A5FA),
+                    color = Color.White.copy(alpha = 0.65f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = when {
+                        isFailed -> item.errorMessage ?: "Falha no download"
+                        isPaused -> "Pausado • ${item.percentage}%"
+                        item.status == DownloadStatus.QUEUED -> "Na fila..."
+                        else -> "Baixando • ${item.percentage}%"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when {
+                        isFailed -> DangerRed
+                        isPaused -> Color.White.copy(alpha = 0.6f)
+                        else -> ProgressBlue
+                    },
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
-            if (isFailed) {
-                IconButton(onClick = onRetryClick, modifier = Modifier.size(34.dp)) {
-                    Icon(VzIcons.Sync, contentDescription = "Tentar novamente", tint = Color.White)
-                }
-                IconButton(onClick = onDismissClick, modifier = Modifier.size(34.dp)) {
-                    Icon(VzIcons.Close, contentDescription = "Dispensar", tint = Color.White.copy(alpha = 0.7f))
-                }
-            } else {
-                IconButton(onClick = onCancelClick, modifier = Modifier.size(34.dp)) {
-                    Icon(VzIcons.Close, contentDescription = "Cancelar download", tint = Color.White.copy(alpha = 0.7f))
-                }
+
+            Spacer(Modifier.width(8.dp))
+
+            // Botão Pausar / Continuar
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .border(BorderStroke(1.dp, NavyBorder), CircleShape)
+                    .clickable { onTogglePauseResume() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = if (isPaused || isFailed) VzIcons.Play else VzIcons.Pause,
+                    contentDescription = if (isPaused || isFailed) "Continuar download" else "Pausar download",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            // Botão Parar / Cancelar (X)
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .border(BorderStroke(1.dp, NavyBorder), CircleShape)
+                    .clickable { onCancel() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = VzIcons.Close,
+                    contentDescription = "Parar download",
+                    tint = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(18.dp),
+                )
             }
         }
 
-        if (!isFailed) {
-            Spacer(Modifier.height(10.dp))
-            if (item.status == DownloadStatus.QUEUED || item.totalBytes <= 0L) {
-                LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(50)),
-                    color = Color(0xFF60A5FA),
-                    trackColor = Color.White.copy(alpha = 0.12f),
-                )
-            } else {
-                LinearProgressIndicator(
-                    progress = { item.progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(50)),
-                    color = Color(0xFF60A5FA),
-                    trackColor = Color.White.copy(alpha = 0.12f),
-                )
-            }
+        Spacer(Modifier.height(10.dp))
+
+        if (item.progress > 0f || isPaused) {
+            LinearProgressIndicator(
+                progress = { item.progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(50)),
+                color = if (isPaused) Color.White.copy(alpha = 0.45f) else ProgressBlue,
+                trackColor = Color.White.copy(alpha = 0.12f),
+            )
+        } else {
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(50)),
+                color = ProgressBlue,
+                trackColor = Color.White.copy(alpha = 0.12f),
+            )
         }
     }
 }
 
 @Composable
-private fun RecentCompletedCard(
-    item: DownloadedTrack,
+private fun CompletedDownloadCard(
+    downloaded: DownloadedTrack,
     onClick: () -> Unit,
     onDeleteClick: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(14.dp)
+    val sizeLabel = formatBytes(downloaded.fileSizeBytes)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF121829))
+            .clip(shape)
+            .background(Color.Transparent)
+            .border(BorderStroke(1.5.dp, NavyBorder), shape)
             .clickable { onClick() }
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MediaThumbnail(
-            imageUrl = item.thumbnailUrl,
-            shape = ThumbnailShape.SQUARE,
-            size = 48.dp,
-            cornerRadius = 8.dp,
-        )
+        Box(
+            modifier = Modifier
+                .size(50.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color.White.copy(alpha = 0.08f)),
+        ) {
+            if (downloaded.thumbnailUrl != null) {
+                AsyncImage(
+                    model = downloaded.thumbnailUrl,
+                    contentDescription = downloaded.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+
         Spacer(Modifier.width(12.dp))
+
         Column(Modifier.weight(1f)) {
             Text(
-                text = "Faixa ${item.title} baixada",
+                text = downloaded.title,
                 style = MaterialTheme.typography.titleSmall,
                 color = Color.White,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                text = "${item.artist} • ${formatBytes(item.fileSizeBytes)}",
+                text = downloaded.artist,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF4ADE80),
+                color = Color.White.copy(alpha = 0.65f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = if (sizeLabel != null) "Baixada • $sizeLabel" else "Baixada",
+                style = MaterialTheme.typography.labelSmall,
+                color = DownloadGreen,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
-        Icon(
-            imageVector = VzIcons.DownloadDone,
-            contentDescription = null,
-            tint = Color(0xFF4ADE80),
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.width(4.dp))
-        IconButton(onClick = onDeleteClick, modifier = Modifier.size(34.dp)) {
+
+        Spacer(Modifier.width(8.dp))
+
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .border(BorderStroke(1.dp, NavyBorder), CircleShape)
+                .clickable { onDeleteClick() },
+            contentAlignment = Alignment.Center,
+        ) {
             Icon(
                 imageVector = VzIcons.Delete,
                 contentDescription = "Remover download",
-                tint = Color.White.copy(alpha = 0.6f),
-                modifier = Modifier.size(20.dp),
+                tint = Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.size(19.dp),
             )
         }
     }
 }
 
 @Composable
-private fun SavedTrackRow(
-    item: DownloadedTrack,
-    onClick: () -> Unit,
-    onDeleteClick: () -> Unit,
-) {
-    Row(
+private fun EmptyDownloadsState(message: String) {
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .clickable { onClick() }
-            .padding(vertical = 6.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .fillMaxSize()
+            .padding(32.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        MediaThumbnail(
-            imageUrl = item.thumbnailUrl,
-            shape = ThumbnailShape.SQUARE,
-            size = 50.dp,
-            cornerRadius = 8.dp,
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(alpha = 0.55f),
+            textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = "${item.artist} • ${formatBytes(item.fileSizeBytes)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        IconButton(onClick = onDeleteClick, modifier = Modifier.size(34.dp)) {
-            Icon(
-                imageVector = VzIcons.Delete,
-                contentDescription = "Remover download",
-                tint = Color.White.copy(alpha = 0.6f),
-                modifier = Modifier.size(20.dp),
-            )
-        }
     }
 }
 
-private fun formatBytesProgress(downloaded: Long, total: Long): String? {
-    if (total <= 0L) return null
-    return "${formatBytes(downloaded)} / ${formatBytes(total)}"
-}
-
-private fun formatBytes(bytes: Long): String {
-    if (bytes <= 0L) return "0 MB"
+private fun formatBytes(bytes: Long): String? {
+    if (bytes <= 0L) return null
     val mb = bytes / (1024.0 * 1024.0)
     return String.format("%.1f MB", mb)
 }

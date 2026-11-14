@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.data.player.PlayerController
+import com.vztechcore.vztune.data.prefs.store.DownloadedTracksStore
 import com.vztechcore.vztune.data.prefs.store.FavoriteTracksStore
 import com.vztechcore.vztune.data.prefs.store.FollowedArtistsStore
 import com.vztechcore.vztune.data.prefs.store.MostPlayedStore
@@ -13,20 +14,22 @@ import com.vztechcore.vztune.ui.navigation.Routes
 import com.vztechcore.vztune.ui.screens.library.LibraryShortcut
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
-/** Backs the lists opened from the Library shortcut cards (favorites, most played, followed...). */
+/** Backs the lists opened from the Library shortcut cards (favorites, most played, followed, downloads). */
 @HiltViewModel
 class LibraryListViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     favoriteTracksStore: FavoriteTracksStore,
     mostPlayedStore: MostPlayedStore,
     followedArtistsStore: FollowedArtistsStore,
+    downloadedTracksStore: DownloadedTracksStore,
     private val playerController: PlayerController,
 ) : ViewModel() {
 
@@ -37,7 +40,10 @@ class LibraryListViewModel @Inject constructor(
     private val tracksFlow: Flow<List<Track>> = when (shortcut) {
         LibraryShortcut.FAVORITES -> favoriteTracksStore.tracks
         LibraryShortcut.MOST_PLAYED -> mostPlayedStore.tracks
-        LibraryShortcut.FOLLOWED, LibraryShortcut.DOWNLOADS -> flowOf(emptyList())
+        LibraryShortcut.DOWNLOADS -> downloadedTracksStore.items.map { list ->
+            list.map { it.toTrack() }
+        }
+        LibraryShortcut.FOLLOWED -> flowOf(emptyList())
     }
 
     val uiState: StateFlow<LibraryListUiState> = combine(

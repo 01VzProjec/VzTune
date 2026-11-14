@@ -54,10 +54,9 @@ class DownloadedTracksStore @Inject constructor(
         return if (file.exists() && file.length() > 0L) file else null
     }
 
-    /** Salva ou atualiza o registro de uma faixa baixada. */
+    /** Salva ou atualiza o registro de uma faixa baixada no topo da lista. */
     suspend fun saveDownload(downloadedTrack: DownloadedTrack) {
-        remove(downloadedTrack.key)
-        prepend(downloadedTrack)
+        addFirst(downloadedTrack)
     }
 
     /** Remove o registro do DataStore e apaga o arquivo físico do aparelho. */

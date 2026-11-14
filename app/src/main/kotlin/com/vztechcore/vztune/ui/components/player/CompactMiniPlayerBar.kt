@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -52,6 +53,8 @@ fun CompactMiniPlayerBar(
     track: Track,
     isPlaying: Boolean,
     isLoading: Boolean = false,
+    progress: Float = 0f,
+    dominantColor: Color = Color.White,
     onPlayPauseClick: () -> Unit,
     onNextClick: () -> Unit,
     onClick: () -> Unit,
@@ -59,6 +62,7 @@ fun CompactMiniPlayerBar(
 ) {
     val shape = RoundedCornerShape(50)
     val isVideo = track.source == Source.YOUTUBE
+    val clampedProgress = progress.coerceIn(0f, 1f)
 
     val discRotation = remember { Animatable(0f) }
 
@@ -73,119 +77,145 @@ fun CompactMiniPlayerBar(
         }
     }
 
-    Row(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
             .clip(shape)
             .background(GlassFill)
             .border(1.dp, GlassBorder, shape)
-            .clickable { onClick() }
-            .padding(horizontal = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .clickable { onClick() },
     ) {
-        Box(
-            Modifier
-                .size(40.dp)
-                .clip(if (isVideo) RoundedCornerShape(6.dp) else CircleShape)
-                .background(Color.White.copy(alpha = 0.1f))
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = if (isVideo) 12.dp else 6.dp, end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (isVideo) {
-                AsyncImage(
-                    model = track.thumbnailUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(6.dp))
-                )
-            } else {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .graphicsLayer { rotationZ = discRotation.value }
-                        .clip(CircleShape)
-                ) {
+            Box(
+                Modifier
+                    .size(if (isVideo) 36.dp else 40.dp)
+                    .clip(if (isVideo) RoundedCornerShape(6.dp) else CircleShape)
+                    .background(Color.White.copy(alpha = 0.1f))
+            ) {
+                if (isVideo) {
                     AsyncImage(
                         model = track.thumbnailUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(6.dp))
                     )
+                } else {
                     Box(
                         Modifier
-                            .align(Alignment.Center)
-                            .size(8.dp)
+                            .fillMaxSize()
+                            .graphicsLayer { rotationZ = discRotation.value }
                             .clip(CircleShape)
-                            .background(Color.Black)
-                    )
+                    ) {
+                        AsyncImage(
+                            model = track.thumbnailUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(1f)
+                        )
+                        Box(
+                            Modifier
+                                .align(Alignment.Center)
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black)
+                        )
+                    }
+                }
+
+                if (isLoading) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(
+                                Color.Black.copy(alpha = 0.45f),
+                                if (isVideo) RoundedCornerShape(6.dp) else CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 
-            if (isLoading) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.45f), if (isVideo) RoundedCornerShape(6.dp) else CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
+            Spacer(Modifier.width(10.dp))
+
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = track.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = track.artist,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Spacer(Modifier.width(4.dp))
+
+            IconButton(onClick = onPlayPauseClick, modifier = Modifier.size(36.dp)) {
+                if (isLoading) {
                     CircularProgressIndicator(
                         color = Color.White,
                         strokeWidth = 2.dp,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (isPlaying) VzIcons.Pause else VzIcons.Play,
+                        contentDescription = if (isPlaying) "Pausar" else "Tocar",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp),
                     )
                 }
             }
-        }
 
-        Spacer(Modifier.width(10.dp))
-
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = track.title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = track.artist,
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.6f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-
-        Spacer(Modifier.width(4.dp))
-
-        IconButton(onClick = onPlayPauseClick, modifier = Modifier.size(36.dp)) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    color = Color.White,
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.size(20.dp)
-                )
-            } else {
+            IconButton(onClick = onNextClick, modifier = Modifier.size(36.dp)) {
                 Icon(
-                    imageVector = if (isPlaying) VzIcons.Pause else VzIcons.Play,
-                    contentDescription = if (isPlaying) "Pausar" else "Tocar",
+                    imageVector = VzIcons.SkipNext,
+                    contentDescription = "Próxima",
                     tint = Color.White,
                     modifier = Modifier.size(24.dp),
                 )
             }
         }
 
-        IconButton(onClick = onNextClick, modifier = Modifier.size(36.dp)) {
-            Icon(
-                imageVector = VzIcons.SkipNext,
-                contentDescription = "Próxima",
-                tint = Color.White,
-                modifier = Modifier.size(24.dp),
-            )
+        // Bottom track progress bar
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .height(3.dp)
+                .background(Color.White.copy(alpha = 0.15f))
+        ) {
+            if (clampedProgress > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(clampedProgress)
+                        .fillMaxHeight()
+                        .background(dominantColor)
+                )
+            }
         }
     }
 }

@@ -140,8 +140,9 @@ private fun SquareThumbWithProgress(
 ) {
     Box(Modifier.fillMaxSize()) {
         Canvas(Modifier.fillMaxSize()) {
-            val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-            val inset = 1.dp.toPx()
+            val strokeWidth = 3.dp.toPx()
+            val stroke = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+            val inset = strokeWidth / 2f
             val cornerRadius = 8.dp.toPx()
             val rect = Rect(inset, inset, size.width - inset, size.height - inset)
             val path = Path().apply { addRoundRect(RoundRect(rect, CornerRadius(cornerRadius))) }
@@ -151,7 +152,7 @@ private fun SquareThumbWithProgress(
             if (progress > 0f) {
                 val measure = PathMeasure().apply { setPath(path, false) }
                 val partial = Path()
-                measure.getSegment(0f, measure.length * progress, partial, true)
+                measure.getSegment(0f, measure.length * progress.coerceIn(0f, 1f), partial, true)
                 drawPath(partial, color = dominantColor, style = stroke)
             }
         }
@@ -162,7 +163,7 @@ private fun SquareThumbWithProgress(
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(3.dp)
+                .padding(4.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .background(Color.White.copy(alpha = 0.06f)),
         )
@@ -198,8 +199,9 @@ private fun DiscThumbWithProgress(
 
     Box(Modifier.fillMaxSize()) {
         Canvas(Modifier.fillMaxSize()) {
-            val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-            val inset = 1.dp.toPx()
+            val strokeWidth = 3.dp.toPx()
+            val stroke = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+            val inset = strokeWidth / 2f
 
             drawCircle(color = Color.White.copy(alpha = 0.15f), radius = size.minDimension / 2 - inset, style = stroke)
 
@@ -207,7 +209,7 @@ private fun DiscThumbWithProgress(
                 drawArc(
                     color = dominantColor,
                     startAngle = -90f,
-                    sweepAngle = 360f * progress,
+                    sweepAngle = 360f * progress.coerceIn(0f, 1f),
                     useCenter = false,
                     topLeft = Offset(inset, inset),
                     size = Size(size.width - inset * 2, size.height - inset * 2),
@@ -219,7 +221,7 @@ private fun DiscThumbWithProgress(
         Box(
             Modifier
                 .fillMaxSize()
-                .padding(3.dp)
+                .padding(4.dp)
                 .graphicsLayer { rotationZ = discRotation.value }
                 .clip(CircleShape)
                 .background(Color(0xFF0F1E3D))

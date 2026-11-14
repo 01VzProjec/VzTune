@@ -115,6 +115,8 @@ fun BoxScope.PlaybackChrome(
                             track = track,
                             isPlaying = playback.isPlaying,
                             isLoading = playback.isLoading,
+                            progress = playback.progress,
+                            dominantColor = dominantColor,
                             onPlayPauseClick = miniPlayerVm::togglePlayPause,
                             onNextClick = miniPlayerVm::next,
                             onClick = { },

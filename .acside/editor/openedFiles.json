@@ -20,12 +20,12 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 1365,
+          "index": 1353,
           "line": 44
         },
         "start": {
           "column": 1,
-          "index": 1365,
+          "index": 1353,
           "line": 44
         }
       }
@@ -91,5 +91,5 @@
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/downloads/DownloadsScreen.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/prefs/store/FavoriteTracksStore.kt"
 }

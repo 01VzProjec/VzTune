@@ -11,8 +11,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Gerencia exclusivamente a lista de músicas favoritadas pelo usuário.
- * Nunca dispara downloads automaticamente.
+ * Manages exclusively the list of user-favorited tracks.
+ * Never triggers automatic downloads.
  */
 @Singleton
 class FavoriteTracksStore @Inject constructor(
@@ -25,7 +25,7 @@ class FavoriteTracksStore @Inject constructor(
     idOf = { it.key },
 ) {
     val tracks: Flow<List<Track>> = items.map { list ->
-        list.map { it.toTrack() }
+        list.mapNotNull { it.toTrack() }
     }
 
     fun containsTrack(track: Track): Flow<Boolean> {

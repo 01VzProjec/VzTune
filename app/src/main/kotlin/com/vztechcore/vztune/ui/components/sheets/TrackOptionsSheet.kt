@@ -29,22 +29,22 @@ import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Delete
 import com.vztechcore.vztune.ui.icons.actions.FavoriteFilled
 import com.vztechcore.vztune.ui.icons.actions.FavoriteOutline
+import com.vztechcore.vztune.ui.icons.actions.Info
 import com.vztechcore.vztune.ui.icons.actions.Share
 import com.vztechcore.vztune.ui.icons.media.Artist
 import com.vztechcore.vztune.ui.icons.media.Download
 import com.vztechcore.vztune.ui.icons.media.DownloadDone
 import com.vztechcore.vztune.ui.icons.media.Groups
-import com.vztechcore.vztune.ui.icons.media.PlayCircleFilled
 import com.vztechcore.vztune.ui.icons.media.PlaylistAdd
 import com.vztechcore.vztune.ui.icons.media.QueueMusic
-import com.vztechcore.vztune.ui.icons.status.Info
+import com.vztechcore.vztune.ui.icons.player.PlayCircleFilled
 
 private val SheetContainerColor = Color(0xFF121829)
 private val DownloadGreen = Color(0xFF4ADE80)
 private val DangerRed = Color(0xFFF87171)
 
 /**
- * Menu de contexto aberto pelos três pontinhos em qualquer cartão de faixa.
+ * Context menu opened from the three-dots button on any track card.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -142,7 +142,7 @@ fun TrackOptionsSheet(
                 color = Color.White.copy(alpha = 0.08f),
             )
 
-            // 1. Favoritar / Desfavoritar (nunca inicia download)
+            // 1. Favorite / Unfavorite (never triggers automatic download)
             SheetOptionRow(
                 icon = if (isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
                 iconTint = if (isFavorite) Color(0xFFEC4899) else Color.White,
@@ -153,14 +153,14 @@ fun TrackOptionsSheet(
                 },
             )
 
-            // 2. Adicionar à playlist
+            // 2. Add to playlist
             SheetOptionRow(
                 icon = VzIcons.PlaylistAdd,
                 label = "Adicionar à playlist",
                 onClick = { showPlaylistPicker = true },
             )
 
-            // 3. Reproduzir como próxima faixa
+            // 3. Play next
             SheetOptionRow(
                 icon = VzIcons.PlayCircleFilled,
                 label = "Reproduzir como próxima faixa",
@@ -170,7 +170,7 @@ fun TrackOptionsSheet(
                 },
             )
 
-            // 4. Adicionar à fila
+            // 4. Add to queue
             SheetOptionRow(
                 icon = VzIcons.QueueMusic,
                 label = "Adicionar à fila",
@@ -180,7 +180,7 @@ fun TrackOptionsSheet(
                 },
             )
 
-            // 5. Baixar / Baixando / Faixa baixada (abre submenu de confirmação)
+            // 5. Download / Downloading / Downloaded
             when {
                 isDownloading -> {
                     val progress = downloadItem?.progress ?: 0f
@@ -223,7 +223,7 @@ fun TrackOptionsSheet(
                 }
             }
 
-            // 6. Compartilhar
+            // 6. Share
             SheetOptionRow(
                 icon = VzIcons.Share,
                 label = "Compartilhar",
@@ -233,7 +233,7 @@ fun TrackOptionsSheet(
                 },
             )
 
-            // 7. Ir para o(s) artista(s)
+            // 7. Go to artist(s)
             if (artists.isNotEmpty()) {
                 val hasMultiple = artists.size > 1
                 SheetOptionRow(
@@ -251,7 +251,7 @@ fun TrackOptionsSheet(
                 )
             }
 
-            // 8. Informações da faixa
+            // 8. Track details
             SheetOptionRow(
                 icon = VzIcons.Info,
                 label = "Ver informações da faixa",
@@ -265,7 +265,7 @@ fun TrackOptionsSheet(
 }
 
 /**
- * Submenu de confirmação exibido ao tocar em "Faixa baixada" ou na lixeira dos downloads finalizados.
+ * Confirmation bottom sheet displayed when tapping "Faixa baixada" or the delete icon in completed downloads.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -1,11 +1,11 @@
 package com.vztechcore.vztune.data.download
 
 import com.vztechcore.vztune.core.domain.music.Track
-import com.vztechcore.vztune.data.prefs.models.StoredTrack
 
 enum class DownloadStatus {
     QUEUED,
     DOWNLOADING,
+    PAUSED,
     COMPLETED,
     FAILED,
 }
@@ -17,11 +17,12 @@ data class TrackDownloadItem(
     val bytesDownloaded: Long = 0L,
     val totalBytes: Long = -1L,
     val errorMessage: String? = null,
+    val createdAtMs: Long = System.currentTimeMillis(),
     val updatedAtMs: Long = System.currentTimeMillis(),
 ) {
-    val key: String
-        get() = StoredTrack.from(track).key
+    val percentage: Int
+        get() = (progress * 100f).toInt().coerceIn(0, 100)
 
-    val progressPercent: Int
-        get() = (progress.coerceIn(0f, 1f) * 100).toInt()
+    val isPaused: Boolean
+        get() = status == DownloadStatus.PAUSED
 }

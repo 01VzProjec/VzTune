@@ -30,8 +30,8 @@ import javax.inject.Singleton
 
 /**
  * Central download manager for VzTune.
- * Extracts the audio stream via [MusicRepository] (NewPipe) and streams bytes
- * with [OkHttpClient], atomically renaming (.tmp -> final file) in internal storage.
+ * Resolves audio streams via [MusicRepository] and downloads them via [OkHttpClient]
+ * with support for pausing, resuming (via HTTP Range when available), and atomic saving.
  */
 @Singleton
 class TrackDownloader @Inject constructor(
@@ -52,7 +52,7 @@ class TrackDownloader @Inject constructor(
     private val _downloads = MutableStateFlow<Map<String, TrackDownloadItem>>(emptyMap())
     val downloads: StateFlow<Map<String, TrackDownloadItem>> = _downloads.asStateFlow()
 
-    /** Emits the track whenever a new download starts so the UI can show a floating banner. */
+    /** Emits a track whenever a new download starts so the UI can show a notification banner. */
     private val _startedEvent = MutableSharedFlow<Track>(extraBufferCapacity = 8)
     val startedEvent: SharedFlow<Track> = _startedEvent.asSharedFlow()
 
@@ -62,23 +62,66 @@ class TrackDownloader @Inject constructor(
         if (current?.status == DownloadStatus.DOWNLOADING || current?.status == DownloadStatus.QUEUED) {
             return
         }
+        if (current?.status == DownloadStatus.PAUSED) {
+            resume(track)
+            return
+        }
 
+        val now = System.currentTimeMillis()
         _downloads.update { map ->
-            map + (key to TrackDownloadItem(track = track, status = DownloadStatus.QUEUED, progress = 0f))
+            map + (
+                key to TrackDownloadItem(
+                    track = track,
+                    status = DownloadStatus.QUEUED,
+                    progress = 0f,
+                    createdAtMs = now,
+                    updatedAtMs = now,
+                )
+            )
         }
         _startedEvent.tryEmit(track)
 
-        val job = scope.launch {
-            runDownload(key, track)
+        startJob(key, track, isResume = false)
+    }
+
+    fun pause(track: Track) {
+        val key = StoredTrack.from(track).key
+        val current = _downloads.value[key] ?: return
+        if (current.status != DownloadStatus.DOWNLOADING && current.status != DownloadStatus.QUEUED) return
+
+        // Mark as paused before cancelling job so the CancellationException handler preserves .tmp files
+        updateItem(key) {
+            it.copy(status = DownloadStatus.PAUSED, updatedAtMs = System.currentTimeMillis())
         }
-        activeJobs[key] = job
+        activeJobs.remove(key)?.cancel()
+    }
+
+    fun resume(track: Track) {
+        val key = StoredTrack.from(track).key
+        val current = _downloads.value[key] ?: return
+        if (current.status == DownloadStatus.DOWNLOADING || current.status == DownloadStatus.QUEUED) return
+
+        updateItem(key) {
+            it.copy(status = DownloadStatus.QUEUED, errorMessage = null, updatedAtMs = System.currentTimeMillis())
+        }
+        startJob(key, track, isResume = true)
+    }
+
+    fun togglePauseResume(track: Track) {
+        val key = StoredTrack.from(track).key
+        val current = _downloads.value[key] ?: return
+        if (current.status == DownloadStatus.PAUSED) {
+            resume(track)
+        } else if (current.status == DownloadStatus.DOWNLOADING || current.status == DownloadStatus.QUEUED) {
+            pause(track)
+        }
     }
 
     fun cancel(track: Track) {
         val key = StoredTrack.from(track).key
-        activeJobs.remove(key)?.cancel()
         _downloads.update { it - key }
-        cleanupTempFiles(key)
+        activeJobs.remove(key)?.cancel()
+        cleanupTempFiles(sanitizeFileName(key))
     }
 
     fun dismissFailed(track: Track) {
@@ -93,44 +136,68 @@ class TrackDownloader @Inject constructor(
         }
     }
 
-    private suspend fun runDownload(key: String, track: Track) {
+    private fun startJob(key: String, track: Track, isResume: Boolean) {
+        activeJobs.remove(key)?.cancel()
+        val job = scope.launch {
+            runDownload(key, track, isResume)
+        }
+        activeJobs[key] = job
+    }
+
+    private suspend fun runDownload(key: String, track: Track, isResume: Boolean) {
+        val safeBaseName = sanitizeFileName(key)
         var tempFile: File? = null
         try {
             updateItem(key) {
-                it.copy(status = DownloadStatus.DOWNLOADING, progress = 0f, errorMessage = null)
+                it.copy(status = DownloadStatus.DOWNLOADING, errorMessage = null)
             }
 
-            // 1. Resolve direct stream URL and MIME type via NewPipe
             val streamUrl = track.streamUrl?.takeIf { it.isNotBlank() }
                 ?: musicRepository.getStreamUrl(track)
-                ?: throw IllegalStateException("Não foi possível obter o link de áudio.")
+                ?: throw IllegalStateException("Unable to resolve audio stream URL.")
 
             val techInfo = runCatching { musicRepository.getTechnicalInfo(track) }.getOrNull()
             val mimeType = techInfo?.mimeType ?: "audio/mp4"
             val extension = resolveExtension(mimeType)
 
             val dir = downloadedTracksStore.downloadsDir
-            val finalFile = File(dir, "$key.$extension")
-            tempFile = File(dir, "$key.$extension.tmp").apply { if (exists()) delete() }
+            if (!dir.exists()) dir.mkdirs()
 
-            // 2. Download stream via OkHttp in 8KB chunks
-            val request = Request.Builder()
+            val finalFile = File(dir, "$safeBaseName.$extension")
+            tempFile = File(dir, "$safeBaseName.$extension.tmp")
+
+            val existingBytes = if (isResume && tempFile.exists()) tempFile.length() else {
+                if (tempFile.exists()) tempFile.delete()
+                0L
+            }
+
+            val requestBuilder = Request.Builder()
                 .url(streamUrl)
                 .header("User-Agent", "Mozilla/5.0")
-                .build()
 
-            okHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IllegalStateException("Erro HTTP ${response.code} ao baixar faixa.")
+            if (existingBytes > 0L) {
+                requestBuilder.header("Range", "bytes=$existingBytes-")
+            }
+
+            okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
+                if (!response.isSuccessful && response.code != 206) {
+                    throw IllegalStateException("HTTP ${response.code} while downloading track.")
                 }
 
-                val body = response.body ?: throw IllegalStateException("Resposta de áudio vazia.")
-                val totalBytes = body.contentLength()
-                var bytesReadTotal = 0L
+                val body = response.body ?: throw IllegalStateException("Empty audio response body.")
+                val isPartial = response.code == 206 && existingBytes > 0L
+                val startOffset = if (isPartial) existingBytes else {
+                    if (tempFile.exists()) tempFile.delete()
+                    0L
+                }
+
+                val contentLength = body.contentLength()
+                val totalBytes = if (contentLength > 0L) startOffset + contentLength else -1L
+                var bytesReadTotal = startOffset
                 var lastEmitTime = 0L
 
                 body.byteStream().use { input ->
-                    FileOutputStream(tempFile).use { output ->
+                    FileOutputStream(tempFile, isPartial).use { output ->
                         val buffer = ByteArray(8 * 1024)
                         while (true) {
                             val read = input.read(buffer)
@@ -139,7 +206,7 @@ class TrackDownloader @Inject constructor(
                             bytesReadTotal += read
 
                             val now = System.currentTimeMillis()
-                            if (now - lastEmitTime >= 200L) {
+                            if (now - lastEmitTime >= 250L) {
                                 lastEmitTime = now
                                 val fraction = if (totalBytes > 0L) {
                                     (bytesReadTotal.toFloat() / totalBytes.toFloat()).coerceIn(0f, 0.99f)
@@ -175,11 +242,14 @@ class TrackDownloader @Inject constructor(
                 )
                 downloadedTracksStore.saveDownload(savedRecord)
 
-                // Remove from active downloads once saved to the 7-day completed store
+                // Remove from active downloads map once persisted in DownloadedTracksStore
                 _downloads.update { it - key }
             }
         } catch (ce: CancellationException) {
-            tempFile?.delete()
+            val status = _downloads.value[key]?.status
+            if (status != DownloadStatus.PAUSED) {
+                tempFile?.delete()
+            }
             throw ce
         } catch (e: Exception) {
             Log.e(TAG, "Failed to download '${track.title}': ${e.message}", e)
@@ -187,7 +257,7 @@ class TrackDownloader @Inject constructor(
             updateItem(key) {
                 it.copy(
                     status = DownloadStatus.FAILED,
-                    errorMessage = e.message ?: "Erro ao baixar faixa.",
+                    errorMessage = e.message ?: "Error downloading track.",
                     updatedAtMs = System.currentTimeMillis(),
                 )
             }
@@ -203,6 +273,10 @@ class TrackDownloader @Inject constructor(
         }
     }
 
+    private fun sanitizeFileName(raw: String): String {
+        return raw.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+    }
+
     private fun resolveExtension(mimeType: String): String {
         val lower = mimeType.lowercase()
         return when {
@@ -212,10 +286,10 @@ class TrackDownloader @Inject constructor(
         }
     }
 
-    private fun cleanupTempFiles(key: String) {
+    private fun cleanupTempFiles(safeBaseName: String) {
         runCatching {
             downloadedTracksStore.downloadsDir
-                .listFiles { file -> file.name.startsWith(key) && file.name.endsWith(".tmp") }
+                .listFiles { file -> file.name.startsWith(safeBaseName) && file.name.endsWith(".tmp") }
                 ?.forEach { it.delete() }
         }
     }

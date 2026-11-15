@@ -31,6 +31,7 @@ import com.vztechcore.vztune.ui.icons.actions.MoreVert
 import com.vztechcore.vztune.ui.icons.actions.Sort
 import com.vztechcore.vztune.ui.icons.actions.StopCircle
 import com.vztechcore.vztune.ui.icons.actions.Sync
+import com.vztechcore.vztune.ui.icons.media.DownloadForOffline
 import com.vztechcore.vztune.ui.icons.navigation.Search
 import com.vztechcore.vztune.ui.icons.player.Play
 import com.vztechcore.vztune.ui.icons.player.Shuffle
@@ -38,6 +39,7 @@ import com.vztechcore.vztune.ui.icons.player.Shuffle
 @Composable
 internal fun MediaListExpandedHeader(
     state: MediaListUiState,
+    allTracksDownloaded: Boolean = false,
     onBackClick: () -> Unit,
     onTabSelected: (MediaListTab) -> Unit,
     onPlayAllClick: () -> Unit,
@@ -211,6 +213,24 @@ internal fun MediaListExpandedHeader(
                     tint = Color.White,
                     modifier = Modifier.size(20.dp),
                 )
+            }
+
+            if (allTracksDownloaded) {
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = VzIcons.DownloadForOffline,
+                        contentDescription = "Playlist baixada",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
 
             Spacer(Modifier.weight(1f))

@@ -1,5 +1,6 @@
 package com.vztechcore.vztune.ui.screens.medialist
 
+import android.net.Uri
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -28,6 +29,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
+import com.vztechcore.vztune.data.download.DownloadStatus
+import com.vztechcore.vztune.data.download.TrackDownloadItem
 import com.vztechcore.vztune.data.prefs.models.StoredTrack
 import com.vztechcore.vztune.ui.components.download.LocalDownloadedKeys
 import com.vztechcore.vztune.ui.components.feedback.VzLoading
@@ -46,6 +49,7 @@ private const val HEADER_OFFSET = 1
 @Composable
 fun MediaListScreen(
     state: MediaListUiState,
+    activeDownloads: Map<String, TrackDownloadItem> = emptyMap(),
     onBackClick: () -> Unit,
     onTabSelected: (MediaListTab) -> Unit,
     onTrackClick: (Track) -> Unit,
@@ -65,6 +69,8 @@ fun MediaListScreen(
     onOpenDownloadsScreen: () -> Unit = {},
     onOpenArtistByName: (String) -> Unit = {},
     onDeleteLocalPlaylist: () -> Unit = {},
+    onRenameLocalPlaylist: (String) -> Unit = {},
+    onChangeLocalPlaylistCover: (Uri) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -84,6 +90,32 @@ fun MediaListScreen(
     val allTracksDownloaded = remember(state.allTracks, downloadedKeys) {
         state.allTracks.isNotEmpty() && state.allTracks.all {
             StoredTrack.from(it).key in downloadedKeys
+        }
+    }
+
+    val batchDownloadState = remember(state.allTracks, downloadedKeys, activeDownloads) {
+        if (state.allTracks.isEmpty()) {
+            false to 0f
+        } else {
+            var activeCount = 0
+            var totalProgress = 0f
+            state.allTracks.forEach { t ->
+                val k = StoredTrack.from(t).key
+                val item = activeDownloads[k]
+                when {
+                    k in downloadedKeys -> totalProgress += 1f
+                    item != null && (item.status == DownloadStatus.DOWNLOADING || item.status == DownloadStatus.QUEUED) -> {
+                        activeCount++
+                        totalProgress += item.progress.coerceIn(0f, 1f)
+                    }
+                    item != null && item.status == DownloadStatus.PAUSED -> {
+                        totalProgress += item.progress.coerceIn(0f, 1f)
+                    }
+                }
+            }
+            val isRunning = activeCount > 0
+            val avgProgress = (totalProgress / state.allTracks.size.toFloat()).coerceIn(0f, 1f)
+            isRunning to avgProgress
         }
     }
 
@@ -126,6 +158,8 @@ fun MediaListScreen(
         MediaListOptionsSheet(
             state = state,
             allTracksDownloaded = allTracksDownloaded,
+            isDownloadingBatch = batchDownloadState.first,
+            batchDownloadProgress = batchDownloadState.second,
             onDismiss = { showListOptionsSheet = false },
             onToggleFavorite = onFavoriteClick,
             onPlayNextAll = onPlayNextAll,
@@ -134,6 +168,8 @@ fun MediaListScreen(
             onOpenDownloadsScreen = onOpenDownloadsScreen,
             onOpenArtistByName = onOpenArtistByName,
             onDeleteLocalPlaylist = onDeleteLocalPlaylist,
+            onRenameLocalPlaylist = onRenameLocalPlaylist,
+            onChangeLocalPlaylistCover = onChangeLocalPlaylistCover,
         )
     }
 
@@ -150,6 +186,7 @@ fun MediaListScreen(
             item(key = "header") {
                 MediaListExpandedHeader(
                     state = state,
+                    allTracksDownloaded = allTracksDownloaded,
                     onBackClick = onBackClick,
                     onTabSelected = onTabSelected,
                     onPlayAllClick = onPlayAllClick,

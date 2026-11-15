@@ -140,13 +140,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 16943,
-          "line": 442
+          "index": 23967,
+          "line": 649
         },
         "start": {
           "column": 1,
-          "index": 16943,
-          "line": 442
+          "index": 23967,
+          "line": 649
         }
       }
     },
@@ -215,13 +215,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 21994,
-          "line": 439
+          "index": 22213,
+          "line": 442
         },
         "start": {
           "column": 1,
-          "index": 21994,
-          "line": 439
+          "index": 22213,
+          "line": 442
         }
       }
     },
@@ -440,13 +440,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 11612,
-          "line": 278
+          "index": 13352,
+          "line": 315
         },
         "start": {
           "column": 1,
-          "index": 11612,
-          "line": 278
+          "index": 13352,
+          "line": 315
         }
       }
     },
@@ -455,13 +455,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 10929,
-          "line": 278
+          "index": 12733,
+          "line": 322
         },
         "start": {
           "column": 1,
-          "index": 10929,
-          "line": 278
+          "index": 12733,
+          "line": 322
         }
       }
     },
@@ -500,13 +500,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 14788,
-          "line": 394
+          "index": 22089,
+          "line": 597
         },
         "start": {
           "column": 1,
-          "index": 14788,
-          "line": 394
+          "index": 22089,
+          "line": 597
         }
       }
     },
@@ -515,16 +515,31 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 10756,
-          "line": 294
+          "index": 11535,
+          "line": 314
         },
         "start": {
           "column": 1,
-          "index": 10756,
-          "line": 294
+          "index": 11535,
+          "line": 314
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/icons/actions/Edit.kt",
+      "selection": {
+        "end": {
+          "column": 5,
+          "index": 598,
+          "line": 9
+        },
+        "start": {
+          "column": 5,
+          "index": 598,
+          "line": 9
         }
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListViewModel.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt"
 }

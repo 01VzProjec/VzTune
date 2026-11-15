@@ -1,11 +1,16 @@
 package com.vztechcore.vztune.data.download
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.util.Log
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.data.music.MusicRepository
 import com.vztechcore.vztune.data.prefs.models.DownloadedTrack
 import com.vztechcore.vztune.data.prefs.models.StoredTrack
 import com.vztechcore.vztune.data.prefs.store.DownloadedTracksStore
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,17 +29,20 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Central download manager for VzTune with a FIFO queue and up to [MAX_CONCURRENT_DOWNLOADS]
- * simultaneous transfers. Supports pause/resume (via HTTP Range when available) and atomic saving.
+ * Central download manager for VzTune with a FIFO queue and up to [MAX_CONCURRENT_DOWNLOADS] (30)
+ * simultaneous transfers. Automatically pauses transfers into cache (.tmp) when internet drops
+ * and resumes them from the exact byte offset as soon as connectivity returns.
  */
 @Singleton
 class TrackDownloader @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val musicRepository: MusicRepository,
     private val downloadedTracksStore: DownloadedTracksStore,
 ) {
@@ -46,9 +54,13 @@ class TrackDownloader @Inject constructor(
             .build()
     }
 
+    private val connectivityManager =
+        context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val activeJobs = ConcurrentHashMap<String, Job>()
     private val resumeKeys = ConcurrentHashMap.newKeySet<String>()
+    private val networkPausedKeys = ConcurrentHashMap.newKeySet<String>()
     private val schedulerLock = Any()
 
     private val _downloads = MutableStateFlow<Map<String, TrackDownloadItem>>(emptyMap())
@@ -57,6 +69,105 @@ class TrackDownloader @Inject constructor(
     /** Emits a track whenever a new download starts so the UI can show a notification banner. */
     private val _startedEvent = MutableSharedFlow<Track>(extraBufferCapacity = 8)
     val startedEvent: SharedFlow<Track> = _startedEvent.asSharedFlow()
+
+    init {
+        registerNetworkObserver()
+    }
+
+    private fun registerNetworkObserver() {
+        val cm = connectivityManager ?: return
+        runCatching {
+            cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    resumeNetworkPausedDownloads()
+                }
+
+                override fun onCapabilitiesChanged(
+                    network: Network,
+                    networkCapabilities: NetworkCapabilities,
+                ) {
+                    val hasInternet = networkCapabilities.hasCapability(
+                        NetworkCapabilities.NET_CAPABILITY_INTERNET
+                    )
+                    if (hasInternet) {
+                        resumeNetworkPausedDownloads()
+                    }
+                }
+
+                override fun onLost(network: Network) {
+                    if (!isNetworkAvailable()) {
+                        pauseAllDueToNetworkLoss()
+                    }
+                }
+            })
+        }.onFailure { e ->
+            Log.w(TAG, "Could not register network callback: ${e.message}")
+        }
+    }
+
+    private fun isNetworkAvailable(): Boolean {
+        val cm = connectivityManager ?: return true
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    private fun pauseAllDueToNetworkLoss() {
+        val keysToPause = _downloads.value.values
+            .filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.QUEUED }
+            .map { StoredTrack.from(it.track).key }
+
+        if (keysToPause.isEmpty()) return
+        val now = System.currentTimeMillis()
+        keysToPause.forEach { networkPausedKeys.add(it) }
+
+        _downloads.update { map ->
+            val mutable = map.toMutableMap()
+            keysToPause.forEach { key ->
+                mutable[key]?.let {
+                    mutable[key] = it.copy(
+                        status = DownloadStatus.PAUSED,
+                        errorMessage = null,
+                        updatedAtMs = now,
+                    )
+                }
+            }
+            mutable
+        }
+
+        keysToPause.forEach { key ->
+            activeJobs.remove(key)?.cancel()
+        }
+    }
+
+    private fun resumeNetworkPausedDownloads() {
+        val keysToRestore = networkPausedKeys.toList()
+        if (keysToRestore.isEmpty()) return
+        networkPausedKeys.clear()
+
+        val now = System.currentTimeMillis()
+        var restoredAny = false
+        _downloads.update { map ->
+            val mutable = map.toMutableMap()
+            keysToRestore.forEach { key ->
+                val item = mutable[key]
+                if (item != null && item.status == DownloadStatus.PAUSED) {
+                    resumeKeys.add(key)
+                    mutable[key] = item.copy(
+                        status = DownloadStatus.QUEUED,
+                        errorMessage = null,
+                        updatedAtMs = now,
+                    )
+                    restoredAny = true
+                }
+            }
+            mutable
+        }
+
+        if (restoredAny) {
+            scheduleNext()
+        }
+    }
 
     fun download(track: Track) {
         val key = StoredTrack.from(track).key
@@ -70,12 +181,19 @@ class TrackDownloader @Inject constructor(
         }
 
         val now = System.currentTimeMillis()
+        val offline = !isNetworkAvailable()
         resumeKeys.remove(key)
+        if (offline) {
+            networkPausedKeys.add(key)
+        } else {
+            networkPausedKeys.remove(key)
+        }
+
         _downloads.update { map ->
             map + (
                 key to TrackDownloadItem(
                     track = track,
-                    status = DownloadStatus.QUEUED,
+                    status = if (offline) DownloadStatus.PAUSED else DownloadStatus.QUEUED,
                     progress = 0f,
                     createdAtMs = now,
                     updatedAtMs = now,
@@ -83,15 +201,18 @@ class TrackDownloader @Inject constructor(
             )
         }
         _startedEvent.tryEmit(track)
-        scheduleNext()
+        if (!offline) {
+            scheduleNext()
+        }
     }
 
-    /** Enqueues multiple tracks at once (e.g., an album or playlist), running up to 5 simultaneously. */
+    /** Enqueues multiple tracks at once (e.g., an album or playlist), running up to 30 simultaneously. */
     fun downloadAll(tracks: List<Track>) {
         if (tracks.isEmpty()) return
         scope.launch {
             val alreadyDownloaded = downloadedTracksStore.downloadedKeys.first()
             val baseTime = System.currentTimeMillis()
+            val offline = !isNetworkAvailable()
             var firstEnqueued: Track? = null
 
             _downloads.update { currentMap ->
@@ -103,10 +224,16 @@ class TrackDownloader @Inject constructor(
                     if (existing?.status == DownloadStatus.DOWNLOADING || existing?.status == DownloadStatus.QUEUED) {
                         return@forEachIndexed
                     }
+                    if (offline) {
+                        networkPausedKeys.add(key)
+                    } else {
+                        networkPausedKeys.remove(key)
+                    }
+
                     if (existing?.status == DownloadStatus.PAUSED) {
                         resumeKeys.add(key)
                         mutable[key] = existing.copy(
-                            status = DownloadStatus.QUEUED,
+                            status = if (offline) DownloadStatus.PAUSED else DownloadStatus.QUEUED,
                             errorMessage = null,
                             updatedAtMs = baseTime + index,
                         )
@@ -114,7 +241,7 @@ class TrackDownloader @Inject constructor(
                         resumeKeys.remove(key)
                         mutable[key] = TrackDownloadItem(
                             track = track,
-                            status = DownloadStatus.QUEUED,
+                            status = if (offline) DownloadStatus.PAUSED else DownloadStatus.QUEUED,
                             progress = 0f,
                             createdAtMs = baseTime + index,
                             updatedAtMs = baseTime + index,
@@ -126,7 +253,9 @@ class TrackDownloader @Inject constructor(
             }
 
             firstEnqueued?.let { _startedEvent.tryEmit(it) }
-            scheduleNext()
+            if (!offline) {
+                scheduleNext()
+            }
         }
     }
 
@@ -135,11 +264,12 @@ class TrackDownloader @Inject constructor(
         val current = _downloads.value[key] ?: return
         if (current.status != DownloadStatus.DOWNLOADING && current.status != DownloadStatus.QUEUED) return
 
+        // Manual pause should not auto-resume until user presses resume
+        networkPausedKeys.remove(key)
         updateItem(key) {
             it.copy(status = DownloadStatus.PAUSED, updatedAtMs = System.currentTimeMillis())
         }
         activeJobs.remove(key)?.cancel()
-        // Frees a concurrency slot for the next queued track
         scheduleNext()
     }
 
@@ -148,6 +278,19 @@ class TrackDownloader @Inject constructor(
         val current = _downloads.value[key] ?: return
         if (current.status == DownloadStatus.DOWNLOADING || current.status == DownloadStatus.QUEUED) return
 
+        if (!isNetworkAvailable()) {
+            networkPausedKeys.add(key)
+            updateItem(key) {
+                it.copy(
+                    status = DownloadStatus.PAUSED,
+                    errorMessage = null,
+                    updatedAtMs = System.currentTimeMillis(),
+                )
+            }
+            return
+        }
+
+        networkPausedKeys.remove(key)
         resumeKeys.add(key)
         updateItem(key) {
             it.copy(
@@ -176,6 +319,8 @@ class TrackDownloader @Inject constructor(
 
         if (keysToPause.isEmpty()) return
         val now = System.currentTimeMillis()
+        keysToPause.forEach { networkPausedKeys.remove(it) }
+
         _downloads.update { map ->
             val mutable = map.toMutableMap()
             keysToPause.forEach { key ->
@@ -197,7 +342,29 @@ class TrackDownloader @Inject constructor(
 
         if (keysToResume.isEmpty()) return
         val now = System.currentTimeMillis()
-        keysToResume.forEach { resumeKeys.add(it) }
+
+        if (!isNetworkAvailable()) {
+            keysToResume.forEach { networkPausedKeys.add(it) }
+            _downloads.update { map ->
+                val mutable = map.toMutableMap()
+                keysToResume.forEach { key ->
+                    mutable[key]?.let {
+                        mutable[key] = it.copy(
+                            status = DownloadStatus.PAUSED,
+                            errorMessage = null,
+                            updatedAtMs = now,
+                        )
+                    }
+                }
+                mutable
+            }
+            return
+        }
+
+        keysToResume.forEach {
+            networkPausedKeys.remove(it)
+            resumeKeys.add(it)
+        }
         _downloads.update { map ->
             val mutable = map.toMutableMap()
             keysToResume.forEach { key ->
@@ -217,6 +384,7 @@ class TrackDownloader @Inject constructor(
     fun cancel(track: Track) {
         val key = StoredTrack.from(track).key
         resumeKeys.remove(key)
+        networkPausedKeys.remove(key)
         _downloads.update { it - key }
         activeJobs.remove(key)?.cancel()
         cleanupTempFiles(sanitizeFileName(key))
@@ -227,6 +395,7 @@ class TrackDownloader @Inject constructor(
         val allKeys = _downloads.value.keys.toList()
         allKeys.forEach { key ->
             resumeKeys.remove(key)
+            networkPausedKeys.remove(key)
             activeJobs.remove(key)?.cancel()
             cleanupTempFiles(sanitizeFileName(key))
         }
@@ -236,6 +405,7 @@ class TrackDownloader @Inject constructor(
     fun dismissFailed(track: Track) {
         val key = StoredTrack.from(track).key
         resumeKeys.remove(key)
+        networkPausedKeys.remove(key)
         _downloads.update { it - key }
     }
 
@@ -247,10 +417,15 @@ class TrackDownloader @Inject constructor(
     }
 
     /**
-     * Promotes queued items to [DownloadStatus.DOWNLOADING] until [MAX_CONCURRENT_DOWNLOADS]
+     * Promotes queued items to [DownloadStatus.DOWNLOADING] until [MAX_CONCURRENT_DOWNLOADS] (30)
      * workers are active simultaneously.
      */
     private fun scheduleNext() {
+        if (!isNetworkAvailable()) {
+            pauseAllDueToNetworkLoss()
+            return
+        }
+
         synchronized(schedulerLock) {
             val currentMap = _downloads.value
             val runningCount = currentMap.values.count { it.status == DownloadStatus.DOWNLOADING }
@@ -291,9 +466,20 @@ class TrackDownloader @Inject constructor(
         val safeBaseName = sanitizeFileName(key)
         var tempFile: File? = null
         try {
+            if (!isNetworkAvailable()) {
+                pauseSingleDueToNetwork(key)
+                return
+            }
+
             val streamUrl = track.streamUrl?.takeIf { it.isNotBlank() }
                 ?: musicRepository.getStreamUrl(track)
-                ?: throw IllegalStateException("Não foi possível obter o link de áudio.")
+                ?: run {
+                    if (!isNetworkAvailable()) {
+                        pauseSingleDueToNetwork(key)
+                        return
+                    }
+                    throw IllegalStateException("Não foi possível obter o link de áudio.")
+                }
 
             val techInfo = runCatching { musicRepository.getTechnicalInfo(track) }.getOrNull()
             val mimeType = techInfo?.mimeType ?: "audio/mp4"
@@ -305,8 +491,9 @@ class TrackDownloader @Inject constructor(
             val finalFile = File(dir, "$safeBaseName.$extension")
             tempFile = File(dir, "$safeBaseName.$extension.tmp")
 
-            val existingBytes = if (isResume && tempFile.exists()) tempFile.length() else {
-                if (tempFile.exists()) tempFile.delete()
+            val existingBytes = if ((isResume || tempFile.exists()) && tempFile.exists()) {
+                tempFile.length()
+            } else {
                 0L
             }
 
@@ -384,6 +571,7 @@ class TrackDownloader @Inject constructor(
                 )
                 downloadedTracksStore.saveDownload(savedRecord)
 
+                networkPausedKeys.remove(key)
                 _downloads.update { it - key }
             }
         } catch (ce: CancellationException) {
@@ -392,7 +580,15 @@ class TrackDownloader @Inject constructor(
                 tempFile?.delete()
             }
             throw ce
+        } catch (ioe: IOException) {
+            // Network drop or socket interrupted: preserve .tmp cache and pause until connection returns
+            Log.w(TAG, "Network interrupted for '${track.title}', keeping cache and pausing: ${ioe.message}")
+            pauseSingleDueToNetwork(key)
         } catch (e: Exception) {
+            if (!isNetworkAvailable()) {
+                pauseSingleDueToNetwork(key)
+                return
+            }
             Log.e(TAG, "Failed to download '${track.title}': ${e.message}", e)
             tempFile?.delete()
             updateItem(key) {
@@ -405,6 +601,17 @@ class TrackDownloader @Inject constructor(
         } finally {
             activeJobs.remove(key)
             scheduleNext()
+        }
+    }
+
+    private fun pauseSingleDueToNetwork(key: String) {
+        networkPausedKeys.add(key)
+        updateItem(key) {
+            it.copy(
+                status = DownloadStatus.PAUSED,
+                errorMessage = null,
+                updatedAtMs = System.currentTimeMillis(),
+            )
         }
     }
 
@@ -438,6 +645,6 @@ class TrackDownloader @Inject constructor(
 
     companion object {
         private const val TAG = "VzTuneDownloader"
-        const val MAX_CONCURRENT_DOWNLOADS = 5
+        const val MAX_CONCURRENT_DOWNLOADS = 30
     }
 }

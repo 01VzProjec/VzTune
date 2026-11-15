@@ -325,6 +325,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
 
                     MediaListScreen(
                         state = state,
+                        activeDownloads = activeDownloads,
                         onBackClick = { navController.popBackStack() },
                         onTabSelected = vm::onTabSelected,
                         onTrackClick = vm::onTrackClick,
@@ -350,6 +351,8 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onOpenDownloadsScreen = { navController.navigate(Routes.Downloads) },
                         onOpenArtistByName = vm::onOpenArtistByName,
                         onDeleteLocalPlaylist = vm::onDeleteLocalPlaylist,
+                        onRenameLocalPlaylist = vm::onRenameLocalPlaylist,
+                        onChangeLocalPlaylistCover = vm::onChangeLocalPlaylistCover,
                     )
                 }
 

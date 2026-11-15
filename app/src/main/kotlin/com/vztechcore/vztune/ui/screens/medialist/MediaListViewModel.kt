@@ -1,5 +1,7 @@
 package com.vztechcore.vztune.ui.screens.medialist
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,6 +20,8 @@ import com.vztechcore.vztune.data.ytmusic.YTMusicOwnerValidator
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,11 +31,14 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
 import javax.inject.Inject
 
 @HiltViewModel
 class MediaListViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
+    @ApplicationContext private val context: Context,
     private val ytMusicRepository: YTMusicRepository,
     private val playerController: PlayerController,
     private val trackDownloader: TrackDownloader,
@@ -264,6 +271,43 @@ class MediaListViewModel @Inject constructor(
         viewModelScope.launch {
             localStore.remove(route.id)
             _navigationEvent.emit(NavigationEvent.CloseScreen)
+        }
+    }
+
+    fun onRenameLocalPlaylist(newTitle: String) {
+        if (!_uiState.value.isLocal) return
+        val clean = newTitle.trim()
+        if (clean.isBlank()) return
+        viewModelScope.launch {
+            localStore.rename(route.id, clean)
+        }
+    }
+
+    fun onChangeLocalPlaylistCover(coverUri: Uri) {
+        if (!_uiState.value.isLocal) return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val coversDir = File(context.filesDir, "playlist_covers").apply {
+                    if (!exists()) mkdirs()
+                }
+                val safeId = route.id.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                val destFile = File(coversDir, "${safeId}_${System.currentTimeMillis()}.jpg")
+                context.contentResolver.openInputStream(coverUri)?.use { input ->
+                    FileOutputStream(destFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                if (destFile.exists() && destFile.length() > 0L) {
+                    // Clean up previous cover file if stored locally
+                    _uiState.value.thumbnailUrl?.let { oldPath ->
+                        val oldFile = File(oldPath)
+                        if (oldFile.exists() && oldFile.parentFile == coversDir) {
+                            runCatching { oldFile.delete() }
+                        }
+                    }
+                    localStore.updateCover(route.id, destFile.absolutePath)
+                }
+            }
         }
     }
 

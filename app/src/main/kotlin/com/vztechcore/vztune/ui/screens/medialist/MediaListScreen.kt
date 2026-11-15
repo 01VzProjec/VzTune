@@ -25,7 +25,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Album
 import com.vztechcore.vztune.core.domain.music.Track
@@ -35,8 +37,12 @@ import com.vztechcore.vztune.data.download.TrackDownloadItem
 import com.vztechcore.vztune.data.prefs.models.StoredTrack
 import com.vztechcore.vztune.ui.components.download.LocalDownloadedKeys
 import com.vztechcore.vztune.ui.components.feedback.VzLoading
+import com.vztechcore.vztune.ui.components.feedback.rememberDominantColor
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
+import com.vztechcore.vztune.ui.components.player.PlaylistCoverPalette
+import com.vztechcore.vztune.ui.components.sheets.MediaListArtistPickerSheet
 import com.vztechcore.vztune.ui.components.sheets.MediaListOptionsSheet
+import com.vztechcore.vztune.ui.components.sheets.parseMediaListArtists
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -82,9 +88,53 @@ fun MediaListScreen(
     var showSortSheet by remember { mutableStateOf(false) }
     var showSearchOverlay by remember { mutableStateOf(false) }
     var showListOptionsSheet by remember { mutableStateOf(false) }
+    var showHeaderArtistPicker by remember { mutableStateOf(false) }
     var shuffleJob by remember { mutableStateOf<Job?>(null) }
 
     val isCollapsed by rememberHeaderCollapsed(listState)
+
+    // Chameleon mode: extracts the dominant color from the album/playlist cover thumbnail
+    // and applies it across the full screen and track list background.
+    val chameleonSourceUrl = remember(state.thumbnailUrl, state.mosaicThumbnails) {
+        val raw = state.thumbnailUrl
+        if (!raw.isNullOrBlank() && !PlaylistCoverPalette.isDefaultColorToken(raw)) {
+            raw
+        } else {
+            state.mosaicThumbnails.firstOrNull()
+        }
+    }
+    val extractedColor = rememberDominantColor(chameleonSourceUrl)
+    val dominantColor = remember(extractedColor, state.isLocal, state.thumbnailUrl, chameleonSourceUrl) {
+        if (chameleonSourceUrl == null && state.isLocal) {
+            PlaylistCoverPalette.resolveBackgroundColor(state.thumbnailUrl, state.listId)
+        } else {
+            extractedColor
+        }
+    }
+    val chameleonBrush = remember(dominantColor) {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.0f to lerp(Color.Black, dominantColor, 0.72f),
+                0.32f to lerp(Color.Black, dominantColor, 0.48f),
+                0.68f to lerp(Color.Black, dominantColor, 0.28f),
+                1.0f to lerp(Color.Black, dominantColor, 0.14f),
+            )
+        )
+    }
+
+    val ownerArtists = remember(state.owner, state.isLocal) {
+        if (!state.isLocal) parseMediaListArtists(state.owner.orEmpty()) else emptyList()
+    }
+
+    val handleHeaderArtistClick: (() -> Unit)? = remember(state.isLocal, state.owner, ownerArtists) {
+        if (state.isLocal || state.owner.isNullOrBlank()) {
+            null
+        } else if (ownerArtists.size > 1) {
+            { showHeaderArtistPicker = true }
+        } else {
+            onOpenArtist
+        }
+    }
 
     val displayedTracks = remember(state.filteredTracks, state.sortOrder, state.manualOrder, state.selectedTab, state.isAlbum) {
         state.getDisplayTracks()
@@ -149,6 +199,17 @@ fun MediaListScreen(
         }
     }
 
+    if (showHeaderArtistPicker && ownerArtists.size > 1) {
+        MediaListArtistPickerSheet(
+            artists = ownerArtists,
+            onPick = { selectedArtist ->
+                showHeaderArtistPicker = false
+                onOpenArtistByName(selectedArtist)
+            },
+            onDismiss = { showHeaderArtistPicker = false },
+        )
+    }
+
     if (showSortSheet) {
         MediaListSortSheet(
             currentSort = state.sortOrder,
@@ -180,15 +241,19 @@ fun MediaListScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
+            .background(chameleonBrush)
     ) {
         LazyColumn(
             state = listState,
             contentPadding = PaddingValues(bottom = 140.dp),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(chameleonBrush),
         ) {
             item(key = "header") {
                 MediaListExpandedHeader(
                     state = state,
+                    dominantColor = dominantColor,
                     allTracksDownloaded = allTracksDownloaded,
                     onBackClick = onBackClick,
                     onTabSelected = onTabSelected,
@@ -201,7 +266,7 @@ fun MediaListScreen(
                         if (state.isShuffling) onStopShuffle() else onStartShuffle()
                     },
                     onFavoriteClick = onFavoriteClick,
-                    onArtistClick = if (state.isAlbum && !state.owner.isNullOrBlank()) onOpenArtist else null,
+                    onArtistClick = handleHeaderArtistClick,
                 )
             }
 
@@ -298,7 +363,7 @@ fun MediaListScreen(
                 MediaListFooter(
                     state = state,
                     onAlbumClick = onAlbumClick,
-                    onArtistClick = if (state.isAlbum && !state.owner.isNullOrBlank()) onOpenArtist else null,
+                    onArtistClick = handleHeaderArtistClick,
                 )
             }
         }
@@ -306,7 +371,8 @@ fun MediaListScreen(
         CollapsedHeaderHost(visible = isCollapsed) {
             MediaListCollapsedHeader(
                 title = state.title,
-                thumbnailUrl = state.thumbnailUrl ?: state.mosaicThumbnails.firstOrNull(),
+                thumbnailUrl = chameleonSourceUrl,
+                dominantColor = dominantColor,
                 onBackClick = onBackClick,
                 onSearchClick = { showSearchOverlay = true },
                 onMoreClick = { showListOptionsSheet = true },

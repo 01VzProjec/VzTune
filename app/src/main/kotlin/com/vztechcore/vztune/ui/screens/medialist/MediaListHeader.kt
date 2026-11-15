@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -22,6 +23,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.search.SortOrder
+import com.vztechcore.vztune.ui.components.player.DefaultPlaylistCover
+import com.vztechcore.vztune.ui.components.player.PlaylistCoverPalette
 import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Close
@@ -39,6 +42,7 @@ import com.vztechcore.vztune.ui.icons.player.Shuffle
 @Composable
 internal fun MediaListExpandedHeader(
     state: MediaListUiState,
+    dominantColor: Color = Color.Black,
     allTracksDownloaded: Boolean = false,
     onBackClick: () -> Unit,
     onTabSelected: (MediaListTab) -> Unit,
@@ -51,10 +55,12 @@ internal fun MediaListExpandedHeader(
     onFavoriteClick: () -> Unit,
     onArtistClick: (() -> Unit)? = null,
 ) {
+    val chameleonBase = remember(dominantColor) {
+        lerp(Color.Black, dominantColor, 0.56f)
+    }
+
     Column(
-        Modifier
-            .fillMaxWidth()
-            .background(Color.Black),
+        Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -62,15 +68,34 @@ internal fun MediaListExpandedHeader(
                 .fillMaxWidth()
                 .height(320.dp)
         ) {
-            if (state.mosaicThumbnails.size >= 4) {
-                PlaylistMosaic(state.mosaicThumbnails)
-            } else {
-                AsyncImage(
-                    model = state.thumbnailUrl,
-                    contentDescription = state.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
+            val hasDefaultColorToken = PlaylistCoverPalette.isDefaultColorToken(state.thumbnailUrl)
+            when {
+                state.isLocal && !hasDefaultColorToken && !state.thumbnailUrl.isNullOrBlank() -> {
+                    AsyncImage(
+                        model = state.thumbnailUrl,
+                        contentDescription = state.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                state.mosaicThumbnails.size >= 4 -> {
+                    PlaylistMosaic(state.mosaicThumbnails)
+                }
+                state.isLocal -> {
+                    DefaultPlaylistCover(
+                        seed = state.listId,
+                        coverPath = state.thumbnailUrl,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                else -> {
+                    AsyncImage(
+                        model = state.thumbnailUrl,
+                        contentDescription = state.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
 
             Box(
@@ -79,10 +104,10 @@ internal fun MediaListExpandedHeader(
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
-                                0.0f to Color.Black.copy(alpha = 0.45f),
-                                0.5f to Color.Transparent,
-                                0.82f to Color.Black.copy(alpha = 0.85f),
-                                1.0f to Color.Black
+                                0.0f to Color.Black.copy(alpha = 0.42f),
+                                0.48f to Color.Transparent,
+                                0.82f to chameleonBase.copy(alpha = 0.78f),
+                                1.0f to chameleonBase,
                             )
                         )
                     )
@@ -132,12 +157,12 @@ internal fun MediaListExpandedHeader(
 
             val ownerName = state.owner?.takeIf { it.isNotBlank() }
             if (!ownerName.isNullOrBlank()) {
-                val isClickableArtist = state.isAlbum && onArtistClick != null
+                val isClickableOwner = !state.isLocal && onArtistClick != null
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
                         .then(
-                            if (isClickableArtist) {
+                            if (isClickableOwner) {
                                 Modifier
                                     .clickable { onArtistClick?.invoke() }
                                     .padding(horizontal = 10.dp, vertical = 4.dp)
@@ -148,13 +173,13 @@ internal fun MediaListExpandedHeader(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                 ) {
-                    if (state.isAlbum && !state.ownerAvatarUrl.isNullOrBlank()) {
+                    if (!state.ownerAvatarUrl.isNullOrBlank()) {
                         AsyncImage(
                             model = state.ownerAvatarUrl,
                             contentDescription = ownerName,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
-                                .size(22.dp)
+                                .size(24.dp)
                                 .clip(CircleShape),
                         )
                         Spacer(Modifier.width(8.dp))
@@ -162,7 +187,7 @@ internal fun MediaListExpandedHeader(
                     Text(
                         text = ownerName,
                         style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White.copy(alpha = 0.9f),
+                        color = Color.White.copy(alpha = 0.92f),
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -180,20 +205,19 @@ internal fun MediaListExpandedHeader(
                     state.totalDurationLabel.takeIf { it.isNotBlank() },
                 ).joinToString(" • ")
             } else {
-                buildString {
-                    if (!state.views.isNullOrBlank()) append(state.views)
-                    if (state.totalDurationLabel.isNotBlank()) {
-                        if (isNotEmpty()) append(" • ")
-                        append(state.totalDurationLabel)
-                    }
-                }
+                listOfNotNull(
+                    "Playlist",
+                    state.year?.takeIf { it.isNotBlank() },
+                    state.trackCountLabel.takeIf { (state.originalTrackCount ?: state.allTracks.size) > 0 },
+                    state.totalDurationLabel.takeIf { it.isNotBlank() },
+                ).joinToString(" • ")
             }
 
             if (statsText.isNotBlank()) {
                 Text(
                     text = statsText,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = Color.White.copy(alpha = 0.72f),
                     textAlign = TextAlign.Center
                 )
             }
@@ -303,16 +327,25 @@ internal fun MediaListCollapsedHeader(
     title: String,
     thumbnailUrl: String?,
     onBackClick: () -> Unit,
+    dominantColor: Color = Color.Black,
     onSearchClick: (() -> Unit)? = null,
     onMoreClick: (() -> Unit)? = null,
     circularThumbnail: Boolean = false,
 ) {
+    val barTint = remember(dominantColor) {
+        lerp(Color.Black, dominantColor, 0.38f)
+    }
+
     Row(
         Modifier
             .fillMaxWidth()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color.Black.copy(alpha = 0.98f), Color.Black.copy(alpha = 0.85f), Color.Transparent)
+                    listOf(
+                        barTint.copy(alpha = 0.98f),
+                        barTint.copy(alpha = 0.88f),
+                        Color.Transparent,
+                    )
                 )
             )
             .statusBarsPadding()

@@ -84,6 +84,7 @@ class MediaListViewModel @Inject constructor(
 
     private fun observeLocalPlaylist() {
         viewModelScope.launch {
+            localStore.ensureRandomDefaultCover(route.id)
             localStore.playlist(route.id).collect { playlist ->
                 _uiState.update {
                     if (playlist == null) {
@@ -153,8 +154,8 @@ class MediaListViewModel @Inject constructor(
                     }
 
                     val resolvedOwner = listOfNotNull(
-                        route.subtitle,
                         playlist.owner,
+                        route.subtitle,
                         _uiState.value.subtitle,
                     ).firstOrNull { YTMusicOwnerValidator.isValidOwnerName(it) }
 
@@ -164,7 +165,7 @@ class MediaListViewModel @Inject constructor(
                             title = playlist.title ?: it.title,
                             subtitle = resolvedOwner ?: it.subtitle,
                             owner = resolvedOwner,
-                            ownerAvatarUrl = null,
+                            ownerAvatarUrl = playlist.ownerAvatarUrl,
                             year = playlist.year,
                             views = playlist.views,
                             originalTrackCount = playlist.trackCount,
@@ -179,9 +180,34 @@ class MediaListViewModel @Inject constructor(
                             allTracks = playlist.tracks,
                         )
                     }
+
+                    if (playlist.ownerAvatarUrl.isNullOrBlank() && !resolvedOwner.isNullOrBlank()) {
+                        loadPlaylistOwnerAvatar(resolvedOwner)
+                    }
                 }
             }.onFailure { e ->
                 _uiState.update { it.copy(isLoading = false, errorMessage = "Erro: ${e.message}") }
+            }
+        }
+    }
+
+    private fun loadPlaylistOwnerAvatar(ownerName: String) {
+        viewModelScope.launch {
+            val primary = ownerName
+                .substringBefore(",")
+                .substringBefore("&")
+                .trim()
+            if (primary.isBlank() || primary.equals("YouTube Music", ignoreCase = true)) return@launch
+            val resolved = runCatching {
+                ytMusicRepository.findChannelOrArtist(primary)
+            }.getOrNull()
+            if (resolved != null) {
+                _uiState.update { current ->
+                    current.copy(
+                        artistId = current.artistId ?: resolved.id,
+                        ownerAvatarUrl = current.ownerAvatarUrl ?: resolved.thumbnailUrl,
+                    )
+                }
             }
         }
     }
@@ -315,7 +341,7 @@ class MediaListViewModel @Inject constructor(
     fun onOpenArtistByName(artistName: String) {
         viewModelScope.launch {
             val found = runCatching {
-                ytMusicRepository.searchArtists(artistName).firstOrNull()
+                ytMusicRepository.findChannelOrArtist(artistName)
             }.getOrNull()
             if (found != null) {
                 _navigationEvent.emit(NavigationEvent.OpenArtist(found))

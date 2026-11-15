@@ -25,6 +25,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.vztechcore.vztune.ui.components.player.DefaultPlaylistCover
+import com.vztechcore.vztune.ui.components.player.PlaylistCoverPalette
 import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.AddPhotoAlternate
@@ -37,6 +39,7 @@ import com.vztechcore.vztune.ui.icons.actions.Share
 import com.vztechcore.vztune.ui.icons.media.Artist
 import com.vztechcore.vztune.ui.icons.media.Download
 import com.vztechcore.vztune.ui.icons.media.DownloadDone
+import com.vztechcore.vztune.ui.icons.media.Groups
 import com.vztechcore.vztune.ui.icons.media.QueueMusic
 import com.vztechcore.vztune.ui.icons.player.PlayCircleFilled
 import com.vztechcore.vztune.ui.screens.medialist.MediaListUiState
@@ -70,6 +73,11 @@ fun MediaListOptionsSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showRenameSheet by remember { mutableStateOf(false) }
+    var showArtistPicker by remember { mutableStateOf(false) }
+
+    val albumArtists = remember(state.owner, state.isAlbum) {
+        if (state.isAlbum) parseMediaListArtists(state.owner.orEmpty()) else emptyList()
+    }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
@@ -102,6 +110,19 @@ fun MediaListOptionsSheet(
                 onDismiss()
             },
             onDismiss = { showRenameSheet = false },
+        )
+        return
+    }
+
+    if (showArtistPicker) {
+        MediaListArtistPickerSheet(
+            artists = albumArtists,
+            onPick = { selectedArtist ->
+                showArtistPicker = false
+                onDismiss()
+                onOpenArtistByName(selectedArtist)
+            },
+            onDismiss = { showArtistPicker = false },
         )
         return
     }
@@ -148,15 +169,33 @@ fun MediaListOptionsSheet(
                         .clip(RoundedCornerShape(10.dp))
                         .background(Color.White.copy(alpha = 0.08f)),
                 ) {
-                    if (state.mosaicThumbnails.size >= 4) {
-                        PlaylistMosaic(state.mosaicThumbnails)
-                    } else if (!state.thumbnailUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = state.thumbnailUrl,
-                            contentDescription = state.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                    val hasDefaultColorToken = PlaylistCoverPalette.isDefaultColorToken(state.thumbnailUrl)
+                    when {
+                        state.isLocal && !hasDefaultColorToken && !state.thumbnailUrl.isNullOrBlank() -> {
+                            AsyncImage(
+                                model = state.thumbnailUrl,
+                                contentDescription = state.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                        state.mosaicThumbnails.size >= 4 -> {
+                            PlaylistMosaic(state.mosaicThumbnails)
+                        }
+                        state.isLocal -> {
+                            DefaultPlaylistCover(
+                                seed = state.listId,
+                                coverPath = state.thumbnailUrl,
+                            )
+                        }
+                        !state.thumbnailUrl.isNullOrBlank() -> {
+                            AsyncImage(
+                                model = state.thumbnailUrl,
+                                contentDescription = state.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.width(14.dp))
@@ -249,7 +288,6 @@ fun MediaListOptionsSheet(
 
                 when {
                     allTracksDownloaded -> {
-                        // Non-clickable completed state
                         ListOptionRow(
                             icon = VzIcons.DownloadDone,
                             iconTint = DownloadGreen,
@@ -289,18 +327,20 @@ fun MediaListOptionsSheet(
                 }
             }
 
-            // Go to Artist (for Albums)
-            val artistName = state.owner?.takeIf {
-                state.isAlbum && it.isNotBlank() && !it.equals("Desconhecido", ignoreCase = true)
-            }
-            if (artistName != null) {
+            // Go to Artist(s) (for Albums — opens a picker submenu when there are multiple artists)
+            if (albumArtists.isNotEmpty()) {
+                val hasMultiple = albumArtists.size > 1
                 ListOptionRow(
-                    icon = VzIcons.Artist,
-                    label = "Ir para o artista",
-                    subtitle = artistName,
+                    icon = if (hasMultiple) VzIcons.Groups else VzIcons.Artist,
+                    label = if (hasMultiple) "Ir para os artistas" else "Ir para o artista",
+                    subtitle = if (hasMultiple) albumArtists.joinToString(", ") else albumArtists.first(),
                     onClick = {
-                        onDismiss()
-                        onOpenArtistByName(artistName)
+                        if (hasMultiple) {
+                            showArtistPicker = true
+                        } else {
+                            onDismiss()
+                            onOpenArtistByName(albumArtists.first())
+                        }
                     },
                 )
             }
@@ -318,6 +358,69 @@ fun MediaListOptionsSheet(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MediaListArtistPickerSheet(
+    artists: List<String>,
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = SheetContainerColor,
+        contentColor = Color.White,
+        dragHandle = {
+            Box(
+                Modifier
+                    .padding(vertical = 12.dp)
+                    .width(36.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.25f))
+            )
+        },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
+        ) {
+            Text(
+                text = "Escolher artista",
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            )
+            artists.forEach { artistName ->
+                ListOptionRow(
+                    icon = VzIcons.Artist,
+                    label = artistName,
+                    onClick = { onPick(artistName) },
+                )
+            }
+        }
+    }
+}
+
+internal fun parseMediaListArtists(raw: String): List<String> {
+    if (raw.isBlank() || raw.equals("Desconhecido", ignoreCase = true)) return emptyList()
+    return raw
+        .split(
+            Regex(
+                "\\s*(?:,|&|/|;|\\be\\b|\\band\\b|\\bfeat\\.?\\b|\\bft\\.?\\b|\\bx\\b|\\bcom\\b|\\bwith\\b)\\s*",
+                RegexOption.IGNORE_CASE,
+            )
+        )
+        .map { it.trim() }
+        .filter { it.isNotBlank() && !it.equals("Desconhecido", ignoreCase = true) }
+        .distinct()
 }
 
 @Composable

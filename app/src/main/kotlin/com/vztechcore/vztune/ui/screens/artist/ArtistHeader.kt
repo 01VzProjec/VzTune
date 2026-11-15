@@ -11,11 +11,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -28,6 +30,24 @@ import com.vztechcore.vztune.ui.icons.actions.PersonAdd
 import com.vztechcore.vztune.ui.icons.actions.PersonCheck
 import com.vztechcore.vztune.ui.icons.player.Shuffle
 
+/**
+ * Computes a full-screen chameleon background brush from the artist's photo.
+ */
+@Composable
+fun rememberArtistChameleonBrush(thumbnailUrl: String?): Brush {
+    val dominantColor = rememberDominantColor(thumbnailUrl)
+    return remember(dominantColor) {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.0f to lerp(Color.Black, dominantColor, 0.65f),
+                0.35f to lerp(Color.Black, dominantColor, 0.42f),
+                0.70f to lerp(Color.Black, dominantColor, 0.24f),
+                1.0f to lerp(Color.Black, dominantColor, 0.12f),
+            )
+        )
+    }
+}
+
 @Composable
 fun ArtistHeader(
     state: ArtistUiState,
@@ -39,18 +59,42 @@ fun ArtistHeader(
     val dominantColor = rememberDominantColor(state.thumbnailUrl)
     val hasPlayableItems = state.topSongs.isNotEmpty() || state.videos.isNotEmpty()
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    val chameleonHeaderBrush = remember(dominantColor) {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.0f to lerp(Color.Black, dominantColor, 0.65f),
+                0.65f to lerp(Color.Black, dominantColor, 0.45f),
+                1.0f to lerp(Color.Black, dominantColor, 0.36f),
+            )
+        )
+    }
+
+    val chameleonBottomFade = remember(dominantColor) {
+        lerp(Color.Black, dominantColor, 0.42f)
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(chameleonHeaderBrush)
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(340.dp),
+                .height(275.dp)
+                .background(chameleonHeaderBrush),
         ) {
             if (state.thumbnailUrl != null) {
+                // Displays the artist's original photo without cropping or artificial zoom
                 AsyncImage(
                     model = state.thumbnailUrl,
                     contentDescription = state.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
+                    alignment = Alignment.Center,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .padding(top = 8.dp, bottom = 28.dp),
                 )
             } else {
                 Box(
@@ -58,7 +102,7 @@ fun ArtistHeader(
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
-                                listOf(dominantColor.copy(alpha = 0.6f), Color.Black)
+                                listOf(dominantColor.copy(alpha = 0.65f), chameleonBottomFade)
                             )
                         )
                 )
@@ -66,17 +110,20 @@ fun ArtistHeader(
 
             Box(
                 Modifier
-                    .fillMaxSize()
+                    .matchParentSize()
                     .background(
                         Brush.verticalGradient(
-                            0f to Color.Black.copy(alpha = 0.35f),
-                            0.55f to Color.Transparent,
-                            1f to Color.Black,
+                            colorStops = arrayOf(
+                                0.0f to Color.Black.copy(alpha = 0.30f),
+                                0.55f to Color.Transparent,
+                                0.85f to chameleonBottomFade.copy(alpha = 0.78f),
+                                1.0f to chameleonBottomFade,
+                            )
                         )
                     )
             )
 
-            // Botão voltar no topo
+            // Back button at top-left
             IconButton(
                 onClick = onBackClick,
                 modifier = Modifier
@@ -93,7 +140,7 @@ fun ArtistHeader(
                 )
             }
 
-            // Nome e inscritos/visualizações
+            // Artist name & stats
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -112,7 +159,7 @@ fun ArtistHeader(
                     Text(
                         text = state.statsLabel,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.72f),
+                        color = Color.White.copy(alpha = 0.78f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -120,11 +167,11 @@ fun ArtistHeader(
             }
         }
 
-        // Barra de ações: Seguir / Seguindo + Aleatório
+        // Action row: Follow / Following + Shuffle
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
+                .padding(horizontal = 20.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -140,7 +187,7 @@ fun ArtistHeader(
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
-                        .background(Color.White.copy(alpha = 0.1f))
+                        .background(Color.White.copy(alpha = 0.12f))
                         .clickable { onRandomClick() }
                         .padding(horizontal = 16.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -170,8 +217,8 @@ private fun FollowButton(
     accent: Color,
     onClick: () -> Unit,
 ) {
-    val bg = if (isFollowing) accent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.08f)
-    val border = if (isFollowing) accent.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.22f)
+    val bg = if (isFollowing) accent.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.10f)
+    val border = if (isFollowing) accent.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.24f)
     val content = if (isFollowing) accent else Color.White
 
     Row(

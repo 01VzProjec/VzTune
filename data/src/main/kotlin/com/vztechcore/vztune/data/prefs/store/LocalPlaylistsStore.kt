@@ -33,10 +33,22 @@ class LocalPlaylistsStore @Inject constructor(
         }
     }
 
-    /** Updates the custom cover image path of an existing local playlist. */
+    /** Updates the custom cover image path (or `vz_color:...` token) of an existing local playlist. */
     suspend fun updateCover(playlistId: String, coverPath: String?) {
         update(playlistId) { playlist ->
             playlist.copy(coverPath = coverPath)
+        }
+    }
+
+    /** Assigns a randomly sorted background color token when the playlist has no custom cover. */
+    suspend fun ensureRandomDefaultCover(playlistId: String) {
+        val token = randomDefaultCoverToken()
+        update(playlistId) { playlist ->
+            if (playlist.coverPath.isNullOrBlank()) {
+                playlist.copy(coverPath = token)
+            } else {
+                playlist
+            }
         }
     }
 
@@ -52,5 +64,27 @@ class LocalPlaylistsStore @Inject constructor(
     suspend fun removeTrack(playlistId: String, track: Track) {
         val key = StoredTrack.from(track).key
         update(playlistId) { playlist -> playlist.copy(tracks = playlist.tracks.filterNot { it.key == key }) }
+    }
+
+    companion object {
+        const val DEFAULT_COLOR_PREFIX = "vz_color:"
+        private val DEFAULT_COLOR_IDS = listOf(
+            "BLUE",
+            "BLACK",
+            "WHITE",
+            "RED",
+            "GREEN",
+            "PURPLE",
+            "ORANGE",
+            "PINK",
+            "CYAN",
+            "INDIGO",
+            "AMBER",
+            "TEAL",
+        )
+
+        fun randomDefaultCoverToken(): String {
+            return "$DEFAULT_COLOR_PREFIX${DEFAULT_COLOR_IDS.random()}"
+        }
     }
 }

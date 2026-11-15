@@ -89,6 +89,12 @@ class YTMusicRepository @Inject constructor(
         val title: String,
     )
 
+    private data class PlaylistHeaderExtras(
+        val ownerAvatarUrl: String?,
+        val year: String?,
+        val channelId: String?,
+    )
+
     // ================= SEARCH =================
 
     suspend fun search(
@@ -329,16 +335,25 @@ class YTMusicRepository @Inject constructor(
             ?: return@withContext PlaylistResult(null, null, null, null, null, 0, null, null, emptyList())
 
         val parsed = YTMusicPlaylistParser.parsePlaylist(json)
+        val headerExtras = extractPlaylistHeaderExtras(json)
         val finalTracks = enricher.enrichTracks(parsed.tracks, null)
+
+        val resolvedAvatar = parsed.ownerAvatarUrl?.takeIf { it.isNotBlank() }
+            ?: headerExtras.ownerAvatarUrl
+            ?: headerExtras.channelId?.let { cid ->
+                runCatching { browseArtist(cid).thumbnailUrl }.getOrNull()
+            }
+
+        val resolvedYear = parsed.year?.takeIf { it.isNotBlank() } ?: headerExtras.year
 
         PlaylistResult(
             coverUrl = parsed.coverUrl,
             owner = parsed.owner,
-            ownerAvatarUrl = parsed.ownerAvatarUrl,
+            ownerAvatarUrl = resolvedAvatar,
             title = parsed.title,
             description = parsed.description,
             trackCount = parsed.trackCount.takeIf { it > 0 } ?: finalTracks.size,
-            year = parsed.year,
+            year = resolvedYear,
             views = parsed.views,
             tracks = finalTracks
         )
@@ -353,6 +368,27 @@ class YTMusicRepository @Inject constructor(
             YTMusicArtistParser.extractArtistsFromSearch(json, out)
         }
         out.distinctBy { it.id }.filter { !it.thumbnailUrl.isNullOrBlank() }.take(30)
+    }
+
+    /**
+     * Resolves an artist or YouTube channel profile (including avatar thumbnail) by name.
+     */
+    suspend fun findChannelOrArtist(name: String): Artist? = withContext(Dispatchers.IO) {
+        val cleanQuery = name.trim()
+        if (cleanQuery.isBlank() || cleanQuery.equals("YouTube Music", ignoreCase = true)) {
+            return@withContext null
+        }
+
+        // 1. Try artists filter first
+        searchArtists(cleanQuery).firstOrNull()?.let { return@withContext it }
+
+        // 2. Fallback to general search to find channel/curator entries (UC...)
+        val fallbackOut = mutableListOf<Artist>()
+        runCatching {
+            val json = InnerTube.search(cleanQuery, null)
+            YTMusicArtistParser.extractArtistsFromSearch(json, fallbackOut)
+        }
+        fallbackOut.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }
     }
 
     suspend fun featuredArtists(): List<Artist> = withContext(Dispatchers.IO) {
@@ -513,6 +549,55 @@ class YTMusicRepository @Inject constructor(
         }
 
     // ================= HELPERS =================
+
+    private fun extractPlaylistHeaderExtras(json: JSONObject): PlaylistHeaderExtras {
+        val header = YTMusicTextUtils.findFirst(json, "musicResponsiveHeaderRenderer")
+            ?: YTMusicTextUtils.findFirst(json, "musicDetailHeaderRenderer")
+            ?: return PlaylistHeaderExtras(null, null, null)
+
+        val avatarUrl = YTMusicThumbnailUtils.thumbnailOf(header.optJSONObject("straplineThumbnail"))
+            ?: YTMusicThumbnailUtils.thumbnailOf(
+                header.optJSONObject("facepile")
+                    ?.optJSONObject("avatarStackViewModel")
+                    ?.optJSONArray("avatars")
+                    ?.optJSONObject(0)
+                    ?.optJSONObject("avatarViewModel")
+                    ?.optJSONObject("image")
+            )
+
+        var year: String? = null
+        var channelId: String? = null
+
+        val runArrays = listOfNotNull(
+            header.optJSONObject("straplineTextOne")?.optJSONArray("runs"),
+            header.optJSONObject("subtitle")?.optJSONArray("runs"),
+            header.optJSONObject("secondSubtitle")?.optJSONArray("runs"),
+        )
+
+        for (runs in runArrays) {
+            for (i in 0 until runs.length()) {
+                val run = runs.optJSONObject(i) ?: continue
+                val text = run.optString("text").trim()
+                val browseId = run.optJSONObject("navigationEndpoint")
+                    ?.optJSONObject("browseEndpoint")
+                    ?.optString("browseId")
+                    ?.takeIf { it.isNotBlank() && it != "null" }
+
+                if (channelId == null && browseId != null && browseId.startsWith("UC")) {
+                    channelId = browseId
+                }
+                if (year == null && YTMusicTextUtils.isYear(text)) {
+                    year = text
+                }
+            }
+        }
+
+        return PlaylistHeaderExtras(
+            ownerAvatarUrl = avatarUrl,
+            year = year,
+            channelId = channelId,
+        )
+    }
 
     private fun extractAlbumHeaderExtras(json: JSONObject): Pair<String?, String?> {
         var artistId: String? = null

@@ -24,6 +24,22 @@ class LocalPlaylistsStore @Inject constructor(
     /** Emits the playlist with [id], or null when it does not exist (anymore). */
     fun playlist(id: String): Flow<LocalPlaylist?> = items.map { list -> list.firstOrNull { it.id == id } }
 
+    /** Renames an existing local playlist. */
+    suspend fun rename(playlistId: String, newName: String) {
+        val clean = newName.trim()
+        if (clean.isBlank()) return
+        update(playlistId) { playlist ->
+            playlist.copy(name = clean)
+        }
+    }
+
+    /** Updates the custom cover image path of an existing local playlist. */
+    suspend fun updateCover(playlistId: String, coverPath: String?) {
+        update(playlistId) { playlist ->
+            playlist.copy(coverPath = coverPath)
+        }
+    }
+
     /** Appends [track] to the playlist, ignoring duplicates. */
     suspend fun addTrack(playlistId: String, track: Track) {
         val stored = StoredTrack.from(track)

@@ -2,7 +2,17 @@ package com.vztechcore.vztune.ui.screens.medialist
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,6 +30,13 @@ import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.music.Album
 import com.vztechcore.vztune.ui.components.AppCredits
 
+/**
+ * Footer of the playlist / album screen.
+ *
+ * It shows the description and, for albums, the "More from this artist" row.
+ * Tapping an album in that row calls [onAlbumClick]. The navigation host is
+ * responsible for opening the tapped album, see AppNavHost.
+ */
 @Composable
 internal fun MediaListFooter(
     state: MediaListUiState,
@@ -50,6 +67,7 @@ internal fun MediaListFooter(
     }
 }
 
+/** Horizontal "More from this artist" section. */
 @Composable
 private fun MoreAlbumsSection(
     artistName: String?,
@@ -101,6 +119,7 @@ private fun MoreAlbumsSection(
     }
 }
 
+/** Small album card in the "More from this artist" row. */
 @Composable
 private fun AlbumCarouselCard(
     album: Album,

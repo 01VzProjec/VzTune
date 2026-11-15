@@ -8,12 +8,38 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +54,7 @@ import coil.compose.AsyncImage
 import com.vztechcore.vztune.ui.components.player.DefaultPlaylistCover
 import com.vztechcore.vztune.ui.components.player.PlaylistCoverPalette
 import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
+import com.vztechcore.vztune.ui.components.player.VzCoverColorPicker
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.AddPhotoAlternate
 import com.vztechcore.vztune.ui.icons.actions.Delete
@@ -49,7 +76,14 @@ private val DownloadGreen = Color(0xFF4ADE80)
 private val DangerRed = Color(0xFFF87171)
 
 /**
- * Context menu opened from the three-dots button in the header of a Playlist or Album screen.
+ * Context menu opened from the three-dots button in the header of a playlist or album screen.
+ *
+ * For local playlists it includes the Vz color editor:
+ * - "Alterar miniatura" picks a photo, the photo replaces the color.
+ * - The color picker below it picks a Vz color, the color replaces the photo.
+ * Both change the official cover shown in the Library and inside the playlist.
+ *
+ * All UI text is in Portuguese. Code and comments are in English.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +102,7 @@ fun MediaListOptionsSheet(
     onDeleteLocalPlaylist: () -> Unit,
     onRenameLocalPlaylist: (String) -> Unit = {},
     onChangeLocalPlaylistCover: (Uri) -> Unit = {},
+    onChangeCoverColor: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -156,7 +191,7 @@ fun MediaListOptionsSheet(
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp),
         ) {
-            // Header
+            // Header with cover preview
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -238,17 +273,43 @@ fun MediaListOptionsSheet(
                     labelColor = DangerRed,
                     onClick = { showDeleteConfirm = true },
                 )
-
                 ListOptionRow(
                     icon = VzIcons.Edit,
                     label = "Alterar título",
                     onClick = { showRenameSheet = true },
                 )
-
                 ListOptionRow(
                     icon = VzIcons.AddPhotoAlternate,
                     label = "Alterar miniatura",
+                    subtitle = "Escolher foto da galeria",
                     onClick = { imagePickerLauncher.launch("image/*") },
+                )
+
+                // Vz color editor
+                Text(
+                    text = "Cor da capa Vz",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 2.dp),
+                )
+                Text(
+                    text = "Sem foto, o Vz com essa cor vira a capa da playlist.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.55f),
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
+                VzCoverColorPicker(
+                    selectedToken = state.thumbnailUrl.takeIf { PlaylistCoverPalette.isDefaultColorToken(it) },
+                    onSelect = { token ->
+                        onChangeCoverColor(token)
+                        onDismiss()
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    color = Color.White.copy(alpha = 0.08f),
                 )
             }
 
@@ -256,8 +317,7 @@ fun MediaListOptionsSheet(
             if (state.showFavorite) {
                 ListOptionRow(
                     icon = if (state.isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
-                    iconTint = if (state.isFavorite) Color(0xFFEC4899) else Color.White,
-                    label = if (state.isFavorite) "Remover dos favoritos" else "Salvar na biblioteca",
+                    label = if (state.isFavorite) "Desfavoritar" else "Favoritar",
                     onClick = {
                         onToggleFavorite()
                         onDismiss()
@@ -265,69 +325,60 @@ fun MediaListOptionsSheet(
                 )
             }
 
-            // Queue & Batch Download actions
+            // Play next / queue
+            ListOptionRow(
+                icon = VzIcons.PlayCircleFilled,
+                label = "Tocar em seguida",
+                onClick = {
+                    onPlayNextAll()
+                    onDismiss()
+                },
+            )
+            ListOptionRow(
+                icon = VzIcons.QueueMusic,
+                label = "Adicionar à fila",
+                onClick = {
+                    onAddToQueueAll()
+                    onDismiss()
+                },
+            )
+
+            // Download section
             if (state.allTracks.isNotEmpty()) {
-                ListOptionRow(
-                    icon = VzIcons.PlayCircleFilled,
-                    label = "Reproduzir a seguir",
-                    subtitle = "${state.allTracks.size} faixas",
-                    onClick = {
-                        onPlayNextAll()
-                        onDismiss()
-                    },
-                )
-
-                ListOptionRow(
-                    icon = VzIcons.QueueMusic,
-                    label = "Adicionar à fila",
-                    onClick = {
-                        onAddToQueueAll()
-                        onDismiss()
-                    },
-                )
-
-                when {
-                    allTracksDownloaded -> {
-                        ListOptionRow(
-                            icon = VzIcons.DownloadDone,
-                            iconTint = DownloadGreen,
-                            label = "Todas as faixas já baixadas",
-                            labelColor = Color.White.copy(alpha = 0.75f),
-                            enabled = false,
-                            onClick = {},
-                        )
-                    }
-                    isDownloadingBatch -> {
-                        val pct = (batchDownloadProgress.coerceIn(0f, 1f) * 100).toInt()
-                        val label = if (pct > 0) {
-                            "Baixando todas as faixas ($pct%)"
-                        } else {
-                            "Baixando todas as faixas"
-                        }
-                        BatchDownloadProgressRow(
-                            progress = batchDownloadProgress,
-                            label = label,
-                            onClick = {
-                                onDismiss()
-                                onOpenDownloadsScreen()
-                            },
-                        )
-                    }
-                    else -> {
-                        ListOptionRow(
-                            icon = VzIcons.Download,
-                            label = if (state.isAlbum) "Baixar álbum" else "Baixar todas as faixas",
-                            subtitle = "Até 30 downloads simultâneos",
-                            onClick = {
-                                onDownloadAll()
-                                onDismiss()
-                            },
-                        )
-                    }
+                if (isDownloadingBatch) {
+                    BatchDownloadProgressRow(
+                        progress = batchDownloadProgress,
+                        label = "Baixando... toque para ver",
+                        onClick = {
+                            onDismiss()
+                            onOpenDownloadsScreen()
+                        },
+                    )
+                } else if (allTracksDownloaded) {
+                    ListOptionRow(
+                        icon = VzIcons.DownloadDone,
+                        iconTint = DownloadGreen,
+                        label = "Todas as faixas baixadas",
+                        subtitle = "Ver downloads",
+                        onClick = {
+                            onDismiss()
+                            onOpenDownloadsScreen()
+                        },
+                    )
+                } else {
+                    ListOptionRow(
+                        icon = VzIcons.Download,
+                        label = if (state.isAlbum) "Baixar álbum" else "Baixar todas as faixas",
+                        subtitle = "Até 30 downloads simultâneos",
+                        onClick = {
+                            onDownloadAll()
+                            onDismiss()
+                        },
+                    )
                 }
             }
 
-            // Go to Artist(s) (for Albums — opens a picker submenu when there are multiple artists)
+            // Go to Artist(s) for albums
             if (albumArtists.isNotEmpty()) {
                 val hasMultiple = albumArtists.size > 1
                 ListOptionRow(
@@ -345,7 +396,7 @@ fun MediaListOptionsSheet(
                 )
             }
 
-            // Share (for external playlists & albums)
+            // Share for external playlists and albums
             if (!state.isLocal) {
                 ListOptionRow(
                     icon = VzIcons.Share,
@@ -360,6 +411,7 @@ fun MediaListOptionsSheet(
     }
 }
 
+/** Sheet to pick one artist when an album has several artists. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MediaListArtistPickerSheet(
@@ -409,6 +461,7 @@ fun MediaListArtistPickerSheet(
     }
 }
 
+/** Parses a raw artist string like "A, B feat. C" into individual artist names. */
 internal fun parseMediaListArtists(raw: String): List<String> {
     if (raw.isBlank() || raw.equals("Desconhecido", ignoreCase = true)) return emptyList()
     return raw
@@ -423,6 +476,7 @@ internal fun parseMediaListArtists(raw: String): List<String> {
         .distinct()
 }
 
+/** Row showing batch download progress. */
 @Composable
 private fun BatchDownloadProgressRow(
     progress: Float,
@@ -475,6 +529,7 @@ private fun BatchDownloadProgressRow(
     }
 }
 
+/** Sheet to rename a local playlist. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RenameLocalPlaylistSheet(
@@ -496,7 +551,6 @@ private fun RenameLocalPlaylistSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .imePadding()
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
             Text(
@@ -523,18 +577,14 @@ private fun RenameLocalPlaylistSheet(
             )
             Spacer(Modifier.height(18.dp))
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 OutlinedButton(
                     onClick = onDismiss,
                     shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(46.dp),
+                    modifier = Modifier.weight(1f).height(46.dp),
                 ) {
                     Text("Cancelar", color = Color.White, fontWeight = FontWeight.SemiBold)
                 }
@@ -546,9 +596,7 @@ private fun RenameLocalPlaylistSheet(
                         containerColor = Color(0xFF1E40AF),
                         contentColor = Color.White,
                     ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(46.dp),
+                    modifier = Modifier.weight(1f).height(46.dp),
                 ) {
                     Text("Salvar", fontWeight = FontWeight.Bold)
                 }
@@ -557,6 +605,7 @@ private fun RenameLocalPlaylistSheet(
     }
 }
 
+/** Confirmation sheet for deleting a local playlist. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DeleteLocalPlaylistSheet(
@@ -591,18 +640,14 @@ private fun DeleteLocalPlaylistSheet(
             )
             Spacer(Modifier.height(20.dp))
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 OutlinedButton(
                     onClick = onDismiss,
                     shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(46.dp),
+                    modifier = Modifier.weight(1f).height(46.dp),
                 ) {
                     Text("Cancelar", color = Color.White, fontWeight = FontWeight.SemiBold)
                 }
@@ -614,9 +659,7 @@ private fun DeleteLocalPlaylistSheet(
                         contentColor = DangerRed,
                     ),
                     border = BorderStroke(1.dp, DangerRed.copy(alpha = 0.45f)),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(46.dp),
+                    modifier = Modifier.weight(1f).height(46.dp),
                 ) {
                     Icon(VzIcons.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
@@ -627,6 +670,7 @@ private fun DeleteLocalPlaylistSheet(
     }
 }
 
+/** Single option row inside the options sheet. */
 @Composable
 private fun ListOptionRow(
     icon: ImageVector,
@@ -638,16 +682,10 @@ private fun ListOptionRow(
     onClick: () -> Unit,
 ) {
     val rowModifier = if (enabled) {
-        Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 20.dp, vertical = 13.dp)
+        Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 20.dp, vertical = 13.dp)
     } else {
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 13.dp)
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 13.dp)
     }
-
     Row(
         modifier = rowModifier,
         verticalAlignment = Alignment.CenterVertically,
@@ -681,6 +719,7 @@ private fun ListOptionRow(
     }
 }
 
+/** Shares the current playlist / album using the system share sheet. */
 private fun shareMediaList(context: Context, state: MediaListUiState) {
     val cleanId = state.listId.removePrefix("VL")
     val url = if (state.isAlbum) {

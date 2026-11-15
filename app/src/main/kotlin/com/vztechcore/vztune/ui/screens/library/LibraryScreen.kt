@@ -1,9 +1,7 @@
 package com.vztechcore.vztune.ui.screens.library
 
 import android.net.Uri
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,18 +9,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,17 +31,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Track
-import com.vztechcore.vztune.ui.components.AppCredits
 import com.vztechcore.vztune.ui.components.cards.CoverCard
-import com.vztechcore.vztune.ui.components.layout.SectionHeader
-import com.vztechcore.vztune.ui.components.cards.TrackListRow
 import com.vztechcore.vztune.ui.components.text.VzChipRow
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Add
+import com.vztechcore.vztune.ui.icons.actions.MoreVert
 
+/**
+ * Library screen.
+ *
+ * Shows the user local playlists, shortcuts and recent tracks.
+ * The create playlist sheet now includes the Vz color editor, so a new
+ * playlist is created with the chosen color as its official cover.
+ * All UI text is in Portuguese. Code and comments are in English.
+ */
 @Composable
 fun LibraryScreen(
     state: LibraryUiState,
@@ -56,244 +56,206 @@ fun LibraryScreen(
     onTrackClick: (Track) -> Unit,
     onTrackInfoClick: (Track) -> Unit,
     onPlaylistClick: (LibraryPlaylistItem) -> Unit,
-    onCreatePlaylist: (name: String, coverUri: Uri?) -> Unit,
+    onCreatePlaylist: (name: String, coverUri: Uri?, colorToken: String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showCreateSheet by remember { mutableStateOf(false) }
 
-    Box(modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
         LazyColumn(
-            contentPadding = PaddingValues(bottom = 200.dp),
             modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 24.dp),
         ) {
-            item(key = "title") { LibraryTitle() }
+            item(key = "title") {
+                Text(
+                    text = "Biblioteca",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 8.dp),
+                )
+            }
+
             item(key = "tabs") {
                 VzChipRow(
                     items = LibraryTab.entries,
                     selected = state.selectedTab,
                     label = { it.label },
-                    icon = { it.icon },
                     onSelect = onTabSelected,
+                    modifier = Modifier.padding(horizontal = 16.dp),
                 )
-                Spacer(Modifier.height(16.dp))
             }
 
-            when (state.selectedTab) {
-                LibraryTab.OVERVIEW -> overviewTab(state.recentTracks, onShortcutClick, onTrackClick, onTrackInfoClick)
-
-                LibraryTab.VZTUNE -> item(key = "vztune_soon") {
-                    EmptyMessage("As playlists do VzTune vão aparecer aqui em breve.")
+            item(key = "shortcuts") {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(LibraryShortcut.entries, key = { it.name }) { shortcut ->
+                        ShortcutCard(
+                            shortcut = shortcut,
+                            onClick = { onShortcutClick(shortcut) },
+                        )
+                    }
                 }
-
-                LibraryTab.MY_PLAYLISTS -> playlistGrid(
-                    items = state.myPlaylists,
-                    emptyText = "Toque em \"Nova playlist\" para criar a primeira.",
-                    showCreateCard = true,
-                    onCreateClick = { showCreateSheet = true },
-                    onPlaylistClick = onPlaylistClick,
-                )
-
-                LibraryTab.FAVORITES -> playlistGrid(
-                    items = state.favoritePlaylists,
-                    emptyText = "Favorite uma playlist (coração na tela dela) para ela aparecer aqui.",
-                    onPlaylistClick = onPlaylistClick,
-                )
-
-                LibraryTab.DOWNLOADS -> playlistGrid(
-                    items = state.downloadedPlaylists,
-                    emptyText = "Nenhuma playlist baixada ainda.",
-                    onPlaylistClick = onPlaylistClick,
-                )
             }
 
-            item(key = "credits") { AppCredits() }
+            if (state.localPlaylists.isNotEmpty()) {
+                item(key = "playlistsTitle") {
+                    Row(
+                        Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = "Suas playlists",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Row(
+                            Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color.White.copy(alpha = 0.10f))
+                                .clickable { showCreateSheet = true }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(imageVector = VzIcons.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Text(text = "Nova", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+                item(key = "playlistsRow") {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(state.localPlaylists, key = { it.id }) { item ->
+                            CoverCard(
+                                title = item.title,
+                                subtitle = item.subtitle,
+                                imageUrl = item.imageUrl,
+                                mosaic = item.mosaic,
+                                onClick = { onPlaylistClick(item) },
+                            )
+                        }
+                    }
+                }
+            } else {
+                item(key = "emptyPlaylists") {
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color.White.copy(alpha = 0.06f))
+                            .clickable { showCreateSheet = true }
+                            .padding(16.dp),
+                    ) {
+                        Text(
+                            text = "Crie sua primeira playlist",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Escolha uma cor Vz para a capa ou uma foto da galeria.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.65f),
+                        )
+                    }
+                }
+            }
+
+            if (state.recentTracks.isNotEmpty()) {
+                item(key = "recentTitle") {
+                    Text(
+                        text = "Recentes",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 10.dp),
+                    )
+                }
+                items(state.recentTracks, key = { "recent_${it.source.name}_${it.id}" }) { track ->
+                    RecentTrackRow(
+                        track = track,
+                        onClick = { onTrackClick(track) },
+                        onMoreClick = { onTrackInfoClick(track) },
+                    )
+                }
+            }
         }
 
         if (showCreateSheet) {
             CreatePlaylistSheet(
                 onDismiss = { showCreateSheet = false },
-                onConfirm = { name, cover ->
-                    onCreatePlaylist(name, cover)
+                onConfirm = { name, coverUri, colorToken ->
                     showCreateSheet = false
+                    onCreatePlaylist(name, coverUri, colorToken)
                 },
             )
         }
     }
 }
 
+/** Small shortcut card in the Library top row. */
 @Composable
-private fun LibraryTitle() {
+private fun ShortcutCard(
+    shortcut: LibraryShortcut,
+    onClick: () -> Unit,
+) {
     Column(
         Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
-    ) {
-        Text(
-            text = "Sua Biblioteca",
-            style = MaterialTheme.typography.headlineMedium,
-            color = Color.White,
-            fontWeight = FontWeight.ExtraBold,
-        )
-        Text(
-            text = "Tudo que é seu, num só lugar",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.55f),
-        )
-    }
-}
-
-private fun LazyListScope.overviewTab(
-    recentTracks: List<Track>,
-    onShortcutClick: (LibraryShortcut) -> Unit,
-    onTrackClick: (Track) -> Unit,
-    onTrackInfoClick: (Track) -> Unit,
-) {
-    items(LibraryShortcut.entries.chunked(2), key = { row -> row.first().name }) { row ->
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            row.forEach { shortcut ->
-                ShortcutCard(shortcut, { onShortcutClick(shortcut) }, Modifier.weight(1f))
-            }
-        }
-    }
-
-    item(key = "recent_header") {
-        Spacer(Modifier.height(16.dp))
-        SectionHeader(title = "Recentemente tocadas")
-    }
-
-    if (recentTracks.isEmpty()) {
-        item(key = "recent_empty") { EmptyMessage("Nada tocado ainda. Toque uma faixa e ela aparece aqui.") }
-    } else {
-        itemsIndexed(recentTracks, key = { _, t -> "recent_${t.source.name}_${t.id}" }) { _, track ->
-            TrackListRow(
-                track = track,
-                onClick = { onTrackClick(track) },
-                onMoreClick = { onTrackInfoClick(track) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun ShortcutCard(shortcut: LibraryShortcut, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(16.dp)
-    Row(
-        modifier
-            .height(54.dp)
-            .clip(shape)
-            .background(shortcut.accent.copy(alpha = 0.14f))
-            .border(BorderStroke(1.5.dp, shortcut.accent.copy(alpha = 0.55f)), shape)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White.copy(alpha = 0.08f))
             .clickable { onClick() }
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(14.dp),
     ) {
-        Icon(shortcut.icon, contentDescription = null, tint = shortcut.accent, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.width(10.dp))
         Text(
             text = shortcut.label,
             style = MaterialTheme.typography.titleSmall,
             color = Color.White,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
-
-private sealed interface GridCell {
-    val key: String
-    data object Create : GridCell { override val key = "create" }
-    data class Playlist(val item: LibraryPlaylistItem) : GridCell { override val key get() = item.id }
-}
-
-private fun LazyListScope.playlistGrid(
-    items: List<LibraryPlaylistItem>,
-    emptyText: String,
-    onPlaylistClick: (LibraryPlaylistItem) -> Unit,
-    showCreateCard: Boolean = false,
-    onCreateClick: () -> Unit = {},
-) {
-    val cells = buildList<GridCell> {
-        if (showCreateCard) add(GridCell.Create)
-        items.forEach { add(GridCell.Playlist(it)) }
-    }
-    val columns = 3
-
-    items(cells.chunked(columns), key = { row -> row.joinToString("|") { it.key } }) { row ->
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            row.forEach { cell ->
-                Box(Modifier.weight(1f)) {
-                    when (cell) {
-                        GridCell.Create -> CreatePlaylistCard(onCreateClick)
-                        is GridCell.Playlist -> CoverCard(
-                            title = cell.item.title,
-                            subtitle = cell.item.subtitle,
-                            imageUrl = cell.item.imageUrl,
-                            mosaic = cell.item.mosaic,
-                            onClick = { onPlaylistClick(cell.item) },
-                        )
-                    }
-                }
-            }
-            repeat(columns - row.size) {
-                Spacer(Modifier.weight(1f))
-            }
-        }
-    }
-
-    if (items.isEmpty()) item(key = "grid_empty") { EmptyMessage(emptyText) }
-}
-
+/** Recent track row. */
 @Composable
-private fun CreatePlaylistCard(onClick: () -> Unit) {
-    Column(
-        Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .clickable { onClick() },
+private fun RecentTrackRow(
+    track: Track,
+    onClick: () -> Unit,
+    onMoreClick: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color.White.copy(alpha = 0.08f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                VzIcons.Add,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(32.dp),
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = track.title,
+                style = MaterialTheme.typography.titleSmall,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = track.artist,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.6f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = "Nova playlist",
-            style = MaterialTheme.typography.labelMedium,
-            color = Color.White,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 2,
-        )
-    }
-}
-
-@Composable
-internal fun EmptyMessage(text: String, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 40.dp), contentAlignment = Alignment.Center) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.5f),
-            textAlign = TextAlign.Center,
+        Icon(
+            imageVector = VzIcons.MoreVert,
+            contentDescription = "Mais",
+            tint = Color.White.copy(alpha = 0.7f),
+            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(20.dp)).clickable { onMoreClick() }.padding(10.dp),
         )
     }
 }

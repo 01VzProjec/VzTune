@@ -27,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Album
 import com.vztechcore.vztune.core.domain.music.Track
@@ -37,7 +36,6 @@ import com.vztechcore.vztune.data.download.TrackDownloadItem
 import com.vztechcore.vztune.data.prefs.models.StoredTrack
 import com.vztechcore.vztune.ui.components.download.LocalDownloadedKeys
 import com.vztechcore.vztune.ui.components.feedback.VzLoading
-import com.vztechcore.vztune.ui.components.feedback.rememberDominantColor
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.player.PlaylistCoverPalette
 import com.vztechcore.vztune.ui.components.sheets.MediaListArtistPickerSheet
@@ -80,7 +78,6 @@ fun MediaListScreen(
     onDeleteLocalPlaylist: () -> Unit = {},
     onRenameLocalPlaylist: (String) -> Unit = {},
     onChangeLocalPlaylistCover: (Uri) -> Unit = {},
-    onChangeCoverColor: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -94,27 +91,13 @@ fun MediaListScreen(
 
     val isCollapsed by rememberHeaderCollapsed(listState)
 
-    // Chameleon mode: extracts the dominant color from the album/playlist cover thumbnail
-    // and applies it across the full screen and track list background.
-    val chameleonSourceUrl = remember(state.thumbnailUrl, state.mosaicThumbnails) {
+    // Fundo preto AMOLED - sem camaleao, sem gradiente de cor dominante
+    val dominantColor = Color.Black
+    // Thumb do header colapsado: se a capa for token de cor, usa o mosaico
+    val collapsedThumbnailUrl = remember(state.thumbnailUrl, state.mosaicThumbnails) {
         val raw = state.thumbnailUrl
-        if (!raw.isNullOrBlank() && !PlaylistCoverPalette.isDefaultColorToken(raw)) {
-            raw
-        } else {
-            state.mosaicThumbnails.firstOrNull()
-        }
-    }
-    val extractedColor = rememberDominantColor(chameleonSourceUrl)
-    val dominantColor = remember(extractedColor, state.isLocal, state.thumbnailUrl, chameleonSourceUrl) {
-        if (chameleonSourceUrl == null && state.isLocal) {
-            PlaylistCoverPalette.resolveBackgroundColor(state.thumbnailUrl, state.listId)
-        } else {
-            extractedColor
-        }
-    }
-    // Solid background, no gradient: same dominant color everywhere.
-    val chameleonBrush = remember(dominantColor) {
-        Brush.verticalGradient(listOf(dominantColor, dominantColor))
+        if (!raw.isNullOrBlank() && !PlaylistCoverPalette.isDefaultColorToken(raw)) raw
+        else state.mosaicThumbnails.firstOrNull()
     }
 
     val ownerArtists = remember(state.owner, state.isLocal) {
@@ -229,7 +212,6 @@ fun MediaListScreen(
             onDeleteLocalPlaylist = onDeleteLocalPlaylist,
             onRenameLocalPlaylist = onRenameLocalPlaylist,
             onChangeLocalPlaylistCover = onChangeLocalPlaylistCover,
-            onChangeCoverColor = onChangeCoverColor,
         )
     }
 
@@ -237,14 +219,13 @@ fun MediaListScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
-            .background(chameleonBrush)
     ) {
         LazyColumn(
             state = listState,
             contentPadding = PaddingValues(bottom = 140.dp),
             modifier = Modifier
                 .fillMaxSize()
-                .background(chameleonBrush),
+                .background(Color.Black),
         ) {
             item(key = "header") {
                 MediaListExpandedHeader(
@@ -367,7 +348,7 @@ fun MediaListScreen(
         CollapsedHeaderHost(visible = isCollapsed) {
             MediaListCollapsedHeader(
                 title = state.title,
-                thumbnailUrl = chameleonSourceUrl,
+                thumbnailUrl = collapsedThumbnailUrl,
                 dominantColor = dominantColor,
                 onBackClick = onBackClick,
                 onSearchClick = { showSearchOverlay = true },

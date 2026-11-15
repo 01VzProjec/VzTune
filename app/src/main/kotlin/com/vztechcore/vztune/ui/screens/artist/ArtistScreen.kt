@@ -87,9 +87,7 @@ fun ArtistScreen(
     val isCollapsed by rememberHeaderCollapsed(listState)
     val nowPlaying = LocalNowPlaying.current
 
-    // Photo color is extracted once and shared by the backdrop, the hero and the sticky bar
-    val accent = rememberArtistAccent(state.thumbnailUrl)
-    val backdrop = rememberArtistChameleonBrush(accent)
+    // Fundo sempre preto AMOLED - camaleao desativado por enquanto
 
     fun seeAll(kind: ArtistListKind, ref: BrowseRef?): (() -> Unit)? =
         ref?.let { { onSeeAllClick(kind, it) } }
@@ -97,7 +95,7 @@ fun ArtistScreen(
     Box(
         modifier
             .fillMaxSize()
-            .background(backdrop)
+            .background(Color.Black)
     ) {
         LazyColumn(
             state = listState,
@@ -107,7 +105,7 @@ fun ArtistScreen(
             item(key = "header") {
                 ArtistHeader(
                     state = state,
-                    accent = accent,
+                    accent = Color.Black,
                     onBackClick = onBackClick,
                     onRandomClick = onRandomClick,
                     onFollowClick = onFollowClick,
@@ -230,7 +228,7 @@ fun ArtistScreen(
                 title = state.name,
                 thumbnailUrl = state.thumbnailUrl,
                 onBackClick = onBackClick,
-                dominantColor = accent,
+                dominantColor = Color.Black,
                 circularThumbnail = true,
             )
         }

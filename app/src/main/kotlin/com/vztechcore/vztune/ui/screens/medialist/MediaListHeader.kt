@@ -55,9 +55,8 @@ internal fun MediaListExpandedHeader(
     onFavoriteClick: () -> Unit,
     onArtistClick: (() -> Unit)? = null,
 ) {
-    val chameleonBase = remember(dominantColor) {
-        lerp(Color.Black, dominantColor, 0.56f)
-    }
+    // Sem camaleao - fade sempre pra preto AMOLED
+    val chameleonBase = Color.Black
 
     Column(
         Modifier.fillMaxWidth(),
@@ -97,6 +96,21 @@ internal fun MediaListExpandedHeader(
                     )
                 }
             }
+
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.0f to Color.Black.copy(alpha = 0.42f),
+                                0.48f to Color.Transparent,
+                                0.82f to chameleonBase.copy(alpha = 0.78f),
+                                1.0f to chameleonBase,
+                            )
+                        )
+                    )
+            )
 
             Row(
                 Modifier
@@ -324,7 +338,15 @@ internal fun MediaListCollapsedHeader(
     Row(
         Modifier
             .fillMaxWidth()
-            .background(barTint)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        barTint.copy(alpha = 0.98f),
+                        barTint.copy(alpha = 0.88f),
+                        Color.Transparent,
+                    )
+                )
+            )
             .statusBarsPadding()
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

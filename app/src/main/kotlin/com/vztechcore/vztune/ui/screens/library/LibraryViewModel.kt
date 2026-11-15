@@ -60,17 +60,16 @@ class LibraryViewModel @Inject constructor(
     }
 
     /**
-     * Creates a local playlist.
-     * Priority: photo cover wins, then Vz color token, then no cover (mosaic fallback).
-     * The [colorToken] param has a default so old 2-arg calls still compile.
+     * Creates a local playlist. Sem capa escolhida, o SISTEMA escolhe uma cor aleatoria
+     * (vermelho, azul, etc) - o usuario nao escolhe a cor.
      */
-    fun createPlaylist(name: String, coverUri: Uri?, colorToken: String? = null) {
+    fun createPlaylist(name: String, coverUri: Uri?) {
         viewModelScope.launch {
             val id = newLocalPlaylistId()
-            val coverPath = when {
-                coverUri != null -> coverStorage.save(id, coverUri)
-                !colorToken.isNullOrBlank() -> colorToken
-                else -> null
+            val coverPath = if (coverUri != null) {
+                coverStorage.save(id, coverUri) ?: LocalPlaylistsStore.randomDefaultCoverToken()
+            } else {
+                LocalPlaylistsStore.randomDefaultCoverToken()
             }
             localStore.addFirst(LocalPlaylist(id = id, name = name.trim(), coverPath = coverPath))
         }

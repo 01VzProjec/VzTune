@@ -68,7 +68,6 @@ fun MediaListOptionsSheet(
     onDeleteLocalPlaylist: () -> Unit,
     onRenameLocalPlaylist: (String) -> Unit = {},
     onChangeLocalPlaylistCover: (Uri) -> Unit = {},
-    onChangeCoverColor: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -251,28 +250,6 @@ fun MediaListOptionsSheet(
                     label = "Alterar miniatura",
                     onClick = { imagePickerLauncher.launch("image/*") },
                 )
-
-                // Vz color cover picker for local playlists
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 8.dp),
-                ) {
-                    Text(
-                        text = "Cor da capa Vz",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    com.vztechcore.vztune.ui.components.player.VzCoverColorPicker(
-                        selectedToken = state.thumbnailUrl,
-                        onColorSelected = { token ->
-                            onChangeCoverColor(token)
-                            onDismiss()
-                        },
-                    )
-                }
             }
 
             // Favorite / Unfavorite external playlist

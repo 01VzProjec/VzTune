@@ -45,7 +45,7 @@ import coil.compose.AsyncImage
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.AddPhotoAlternate
 
-private val SheetBackground = Color(0xFF141B30)
+private val SheetBackground = Color.Black // AMOLED
 private val AccentBlue = Color(0xFF60A5FA)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,21 +54,8 @@ fun CreatePlaylistSheet(
     onDismiss: () -> Unit,
     onConfirm: (name: String, coverUri: Uri?) -> Unit,
 ) {
-    CreatePlaylistSheet(
-        onDismiss = onDismiss,
-        onConfirm = { name, cover, _ -> onConfirm(name, cover) },
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun CreatePlaylistSheet(
-    onDismiss: () -> Unit,
-    onConfirm: (name: String, coverUri: Uri?, colorToken: String?) -> Unit,
-) {
     var name by remember { mutableStateOf("") }
     var cover by remember { mutableStateOf<Uri?>(null) }
-    var selectedColorToken by remember { mutableStateOf<String?>(null) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) cover = uri
@@ -143,22 +130,8 @@ fun CreatePlaylistSheet(
             }
 
             Spacer(Modifier.height(8.dp))
-            if (cover == null) {
-                Text(
-                    text = "Cor da capa Vz",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Spacer(Modifier.height(10.dp))
-                com.vztechcore.vztune.ui.components.player.VzCoverColorPicker(
-                    selectedToken = selectedColorToken,
-                    onColorSelected = { selectedColorToken = it },
-                )
-                Spacer(Modifier.height(8.dp))
-            }
             Text(
-                text = "Sem foto e sem cor, usamos as thumbnails das faixas da playlist.",
+                text = "Sem capa, o VzTune escolhe uma cor aleatória pra sua playlist.",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White.copy(alpha = 0.5f),
             )
@@ -170,7 +143,7 @@ fun CreatePlaylistSheet(
                 }
                 Spacer(Modifier.width(8.dp))
                 Button(
-                    onClick = { onConfirm(name, cover, if (cover != null) null else selectedColorToken) },
+                    onClick = { onConfirm(name, cover) },
                     enabled = name.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AccentBlue,

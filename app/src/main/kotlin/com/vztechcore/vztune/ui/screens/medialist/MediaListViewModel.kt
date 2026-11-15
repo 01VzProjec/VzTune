@@ -393,14 +393,6 @@ class MediaListViewModel @Inject constructor(
         }
     }
 
-
-    fun onChangeCoverColor(colorToken: String) {
-        if (!_uiState.value.isLocal) return
-        viewModelScope.launch {
-            localStore.updateCover(route.id, colorToken)
-        }
-    }
-
     fun onPlayAll() {
         val sorted = _uiState.value.getDisplayTracks()
         if (sorted.isNotEmpty()) playerController.playQueue(sorted, 0)

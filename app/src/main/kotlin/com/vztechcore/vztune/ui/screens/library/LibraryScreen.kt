@@ -56,12 +56,12 @@ fun LibraryScreen(
     onTrackClick: (Track) -> Unit,
     onTrackInfoClick: (Track) -> Unit,
     onPlaylistClick: (LibraryPlaylistItem) -> Unit,
-    onCreatePlaylist: (name: String, coverUri: Uri?, colorToken: String?) -> Unit,
+    onCreatePlaylist: (name: String, coverUri: Uri?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showCreateSheet by remember { mutableStateOf(false) }
 
-    Box(modifier.fillMaxSize()) {
+    Box(modifier.fillMaxSize().background(Color.Black)) {
         LazyColumn(
             contentPadding = PaddingValues(bottom = 200.dp),
             modifier = Modifier.fillMaxSize(),
@@ -112,8 +112,8 @@ fun LibraryScreen(
         if (showCreateSheet) {
             CreatePlaylistSheet(
                 onDismiss = { showCreateSheet = false },
-                onConfirm = { name, cover, colorToken ->
-                    onCreatePlaylist(name, cover, colorToken)
+                onConfirm = { name, cover ->
+                    onCreatePlaylist(name, cover)
                     showCreateSheet = false
                 },
             )

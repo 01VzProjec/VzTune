@@ -358,7 +358,6 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onDeleteLocalPlaylist = vm::onDeleteLocalPlaylist,
                         onRenameLocalPlaylist = vm::onRenameLocalPlaylist,
                         onChangeLocalPlaylistCover = vm::onChangeLocalPlaylistCover,
-                        onChangeCoverColor = vm::onChangeCoverColor,
                     )
                 }
 

@@ -16,17 +16,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
-enum class DownloadsTab(val label: String) {
-    IN_PROGRESS("Em andamento"),
-    COMPLETED("Finalizados"),
-}
-
-data class DownloadsUiState(
-    val selectedTab: DownloadsTab = DownloadsTab.IN_PROGRESS,
-    val activeDownloads: List<TrackDownloadItem> = emptyList(),
-    val completedDownloads: List<DownloadedTrack> = emptyList(),
-)
-
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
     private val trackDownloader: TrackDownloader,

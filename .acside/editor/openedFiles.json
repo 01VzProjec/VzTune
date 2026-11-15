@@ -65,13 +65,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 2946,
-          "line": 82
+          "index": 2612,
+          "line": 71
         },
         "start": {
           "column": 1,
-          "index": 2946,
-          "line": 82
+          "index": 2612,
+          "line": 71
         }
       }
     },
@@ -89,7 +89,37 @@
           "line": 63
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/downloads/DownloadsUiState.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 509,
+          "line": 14
+        },
+        "start": {
+          "column": 1,
+          "index": 509,
+          "line": 14
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/LibraryUiState.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        },
+        "start": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/downloads/DownloadsViewModel.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/downloads/DownloadsUiState.kt"
 }

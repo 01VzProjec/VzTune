@@ -18,6 +18,7 @@ import com.vztechcore.vztune.data.prefs.store.FavoriteTracksStore
 import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
 import com.vztechcore.vztune.data.prefs.store.RecentPlayedStore
 import com.vztechcore.vztune.data.prefs.store.SearchHistoryStore
+import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -37,6 +38,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
+    private val ytMusicRepository: YTMusicRepository,
     private val historyStore: SearchHistoryStore,
     private val recentPlayedStore: RecentPlayedStore,
     private val favoriteTracksStore: FavoriteTracksStore,
@@ -63,22 +65,23 @@ class SearchViewModel @Inject constructor(
     private val _navigationEvent = MutableSharedFlow<NavigationEvent>()
     val navigationEvent: SharedFlow<NavigationEvent> = _navigationEvent.asSharedFlow()
 
+    private data class CachedTab(val query: String, val hits: List<SearchHit>, val hasMore: Boolean)
+
+    private val _uiState = MutableStateFlow(SearchUiState())
+    val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
+
     val favoriteKeys: StateFlow<Set<String>> = favoriteTracksStore.tracks
         .map { list -> list.map { StoredTrack.from(it).key }.toSet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
-    val downloadedKeys: StateFlow<Set<String>> = downloadedTracksStore.downloadedKeys
+    val downloadedKeys: StateFlow<Set<String>> = downloadedTracksStore.items
+        .map { list -> list.map { it.key }.toSet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     val activeDownloads: StateFlow<Map<String, TrackDownloadItem>> = trackDownloader.downloads
 
     val localPlaylists: StateFlow<List<LocalPlaylist>> = localPlaylistsStore.items
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    private data class CachedTab(val query: String, val hits: List<SearchHit>, val hasMore: Boolean)
-
-    private val _uiState = MutableStateFlow(SearchUiState())
-    val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
     private val filterCache = mutableMapOf<SearchFilter, CachedTab>()
     private var suggestJob: Job? = null
@@ -102,7 +105,16 @@ class SearchViewModel @Inject constructor(
         searchJob?.cancel()
         filterCache.clear()
         _uiState.update {
-            it.copy(query = value, errorMessage = null, hasSearched = false, hits = emptyList(), hasMore = false, isLoading = false, isLoadingMore = false, isRefreshing = false)
+            it.copy(
+                query = value,
+                errorMessage = null,
+                hasSearched = false,
+                hits = emptyList(),
+                hasMore = false,
+                isLoading = false,
+                isLoadingMore = false,
+                isRefreshing = false,
+            )
         }
         if (value.isBlank() || value.trim().length < 2) {
             _uiState.update { it.copy(suggestions = SearchSuggestions()) }
@@ -177,17 +189,38 @@ class SearchViewModel @Inject constructor(
             is SearchHit.VideoHit -> playRadio(hit.track)
             is SearchHit.PlaylistHit -> {
                 viewModelScope.launch {
-                    _navigationEvent.emit(NavigationEvent.OpenPlaylist(hit.playlist.id, hit.playlist.title, hit.playlist.owner, hit.playlist.thumbnailUrl, hit.playlist.mosaicThumbnails))
+                    _navigationEvent.emit(
+                        NavigationEvent.OpenPlaylist(
+                            hit.playlist.id,
+                            hit.playlist.title,
+                            hit.playlist.owner,
+                            hit.playlist.thumbnailUrl,
+                            hit.playlist.mosaicThumbnails,
+                        )
+                    )
                 }
             }
             is SearchHit.AlbumHit -> {
                 viewModelScope.launch {
-                    _navigationEvent.emit(NavigationEvent.OpenAlbum(hit.album.id, hit.album.title, hit.album.artist, hit.album.thumbnailUrl))
+                    _navigationEvent.emit(
+                        NavigationEvent.OpenAlbum(
+                            hit.album.id,
+                            hit.album.title,
+                            hit.album.artist,
+                            hit.album.thumbnailUrl,
+                        )
+                    )
                 }
             }
             is SearchHit.ArtistHit -> {
                 viewModelScope.launch {
-                    _navigationEvent.emit(NavigationEvent.OpenArtist(hit.artist.id, hit.artist.name, hit.artist.thumbnailUrl))
+                    _navigationEvent.emit(
+                        NavigationEvent.OpenArtist(
+                            hit.artist.id,
+                            hit.artist.name,
+                            hit.artist.thumbnailUrl,
+                        )
+                    )
                 }
             }
         }
@@ -201,45 +234,34 @@ class SearchViewModel @Inject constructor(
         playerController.addToQueueEnd(track)
     }
 
+    /** Strictly toggles favorite status without triggering any automatic download. */
     fun onToggleFavorite(track: Track) {
-        val key = StoredTrack.from(track).key
-        val wasFavorite = key in favoriteKeys.value
         viewModelScope.launch {
             favoriteTracksStore.toggle(track)
-            // Automatically save offline on device when favoriting a track
-            if (!wasFavorite && key !in downloadedKeys.value) {
-                trackDownloader.download(track)
-            }
         }
     }
 
     fun onAddToPlaylist(playlistId: String, track: Track) {
-        viewModelScope.launch { localPlaylistsStore.addTrack(playlistId, track) }
+        viewModelScope.launch {
+            localPlaylistsStore.addTrack(playlistId, track)
+        }
     }
 
-    fun onDownloadClick(track: Track) {
-        val key = StoredTrack.from(track).key
-        if (key in downloadedKeys.value) {
-            trackDownloader.deleteDownload(track)
-        } else {
-            trackDownloader.download(track)
-        }
+    fun onDownloadTrack(track: Track) {
+        trackDownloader.download(track)
+    }
+
+    fun onRemoveDownload(track: Track) {
+        trackDownloader.deleteDownload(track)
     }
 
     fun onOpenArtistByName(artistName: String) {
         viewModelScope.launch {
-            val result = musicRepository.search(artistName, SearchFilter.ARTISTS, loadMore = false)
-            if (result is SearchResult.Success) {
-                val artistHit = result.hits.filterIsInstance<SearchHit.ArtistHit>().firstOrNull()
-                if (artistHit != null) {
-                    _navigationEvent.emit(
-                        NavigationEvent.OpenArtist(
-                            id = artistHit.artist.id,
-                            name = artistHit.artist.name,
-                            thumbnailUrl = artistHit.artist.thumbnailUrl,
-                        )
-                    )
-                }
+            val found = runCatching {
+                ytMusicRepository.searchArtists(artistName).firstOrNull()
+            }.getOrNull()
+            if (found != null) {
+                _navigationEvent.emit(NavigationEvent.OpenArtist(found.id, found.name, found.thumbnailUrl))
             }
         }
     }
@@ -259,7 +281,14 @@ class SearchViewModel @Inject constructor(
     private fun runSearch(query: String, filter: SearchFilter, isRefresh: Boolean, loadMore: Boolean) {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = !isRefresh && !loadMore, isRefreshing = isRefresh, hasSearched = true, errorMessage = null) }
+            _uiState.update {
+                it.copy(
+                    isLoading = !isRefresh && !loadMore,
+                    isRefreshing = isRefresh,
+                    hasSearched = true,
+                    errorMessage = null,
+                )
+            }
             when (val result = musicRepository.search(query, filter, loadMore)) {
                 is SearchResult.Success -> {
                     filterCache[filter] = CachedTab(query, result.hits, result.hasMore)

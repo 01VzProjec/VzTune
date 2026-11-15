@@ -224,7 +224,52 @@
           "line": 333
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchViewModel.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 11997,
+          "line": 302
+        },
+        "start": {
+          "column": 1,
+          "index": 11997,
+          "line": 302
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/trackinfo/TrackInfoUiState.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 776,
+          "line": 22
+        },
+        "start": {
+          "column": 1,
+          "index": 776,
+          "line": 22
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/trackinfo/TrackInfoViewModel.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 4929,
+          "line": 135
+        },
+        "start": {
+          "column": 1,
+          "index": 4929,
+          "line": 135
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/downloads/DownloadBannerViewModel.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/trackinfo/TrackInfoViewModel.kt"
 }

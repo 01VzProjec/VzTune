@@ -22,12 +22,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.ui.components.download.isTrackDownloaded
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.player.MediaThumbnail
 import com.vztechcore.vztune.ui.components.player.playbackOf
 import com.vztechcore.vztune.ui.components.text.ExplicitBadge
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.MoreVert
+import com.vztechcore.vztune.ui.icons.media.DownloadForOffline
+
+private val OfflineBadgeGreen = Color(0xFF4ADE80)
 
 @Composable
 fun TrackListRow(
@@ -38,6 +42,7 @@ fun TrackListRow(
     number: Int? = null,
 ) {
     val playback = LocalNowPlaying.current.playbackOf(track)
+    val isDownloaded = isTrackDownloaded(track)
 
     Row(
         modifier
@@ -74,6 +79,15 @@ fun TrackListRow(
             )
             Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isDownloaded) {
+                    Icon(
+                        imageVector = VzIcons.DownloadForOffline,
+                        contentDescription = "Baixada offline",
+                        tint = OfflineBadgeGreen,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
                 if (track.isExplicit) {
                     ExplicitBadge()
                     Spacer(Modifier.width(4.dp))

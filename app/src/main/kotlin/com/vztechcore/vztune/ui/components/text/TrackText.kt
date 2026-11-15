@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,6 +25,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.ui.components.download.isTrackDownloaded
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.media.DownloadForOffline
+
+private val OfflineBadgeGreen = Color(0xFF4ADE80)
 
 @Composable
 fun MarqueeText(
@@ -73,8 +79,7 @@ fun ExplicitBadge(modifier: Modifier = Modifier) {
  * Subtitle line for a Track.
  *   Video -> "Video — <channelName>"
  *   Song  -> "Song — <artist1, artist2, ...>"
- * The prefix uses an em dash (—) and is stable; the artist text
- * marquees if it does not fit. Explicit tracks get an "E" badge before the artist.
+ * Shows an offline badge to the left of "Song"/"Video" whenever the track is saved locally.
  */
 @Composable
 fun TrackSubtitle(
@@ -87,8 +92,18 @@ fun TrackSubtitle(
     val isVideo = track.source == Source.YOUTUBE
     val prefix = if (isVideo) "Video — " else "Song — "
     val artists = track.artist.ifBlank { "Unknown" }
+    val isDownloaded = isTrackDownloaded(track)
 
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        if (isDownloaded) {
+            Icon(
+                imageVector = VzIcons.DownloadForOffline,
+                contentDescription = "Baixada offline",
+                tint = OfflineBadgeGreen,
+                modifier = Modifier.size(14.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+        }
         Text(text = prefix, style = style, color = prefixColor, maxLines = 1)
         if (track.isExplicit) {
             ExplicitBadge()

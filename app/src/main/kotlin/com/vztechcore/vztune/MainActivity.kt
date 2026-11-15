@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.vztechcore.vztune.ui.components.download.LocalDownloadedKeys
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.navigation.AppNavHost
 import com.vztechcore.vztune.ui.screens.main.MainViewModel
@@ -29,6 +30,7 @@ class MainActivity : ComponentActivity() {
             val vm: MainViewModel = hiltViewModel()
             val settings by vm.settings.collectAsStateWithLifecycle()
             val playbackState by vm.playbackState.collectAsStateWithLifecycle()
+            val downloadedKeys by vm.downloadedKeys.collectAsStateWithLifecycle()
 
             // Ask for POST_NOTIFICATIONS once, on Android 13+.
             // Without it, the player notification is silently dropped.
@@ -47,7 +49,10 @@ class MainActivity : ComponentActivity() {
             }
 
             VzTuneTheme(themeMode = settings.themeMode) {
-                CompositionLocalProvider(LocalNowPlaying provides playbackState) {
+                CompositionLocalProvider(
+                    LocalNowPlaying provides playbackState,
+                    LocalDownloadedKeys provides downloadedKeys,
+                ) {
                     AppNavHost()
                 }
             }

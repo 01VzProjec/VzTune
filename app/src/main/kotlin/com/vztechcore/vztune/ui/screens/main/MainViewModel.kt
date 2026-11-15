@@ -6,6 +6,7 @@ import com.vztechcore.vztune.core.domain.player.PlaybackState
 import com.vztechcore.vztune.core.domain.settings.AppSettings
 import com.vztechcore.vztune.data.player.PlayerController
 import com.vztechcore.vztune.data.prefs.store.AppSettingsStore
+import com.vztechcore.vztune.data.prefs.store.DownloadedTracksStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -16,6 +17,7 @@ import javax.inject.Inject
 class MainViewModel @Inject constructor(
     appSettingsStore: AppSettingsStore,
     playerController: PlayerController,
+    downloadedTracksStore: DownloadedTracksStore,
 ) : ViewModel() {
 
     val settings: StateFlow<AppSettings> = appSettingsStore.settings
@@ -23,4 +25,7 @@ class MainViewModel @Inject constructor(
 
     val playbackState: StateFlow<PlaybackState> = playerController.state
         .stateIn(viewModelScope, SharingStarted.Eagerly, PlaybackState())
+
+    val downloadedKeys: StateFlow<Set<String>> = downloadedTracksStore.downloadedKeys
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 }

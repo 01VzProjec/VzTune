@@ -284,7 +284,67 @@
           "line": 80
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/text/TrackText.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 3974,
+          "line": 118
+        },
+        "start": {
+          "column": 1,
+          "index": 3974,
+          "line": 118
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/cards/TrackListRow.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 4237,
+          "line": 111
+        },
+        "start": {
+          "column": 1,
+          "index": 4237,
+          "line": 111
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/MainActivity.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 2655,
+          "line": 60
+        },
+        "start": {
+          "column": 1,
+          "index": 2655,
+          "line": 60
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/main/MainViewModel.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 1293,
+          "line": 30
+        },
+        "start": {
+          "column": 1,
+          "index": 1293,
+          "line": 30
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/prefs/store/DownloadedTracksStore.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/main/MainViewModel.kt"
 }

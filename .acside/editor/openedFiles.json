@@ -29,7 +29,22 @@
           "line": 2222
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistHeader.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 9685,
+          "line": 278
+        },
+        "start": {
+          "column": 0,
+          "index": 9685,
+          "line": 278
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/VzTune-FIX2.sh"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistHeader.kt"
 }

@@ -137,7 +137,8 @@ class MediaListViewModel @Inject constructor(
                             thumbnailUrl = album.coverUrl ?: it.thumbnailUrl,
                             description = album.description,
                             views = album.views,
-                            allTracks = album.tracks,
+                            // Tira duplicadas (mesmo source + id) pra LazyColumn nunca crashar com key repetida
+                            allTracks = album.tracks.distinctBy { "${it.source}_${it.id}" },
                         )
                     }
 
@@ -177,7 +178,7 @@ class MediaListViewModel @Inject constructor(
                                 .distinct()
                                 .take(4)
                                 .toList(),
-                            allTracks = playlist.tracks,
+                            allTracks = playlist.tracks.distinctBy { "${it.source}_${it.id}" },
                         )
                     }
 
@@ -290,6 +291,7 @@ class MediaListViewModel @Inject constructor(
                     owner = state.owner,
                     thumbnailUrl = state.thumbnailUrl,
                     mosaic = state.mosaicThumbnails,
+                    isAlbum = state.isAlbum,
                 )
             )
         }

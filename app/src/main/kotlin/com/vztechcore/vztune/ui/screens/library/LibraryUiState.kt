@@ -38,6 +38,7 @@ data class LibraryPlaylistItem(
     val subtitle: String?,
     val imageUrl: String?,
     val mosaic: List<String> = emptyList(),
+    val isAlbum: Boolean = false,
 )
 
 data class LibraryUiState(

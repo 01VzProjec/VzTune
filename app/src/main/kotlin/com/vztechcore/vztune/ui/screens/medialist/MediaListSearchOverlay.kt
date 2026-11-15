@@ -180,7 +180,7 @@ internal fun MediaListSearchOverlay(
             ) {
                 itemsIndexed(
                     items = filteredTracks,
-                    key = { _, t -> "search_${t.source.name}_${t.id}" },
+                    key = { index, t -> "search_${t.source.name}_${t.id}_$index" },
                 ) { _, track ->
                     val isCurrent = nowPlaying.isCurrent(track.id, track.source)
                     val originalIndex = if (isAlbum) {

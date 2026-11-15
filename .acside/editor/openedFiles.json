@@ -14,7 +14,22 @@
           "line": 319
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/VzTune-FIX2.sh",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 93085,
+          "line": 2222
+        },
+        "start": {
+          "column": 0,
+          "index": 93085,
+          "line": 2222
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistScreen.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/VzTune-FIX2.sh"
 }

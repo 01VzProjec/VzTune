@@ -59,18 +59,11 @@ class LibraryViewModel @Inject constructor(
         else playerController.playQueue(listOf(track), 0)
     }
 
-    /**
-     * Creates a local playlist. Sem capa escolhida, o SISTEMA escolhe uma cor aleatoria
-     * (vermelho, azul, etc) - o usuario nao escolhe a cor.
-     */
+    /** Creates a local playlist; without a cover it shows the thumbnails of its tracks. */
     fun createPlaylist(name: String, coverUri: Uri?) {
         viewModelScope.launch {
             val id = newLocalPlaylistId()
-            val coverPath = if (coverUri != null) {
-                coverStorage.save(id, coverUri) ?: LocalPlaylistsStore.randomDefaultCoverToken()
-            } else {
-                LocalPlaylistsStore.randomDefaultCoverToken()
-            }
+            val coverPath = coverUri?.let { coverStorage.save(id, it) }
             localStore.addFirst(LocalPlaylist(id = id, name = name.trim(), coverPath = coverPath))
         }
     }
@@ -89,5 +82,6 @@ class LibraryViewModel @Inject constructor(
         subtitle = owner,
         imageUrl = thumbnailUrl,
         mosaic = mosaic,
+        isAlbum = isAlbum,
     )
 }

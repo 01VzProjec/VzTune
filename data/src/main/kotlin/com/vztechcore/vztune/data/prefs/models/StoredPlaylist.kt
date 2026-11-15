@@ -11,6 +11,9 @@ data class StoredPlaylist(
     val owner: String? = null,
     val thumbnailUrl: String? = null,
     val mosaic: List<String> = emptyList(),
+    // True quando o favorito era um álbum. Sem isso o álbum favoritado abria como
+    // playlist e crashava com key duplicada. Default false mantém favoritos antigos válidos.
+    val isAlbum: Boolean = false,
 ) {
     fun toPlaylist(source: Source = Source.YOUTUBE_MUSIC) = Playlist(
         id = id, title = title, owner = owner, thumbnailUrl = thumbnailUrl,

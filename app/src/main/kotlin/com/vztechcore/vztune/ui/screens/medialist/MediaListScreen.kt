@@ -280,7 +280,8 @@ fun MediaListScreen(
                 }
                 else -> itemsIndexed(
                     items = displayedTracks,
-                    key = { _, t -> "${t.source.name}_${t.id}" },
+                    // Key com índice: mesmo se o InnerTube devolver a mesma faixa 2x, nunca duplica e nunca crasha
+                    key = { index, t -> "${t.source.name}_${t.id}_$index" },
                 ) { index, track ->
                     val isCurrent = nowPlaying.isCurrent(track.id, track.source)
                     val isPlaying = isCurrent && nowPlaying.isPlaying
@@ -297,7 +298,7 @@ fun MediaListScreen(
                             onMoreClick = { onTrackInfoClick(track) },
                         )
                     } else if (canReorder) {
-                        val itemKey = "${track.source.name}_${track.id}"
+                        val itemKey = "${track.source.name}_${track.id}_$index"
                         ReorderableItem(reorderableState, key = itemKey) { isDragging ->
                             MediaListTrackRow(
                                 track = track,

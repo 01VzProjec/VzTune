@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.player.MediaThumbnail
+import com.vztechcore.vztune.ui.components.player.PlayingEqualizer
 import com.vztechcore.vztune.ui.components.player.ThumbnailShape
 import com.vztechcore.vztune.ui.components.player.playbackOf
 import com.vztechcore.vztune.ui.components.text.TrackSubtitle
@@ -88,22 +89,35 @@ internal fun MediaListTrackRow(
                     .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Álbum: o InnerTube não dá a thumbnail exata da faixa, então mostra
-                // só a numeração onde ficaria a thumbnail. Playlist: mostra a thumbnail normal.
+                // Álbum: sem fundo cinza, só o número grande onde ficaria a thumbnail.
+                // Tocando: equalizador subindo e descendo, sem fundo. Pausado: só •••.
+                // Playlist: mostra a thumbnail normal.
                 if (index != null) {
                     Box(
-                        Modifier
-                            .size(52.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color.White.copy(alpha = 0.08f)),
+                        Modifier.size(52.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            text = "$index",
-                            color = if (isPlaying) Color(0xFF60A5FA) else Color.White.copy(alpha = 0.75f),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal,
-                        )
+                        when {
+                            isPlaying -> PlayingEqualizer(
+                                color = Color.White,
+                                barCount = 4,
+                                maxHeight = 24.dp,
+                                barWidth = 3.dp,
+                                gap = 3.dp,
+                            )
+                            isPaused -> Text(
+                                text = "•••",
+                                color = Color.White.copy(alpha = 0.6f),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            else -> Text(
+                                text = "$index",
+                                color = Color.White.copy(alpha = 0.9f),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
                     }
                 } else {
                     MediaThumbnail(

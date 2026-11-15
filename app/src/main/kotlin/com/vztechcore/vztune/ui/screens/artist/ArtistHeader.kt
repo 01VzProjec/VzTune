@@ -1,6 +1,5 @@
 package com.vztechcore.vztune.ui.screens.artist
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,7 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -47,7 +46,6 @@ import com.vztechcore.vztune.ui.icons.media.Artist
 import com.vztechcore.vztune.ui.icons.player.Shuffle
 import com.vztechcore.vztune.ui.screens.medialist.MediaListCircleButton
 
-private val HeroMinHeight = 300.dp
 private val ButtonHeight = 44.dp
 
 // Camaleão desativado - sempre preto AMOLED. Mantido pra compatibilidade.
@@ -82,11 +80,11 @@ fun ArtistHeader(
             .fillMaxWidth()
             .background(Color.Black)
     ) {
+        // Foto quadrada 1:1, nunca esticada como retângulo
         Box(
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = HeroMinHeight)
-                .animateContentSize()
+                .aspectRatio(1f)
         ) {
             ArtistPhoto(imageUrl = state.thumbnailUrl, name = state.name)
 
@@ -176,7 +174,7 @@ fun ArtistHeader(
 }
 
 /**
- * Foto cheia, FillWidth, sem crop forçado, com fade pra preto embaixo.
+ * Foto quadrada 1:1, Crop pra nunca esticar, com fade pra preto embaixo.
  * Sem foto, ícone grande no fundo preto.
  */
 @Composable
@@ -185,7 +183,7 @@ private fun ArtistPhoto(imageUrl: String?, name: String) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(HeroMinHeight),
+                .aspectRatio(1f),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -207,10 +205,10 @@ private fun ArtistPhoto(imageUrl: String?, name: String) {
     AsyncImage(
         model = request,
         contentDescription = name,
-        contentScale = ContentScale.FillWidth,
-        alignment = Alignment.TopCenter,
+        contentScale = ContentScale.Crop,
+        alignment = Alignment.Center,
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxSize()
             .fadeOutBottom(fadeFraction = 0.55f),
     )
 }

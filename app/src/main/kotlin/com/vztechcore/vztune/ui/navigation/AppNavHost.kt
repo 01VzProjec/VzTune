@@ -192,7 +192,8 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             navController.navigate(
                                 Routes.MediaList(
                                     id = item.id,
-                                    isAlbum = false,
+                                    // Favorito de álbum abre como álbum, senão crashava com key duplicada
+                                    isAlbum = item.isAlbum,
                                     title = item.title,
                                     subtitle = item.subtitle,
                                     thumbnailUrl = item.imageUrl,

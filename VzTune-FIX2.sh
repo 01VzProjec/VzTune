@@ -1,12 +1,294 @@
 #!/bin/bash
-# VzTune FIX2 - album só número, favoritar no álbum, artista pills + share, sheet azul marinho
-# Roda dentro da pasta do projeto: cd ~/VzTune && bash VzTune-FIX2.sh
+# VzTune FIX3 - artista quadrado, album numero sem fundo + equalizador, crash favorito album
+# Roda dentro da pasta do projeto: cd ~/VzTune && bash VzTune-FIX3.sh
 set -e
-echo "== VzTune FIX2 - 7 arquivos =="
+echo "== VzTune FIX3 - 9 arquivos =="
 
-echo "[1/7] app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListTrackRow.kt"
+echo "[1/9] app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistHeader.kt"
+mkdir -p "$(dirname "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistHeader.kt")"
+cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistHeader.kt" <<'VZ_EOF_1_FIX3'
+package com.vztechcore.vztune.ui.screens.artist
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.vztechcore.vztune.ui.components.feedback.fadeOutBottom
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.ArrowBack
+import com.vztechcore.vztune.ui.icons.actions.PersonAdd
+import com.vztechcore.vztune.ui.icons.actions.PersonCheck
+import com.vztechcore.vztune.ui.icons.actions.Share
+import com.vztechcore.vztune.ui.icons.media.Artist
+import com.vztechcore.vztune.ui.icons.player.Shuffle
+import com.vztechcore.vztune.ui.screens.medialist.MediaListCircleButton
+
+private val ButtonHeight = 44.dp
+
+// Camaleão desativado - sempre preto AMOLED. Mantido pra compatibilidade.
+@Composable
+fun rememberArtistAccent(thumbnailUrl: String?): Color = Color.Black
+
+// Camaleão desativado - sempre preto sólido. Mantido pra compatibilidade.
+@Composable
+fun rememberArtistChameleonBrush(accent: Color): Brush =
+    Brush.verticalGradient(listOf(Color.Black, Color.Black))
+
+/**
+ * Hero do artista como era antes: foto cheia em cima, nome e stats embaixo à esquerda,
+ * botões pill embaixo: Seguir na esquerda, Aleatório na direita.
+ * Fundo sempre preto AMOLED, sem camaleão.
+ * Barra superior: Voltar na esquerda, Compartilhar na direita.
+ */
+@Composable
+fun ArtistHeader(
+    state: ArtistUiState,
+    accent: Color,
+    onBackClick: () -> Unit,
+    onRandomClick: () -> Unit,
+    onFollowClick: () -> Unit,
+    onShareClick: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    val hasPlayableItems = state.topSongs.isNotEmpty() || state.videos.isNotEmpty()
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color.Black)
+    ) {
+        // Foto quadrada 1:1, nunca esticada como retângulo
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+        ) {
+            ArtistPhoto(imageUrl = state.thumbnailUrl, name = state.name)
+
+            // Sombra em cima pra barra ficar legível
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .height(120.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent)
+                        )
+                    )
+            )
+
+            // Barra superior: Voltar esquerda, Compartilhar direita
+            Row(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MediaListCircleButton(VzIcons.ArrowBack, "Voltar", onBackClick)
+                MediaListCircleButton(VzIcons.Share, "Compartilhar artista", onShareClick)
+            }
+
+            Column(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 20.dp, end = 20.dp, bottom = 12.dp)
+            ) {
+                Text(
+                    text = state.name,
+                    style = MaterialTheme.typography.displaySmall.copy(
+                        letterSpacing = (-0.5).sp,
+                        shadow = Shadow(
+                            color = Color.Black.copy(alpha = 0.45f),
+                            offset = Offset(0f, 3f),
+                            blurRadius = 12f,
+                        ),
+                    ),
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (state.statsLabel.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = state.statsLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.8f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+
+        // Botões como era antes, mas com Seguir na esquerda e Aleatório na direita
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            FollowButton(
+                isFollowing = state.isFollowing,
+                onClick = onFollowClick,
+            )
+            if (hasPlayableItems) {
+                PillButton(
+                    label = "Aleatório",
+                    icon = VzIcons.Shuffle,
+                    containerColor = Color.White,
+                    contentColor = Color.Black,
+                    onClick = onRandomClick,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Foto quadrada 1:1, Crop pra nunca esticar, com fade pra preto embaixo.
+ * Sem foto, ícone grande no fundo preto.
+ */
+@Composable
+private fun ArtistPhoto(imageUrl: String?, name: String) {
+    if (imageUrl.isNullOrBlank()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = VzIcons.Artist,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.12f),
+                modifier = Modifier.size(140.dp),
+            )
+        }
+        return
+    }
+    val context = LocalContext.current
+    val request = remember(imageUrl) {
+        ImageRequest.Builder(context)
+            .data(imageUrl)
+            .crossfade(400)
+            .build()
+    }
+    AsyncImage(
+        model = request,
+        contentDescription = name,
+        contentScale = ContentScale.Crop,
+        alignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .fadeOutBottom(fadeFraction = 0.55f),
+    )
+}
+
+@Composable
+private fun FollowButton(
+    isFollowing: Boolean,
+    onClick: () -> Unit,
+) {
+    if (isFollowing) {
+        PillButton(
+            label = "Seguindo",
+            icon = VzIcons.PersonCheck,
+            containerColor = Color.White.copy(alpha = 0.12f),
+            contentColor = Color.White,
+            borderColor = Color.White.copy(alpha = 0.35f),
+            onClick = onClick,
+        )
+    } else {
+        PillButton(
+            label = "Seguir",
+            icon = VzIcons.PersonAdd,
+            containerColor = Color.Transparent,
+            contentColor = Color.White,
+            borderColor = Color.White.copy(alpha = 0.35f),
+            onClick = onClick,
+        )
+    }
+}
+
+/** Pill com ícone + texto. Igual era antes. */
+@Composable
+private fun PillButton(
+    label: String,
+    icon: ImageVector,
+    containerColor: Color,
+    contentColor: Color,
+    onClick: () -> Unit,
+    borderColor: Color? = null,
+) {
+    val shape = RoundedCornerShape(50)
+    Row(
+        modifier = Modifier
+            .height(ButtonHeight)
+            .clip(shape)
+            .background(containerColor)
+            .then(if (borderColor != null) Modifier.border(1.dp, borderColor, shape) else Modifier)
+            .clickable { onClick() }
+            .padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = contentColor,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = contentColor,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+VZ_EOF_1_FIX3
+
+echo "[2/9] app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListTrackRow.kt"
 mkdir -p "$(dirname "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListTrackRow.kt")"
-cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListTrackRow.kt" <<'VZ_EOF_1_FIX2'
+cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListTrackRow.kt" <<'VZ_EOF_2_FIX3'
 package com.vztechcore.vztune.ui.screens.medialist
 
 import androidx.compose.foundation.background
@@ -29,6 +311,7 @@ import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.player.MediaThumbnail
+import com.vztechcore.vztune.ui.components.player.PlayingEqualizer
 import com.vztechcore.vztune.ui.components.player.ThumbnailShape
 import com.vztechcore.vztune.ui.components.player.playbackOf
 import com.vztechcore.vztune.ui.components.text.TrackSubtitle
@@ -97,22 +380,35 @@ internal fun MediaListTrackRow(
                     .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Álbum: o InnerTube não dá a thumbnail exata da faixa, então mostra
-                // só a numeração onde ficaria a thumbnail. Playlist: mostra a thumbnail normal.
+                // Álbum: sem fundo cinza, só o número grande onde ficaria a thumbnail.
+                // Tocando: equalizador subindo e descendo, sem fundo. Pausado: só •••.
+                // Playlist: mostra a thumbnail normal.
                 if (index != null) {
                     Box(
-                        Modifier
-                            .size(52.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color.White.copy(alpha = 0.08f)),
+                        Modifier.size(52.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            text = "$index",
-                            color = if (isPlaying) Color(0xFF60A5FA) else Color.White.copy(alpha = 0.75f),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal,
-                        )
+                        when {
+                            isPlaying -> PlayingEqualizer(
+                                color = Color.White,
+                                barCount = 4,
+                                maxHeight = 24.dp,
+                                barWidth = 3.dp,
+                                gap = 3.dp,
+                            )
+                            isPaused -> Text(
+                                text = "•••",
+                                color = Color.White.copy(alpha = 0.6f),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            else -> Text(
+                                text = "$index",
+                                color = Color.White.copy(alpha = 0.9f),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
                     }
                 } else {
                     MediaThumbnail(
@@ -279,530 +575,1051 @@ internal fun PlayableVideoCard(
         modifier = modifier,
     )
 }
-VZ_EOF_1_FIX2
+VZ_EOF_2_FIX3
 
-echo "[2/7] app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListUiState.kt"
-mkdir -p "$(dirname "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListUiState.kt")"
-cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListUiState.kt" <<'VZ_EOF_2_FIX2'
+echo "[3/9] data/src/main/kotlin/com/vztechcore/vztune/data/prefs/models/StoredPlaylist.kt"
+mkdir -p "$(dirname "data/src/main/kotlin/com/vztechcore/vztune/data/prefs/models/StoredPlaylist.kt")"
+cat > "data/src/main/kotlin/com/vztechcore/vztune/data/prefs/models/StoredPlaylist.kt" <<'VZ_EOF_3_FIX3'
+package com.vztechcore.vztune.data.prefs.models
+
+import com.vztechcore.vztune.core.domain.music.Playlist
+import com.vztechcore.vztune.core.domain.music.Source
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class StoredPlaylist(
+    val id: String,
+    val title: String,
+    val owner: String? = null,
+    val thumbnailUrl: String? = null,
+    val mosaic: List<String> = emptyList(),
+    // True quando o favorito era um álbum. Sem isso o álbum favoritado abria como
+    // playlist e crashava com key duplicada. Default false mantém favoritos antigos válidos.
+    val isAlbum: Boolean = false,
+) {
+    fun toPlaylist(source: Source = Source.YOUTUBE_MUSIC) = Playlist(
+        id = id, title = title, owner = owner, thumbnailUrl = thumbnailUrl,
+        source = source, mosaicThumbnails = mosaic,
+    )
+}
+VZ_EOF_3_FIX3
+
+echo "[4/9] app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListViewModel.kt"
+mkdir -p "$(dirname "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListViewModel.kt")"
+cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListViewModel.kt" <<'VZ_EOF_4_FIX3'
 package com.vztechcore.vztune.ui.screens.medialist
 
-import com.vztechcore.vztune.core.domain.music.Album
+import android.content.Context
+import android.net.Uri
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.navigation.toRoute
+import com.vztechcore.vztune.core.domain.music.Artist
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
+import com.vztechcore.vztune.data.download.TrackDownloader
+import com.vztechcore.vztune.data.player.PlayerController
+import com.vztechcore.vztune.data.prefs.models.StoredPlaylist
+import com.vztechcore.vztune.data.prefs.models.isLocalPlaylistId
+import com.vztechcore.vztune.data.prefs.store.FavoritePlaylistsStore
+import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
+import com.vztechcore.vztune.data.prefs.store.MediaListPreferencesStore
+import com.vztechcore.vztune.data.ytmusic.YTMusicOwnerValidator
+import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
+import com.vztechcore.vztune.ui.navigation.Routes
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
+import javax.inject.Inject
 
-enum class MediaListTab(val label: String) {
-    ALL("Tudo"),
-    SONGS("Músicas"),
-    VIDEOS("Vídeos"),
-}
+@HiltViewModel
+class MediaListViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
+    @ApplicationContext private val context: Context,
+    private val ytMusicRepository: YTMusicRepository,
+    private val playerController: PlayerController,
+    private val trackDownloader: TrackDownloader,
+    private val store: MediaListPreferencesStore,
+    private val favoritesStore: FavoritePlaylistsStore,
+    private val localStore: LocalPlaylistsStore,
+) : ViewModel() {
 
-data class MediaListUiState(
-    val listId: String = "",
-    val isLoading: Boolean = true,
-    val errorMessage: String? = null,
-    val title: String = "",
-    val subtitle: String? = null,
-    val owner: String? = null,
-    val ownerAvatarUrl: String? = null,
-    val artistId: String? = null,
-    val moreAlbumsByArtist: List<Album> = emptyList(),
-    val year: String? = null,
-    val views: String? = null,
-    val originalTrackCount: Int? = null,
-    val thumbnailUrl: String? = null,
-    val mosaicThumbnails: List<String> = emptyList(),
-    val isAlbum: Boolean = false,
-    val allTracks: List<Track> = emptyList(),
-    val description: String? = null,
-    val selectedTab: MediaListTab = MediaListTab.ALL,
-    val sortOrder: SortOrder = SortOrder.OLD_TO_RECENT,
-    val manualOrder: List<String> = emptyList(),
-    val isShuffling: Boolean = false,
-    val isFavorite: Boolean = false,
-    // Playlist created by the user inside the app (stored on the device).
-    val isLocal: Boolean = false,
-) {
-    val showTabs: Boolean get() = !isAlbum
-
-    // Só playlist local não pode favoritar. Álbum e playlist do YouTube podem.
-    // Barra de cima fica: Lupa, Favoritar, 3 pontinhos.
-    val showFavorite: Boolean get() = !isLocal
-
-    // Albums keep their official tracklist order without sorting controls.
-    val isSortEnabled: Boolean get() = !isAlbum && selectedTab == MediaListTab.ALL
-
-    val filteredTracks: List<Track>
-        get() = when (selectedTab) {
-            MediaListTab.ALL -> allTracks
-            MediaListTab.SONGS -> allTracks.filter { it.source == Source.YOUTUBE_MUSIC }
-            MediaListTab.VIDEOS -> allTracks.filter { it.source == Source.YOUTUBE }
-        }
-
-    fun applySort(tracks: List<Track>): List<Track> = when (sortOrder) {
-        SortOrder.MANUAL, SortOrder.SHUFFLE -> {
-            if (manualOrder.isEmpty()) tracks
-            else {
-                val map = manualOrder.withIndex().associate { it.value to it.index }
-                tracks.sortedBy { map[it.id] ?: Int.MAX_VALUE }
-            }
-        }
-        SortOrder.RECENT_TO_OLD -> tracks.reversed()
-        SortOrder.OLD_TO_RECENT -> tracks
-        SortOrder.TITLE_ASC -> tracks.sortedBy { it.title.lowercase() }
-        SortOrder.TITLE_DESC -> tracks.sortedByDescending { it.title.lowercase() }
-        SortOrder.ARTIST_ASC -> tracks.sortedBy { it.artist.lowercase() }
-        SortOrder.ARTIST_DESC -> tracks.sortedByDescending { it.artist.lowercase() }
+    sealed interface NavigationEvent {
+        data class OpenArtist(val artist: Artist) : NavigationEvent
+        data object CloseScreen : NavigationEvent
     }
 
-    fun getDisplayTracks(): List<Track> {
-        if (isAlbum) return allTracks
-        val filtered = filteredTracks
-        return if (isSortEnabled) {
-            applySort(filtered)
-        } else {
-            filtered.reversed()
+    private val _navigationEvent = MutableSharedFlow<NavigationEvent>()
+    val navigationEvent: SharedFlow<NavigationEvent> = _navigationEvent.asSharedFlow()
+
+    private val route = savedStateHandle.toRoute<Routes.MediaList>()
+
+    private val _uiState = MutableStateFlow(
+        MediaListUiState(
+            listId = route.id,
+            title = route.title,
+            subtitle = route.subtitle,
+            thumbnailUrl = route.thumbnailUrl,
+            isAlbum = route.isAlbum,
+            isLocal = isLocalPlaylistId(route.id),
+        )
+    )
+    val uiState: StateFlow<MediaListUiState> = _uiState.asStateFlow()
+
+    init {
+        val savedSort = store.getSortOrder(route.id)
+        val savedManual = store.getManualOrder(route.id)
+        _uiState.update { it.copy(sortOrder = savedSort, manualOrder = savedManual) }
+        loadContent()
+        viewModelScope.launch {
+            favoritesStore.contains(route.id).collect { favorite ->
+                _uiState.update { it.copy(isFavorite = favorite) }
+            }
         }
     }
 
-    val trackCountLabel: String
-        get() {
-            val count = originalTrackCount ?: filteredTracks.size
-            return if (count == 1) "1 faixa" else "$count faixas"
-        }
-
-    val totalDurationLabel: String
-        get() {
-            val totalSeconds = filteredTracks.sumOf { it.durationSeconds }
-            if (totalSeconds <= 0) return ""
-            val h = totalSeconds / 3600
-            val m = (totalSeconds % 3600) / 60
-            val s = totalSeconds % 60
-            return when {
-                h > 0 && m > 0 -> "${h}h ${m}min total"
-                h > 0 -> "${h}h total"
-                m > 0 -> "${m}min total"
-                else -> "${s}s total"
+    private fun observeLocalPlaylist() {
+        viewModelScope.launch {
+            localStore.ensureRandomDefaultCover(route.id)
+            localStore.playlist(route.id).collect { playlist ->
+                _uiState.update {
+                    if (playlist == null) {
+                        it.copy(isLoading = false, errorMessage = "Playlist não encontrada.")
+                    } else {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = null,
+                            title = playlist.name,
+                            owner = "Você",
+                            subtitle = "Você",
+                            thumbnailUrl = playlist.coverPath,
+                            mosaicThumbnails = playlist.mosaic,
+                            allTracks = playlist.tracks.mapNotNull { stored -> stored.toTrack() },
+                        )
+                    }
+                }
             }
         }
+    }
 
-    val metadataLabel: String
-        get() = listOf(trackCountLabel, totalDurationLabel)
-            .filter { it.isNotBlank() }
-            .joinToString(" • ")
+    private fun loadContent() {
+        if (_uiState.value.isLocal) {
+            observeLocalPlaylist()
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            runCatching {
+                if (route.isAlbum) {
+                    val album = ytMusicRepository.browseAlbum(route.id)
 
-    val descriptionLabel: String
-        get() = description?.takeIf { it.isNotBlank() } ?: "Sem descrição"
+                    val resolvedArtist = listOfNotNull(
+                        album.artist,
+                        route.subtitle,
+                        _uiState.value.subtitle,
+                    ).firstOrNull { YTMusicOwnerValidator.isValidOwnerName(it) }
+
+                    val resolvedTitle = album.title ?: _uiState.value.title
+
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            title = resolvedTitle,
+                            subtitle = resolvedArtist ?: it.subtitle,
+                            owner = resolvedArtist,
+                            ownerAvatarUrl = null,
+                            artistId = album.artistId,
+                            year = album.year,
+                            thumbnailUrl = album.coverUrl ?: it.thumbnailUrl,
+                            description = album.description,
+                            views = album.views,
+                            // Tira duplicadas (mesmo source + id) pra LazyColumn nunca crashar com key repetida
+                            allTracks = album.tracks.distinctBy { "${it.source}_${it.id}" },
+                        )
+                    }
+
+                    loadMoreAlbumsByArtist(
+                        artistName = resolvedArtist,
+                        artistId = album.artistId,
+                        excludeAlbumTitle = resolvedTitle,
+                    )
+                } else {
+                    var playlist = ytMusicRepository.browsePlaylist(route.id)
+                    if (playlist.tracks.isEmpty()) {
+                        delay(1000)
+                        playlist = ytMusicRepository.browsePlaylist(route.id)
+                    }
+
+                    val resolvedOwner = listOfNotNull(
+                        playlist.owner,
+                        route.subtitle,
+                        _uiState.value.subtitle,
+                    ).firstOrNull { YTMusicOwnerValidator.isValidOwnerName(it) }
+
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            title = playlist.title ?: it.title,
+                            subtitle = resolvedOwner ?: it.subtitle,
+                            owner = resolvedOwner,
+                            ownerAvatarUrl = playlist.ownerAvatarUrl,
+                            year = playlist.year,
+                            views = playlist.views,
+                            originalTrackCount = playlist.trackCount,
+                            thumbnailUrl = playlist.coverUrl ?: it.thumbnailUrl,
+                            description = playlist.description,
+                            mosaicThumbnails = playlist.tracks
+                                .asSequence()
+                                .mapNotNull { t -> t.thumbnailUrl }
+                                .distinct()
+                                .take(4)
+                                .toList(),
+                            allTracks = playlist.tracks.distinctBy { "${it.source}_${it.id}" },
+                        )
+                    }
+
+                    if (playlist.ownerAvatarUrl.isNullOrBlank() && !resolvedOwner.isNullOrBlank()) {
+                        loadPlaylistOwnerAvatar(resolvedOwner)
+                    }
+                }
+            }.onFailure { e ->
+                _uiState.update { it.copy(isLoading = false, errorMessage = "Erro: ${e.message}") }
+            }
+        }
+    }
+
+    private fun loadPlaylistOwnerAvatar(ownerName: String) {
+        viewModelScope.launch {
+            val primary = ownerName
+                .substringBefore(",")
+                .substringBefore("&")
+                .trim()
+            if (primary.isBlank() || primary.equals("YouTube Music", ignoreCase = true)) return@launch
+            val resolved = runCatching {
+                ytMusicRepository.findChannelOrArtist(primary)
+            }.getOrNull()
+            if (resolved != null) {
+                _uiState.update { current ->
+                    current.copy(
+                        artistId = current.artistId ?: resolved.id,
+                        ownerAvatarUrl = current.ownerAvatarUrl ?: resolved.thumbnailUrl,
+                    )
+                }
+            }
+        }
+    }
+
+    private fun loadMoreAlbumsByArtist(
+        artistName: String?,
+        artistId: String?,
+        excludeAlbumTitle: String?,
+    ) {
+        viewModelScope.launch {
+            val (artist, moreAlbums) = ytMusicRepository.getMoreAlbumsByArtist(
+                artistName = artistName,
+                artistId = artistId,
+                excludeAlbumId = route.id,
+                excludeAlbumTitle = excludeAlbumTitle,
+            )
+            _uiState.update { current ->
+                current.copy(
+                    artistId = artist?.id ?: current.artistId,
+                    ownerAvatarUrl = artist?.thumbnailUrl ?: current.ownerAvatarUrl,
+                    moreAlbumsByArtist = moreAlbums,
+                )
+            }
+        }
+    }
+
+    fun onTabSelected(tab: MediaListTab) {
+        if (tab == _uiState.value.selectedTab) return
+        _uiState.update { it.copy(selectedTab = tab) }
+    }
+
+    fun onSortOrderSelected(order: SortOrder) {
+        if (order == _uiState.value.sortOrder) return
+        _uiState.update { it.copy(sortOrder = order, isShuffling = false) }
+        store.setSortOrder(route.id, order)
+    }
+
+    fun onReorder(fromIndex: Int, toIndex: Int) {
+        val currentTracks = _uiState.value.getDisplayTracks()
+        if (fromIndex !in currentTracks.indices) return
+        if (toIndex !in currentTracks.indices) return
+        val newList = currentTracks.toMutableList()
+        val item = newList.removeAt(fromIndex)
+        newList.add(toIndex, item)
+        val newOrderIds = newList.map { it.id }
+        _uiState.update { it.copy(manualOrder = newOrderIds, sortOrder = SortOrder.MANUAL) }
+        store.setManualOrder(route.id, newOrderIds)
+        store.setSortOrder(route.id, SortOrder.MANUAL)
+    }
+
+    fun startShuffle() { _uiState.update { it.copy(isShuffling = true) } }
+
+    fun shuffleOnce() {
+        val currentTracks = _uiState.value.allTracks
+        if (currentTracks.isEmpty()) return
+        val newOrderIds = currentTracks.map { it.id }.shuffled()
+        _uiState.update { it.copy(manualOrder = newOrderIds, sortOrder = SortOrder.SHUFFLE) }
+    }
+
+    fun stopShuffle() {
+        _uiState.update { it.copy(isShuffling = false) }
+        store.setManualOrder(route.id, _uiState.value.manualOrder)
+        store.setSortOrder(route.id, SortOrder.SHUFFLE)
+    }
+
+    fun onTrackClick(track: Track) {
+        val sorted = _uiState.value.getDisplayTracks()
+        val idx = sorted.indexOfFirst { it.id == track.id && it.source == track.source }
+        if (idx >= 0) playerController.playQueue(sorted, idx)
+        else playerController.playQueue(listOf(track), 0)
+    }
+
+    fun onFavoriteClick() {
+        val state = _uiState.value
+        viewModelScope.launch {
+            favoritesStore.toggle(
+                StoredPlaylist(
+                    id = route.id,
+                    title = state.title,
+                    owner = state.owner,
+                    thumbnailUrl = state.thumbnailUrl,
+                    mosaic = state.mosaicThumbnails,
+                    isAlbum = state.isAlbum,
+                )
+            )
+        }
+    }
+
+    fun onPlayNextClick(track: Track) { playerController.addToQueueNext(track) }
+
+    fun onPlayNextAll() {
+        val tracks = _uiState.value.getDisplayTracks()
+        tracks.asReversed().forEach { playerController.addToQueueNext(it) }
+    }
+
+    fun onAddToQueueAll() {
+        val tracks = _uiState.value.getDisplayTracks()
+        tracks.forEach { playerController.addToQueueEnd(it) }
+    }
+
+    fun onDownloadAll() {
+        val tracks = _uiState.value.allTracks
+        if (tracks.isNotEmpty()) {
+            trackDownloader.downloadAll(tracks)
+        }
+    }
+
+    fun onOpenArtist() {
+        val state = _uiState.value
+        val directId = state.artistId?.takeIf { it.startsWith("UC") }
+        val artistName = state.owner?.takeIf { it.isNotBlank() }
+        if (directId != null && artistName != null) {
+            viewModelScope.launch {
+                _navigationEvent.emit(
+                    NavigationEvent.OpenArtist(
+                        Artist(
+                            id = directId,
+                            name = artistName,
+                            thumbnailUrl = state.ownerAvatarUrl,
+                            source = Source.YOUTUBE_MUSIC,
+                        )
+                    )
+                )
+            }
+            return
+        }
+        if (artistName != null) {
+            onOpenArtistByName(artistName)
+        }
+    }
+
+    fun onOpenArtistByName(artistName: String) {
+        viewModelScope.launch {
+            val found = runCatching {
+                ytMusicRepository.findChannelOrArtist(artistName)
+            }.getOrNull()
+            if (found != null) {
+                _navigationEvent.emit(NavigationEvent.OpenArtist(found))
+            }
+        }
+    }
+
+    fun onDeleteLocalPlaylist() {
+        if (!_uiState.value.isLocal) return
+        viewModelScope.launch {
+            localStore.remove(route.id)
+            _navigationEvent.emit(NavigationEvent.CloseScreen)
+        }
+    }
+
+    fun onRenameLocalPlaylist(newTitle: String) {
+        if (!_uiState.value.isLocal) return
+        val clean = newTitle.trim()
+        if (clean.isBlank()) return
+        viewModelScope.launch {
+            localStore.rename(route.id, clean)
+        }
+    }
+
+    fun onChangeLocalPlaylistCover(coverUri: Uri) {
+        if (!_uiState.value.isLocal) return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val coversDir = File(context.filesDir, "playlist_covers").apply {
+                    if (!exists()) mkdirs()
+                }
+                val safeId = route.id.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                val destFile = File(coversDir, "${safeId}_${System.currentTimeMillis()}.jpg")
+                context.contentResolver.openInputStream(coverUri)?.use { input ->
+                    FileOutputStream(destFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                if (destFile.exists() && destFile.length() > 0L) {
+                    _uiState.value.thumbnailUrl?.let { oldPath ->
+                        val oldFile = File(oldPath)
+                        if (oldFile.exists() && oldFile.parentFile == coversDir) {
+                            runCatching { oldFile.delete() }
+                        }
+                    }
+                    localStore.updateCover(route.id, destFile.absolutePath)
+                }
+            }
+        }
+    }
+
+    fun onPlayAll() {
+        val sorted = _uiState.value.getDisplayTracks()
+        if (sorted.isNotEmpty()) playerController.playQueue(sorted, 0)
+    }
+
+    fun onShuffle() {
+        val shuffled = _uiState.value.filteredTracks.shuffled()
+        if (shuffled.isNotEmpty()) playerController.playQueue(shuffled, 0)
+    }
 }
-VZ_EOF_2_FIX2
+VZ_EOF_4_FIX3
 
-echo "[3/7] app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListHeader.kt"
-mkdir -p "$(dirname "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListHeader.kt")"
-cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListHeader.kt" <<'VZ_EOF_3_FIX2'
-package com.vztechcore.vztune.ui.screens.medialist
+echo "[5/9] app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/LibraryUiState.kt"
+mkdir -p "$(dirname "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/LibraryUiState.kt")"
+cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/LibraryUiState.kt" <<'VZ_EOF_5_FIX3'
+package com.vztechcore.vztune.ui.screens.library
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import com.vztechcore.vztune.core.domain.search.SortOrder
-import com.vztechcore.vztune.ui.components.player.DefaultPlaylistCover
-import com.vztechcore.vztune.ui.components.player.PlaylistCoverPalette
-import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.ui.icons.VzIcons
-import com.vztechcore.vztune.ui.icons.actions.Close
 import com.vztechcore.vztune.ui.icons.actions.FavoriteFilled
 import com.vztechcore.vztune.ui.icons.actions.FavoriteOutline
-import com.vztechcore.vztune.ui.icons.actions.MoreVert
-import com.vztechcore.vztune.ui.icons.actions.Sort
-import com.vztechcore.vztune.ui.icons.actions.StopCircle
-import com.vztechcore.vztune.ui.icons.actions.Sync
-import com.vztechcore.vztune.ui.icons.media.DownloadForOffline
-import com.vztechcore.vztune.ui.icons.navigation.Search
-import com.vztechcore.vztune.ui.icons.player.Play
-import com.vztechcore.vztune.ui.icons.player.Shuffle
+import com.vztechcore.vztune.ui.icons.actions.StarOutline
+import com.vztechcore.vztune.ui.icons.media.CloudDownload
+import com.vztechcore.vztune.ui.icons.media.Download
+import com.vztechcore.vztune.ui.icons.media.Groups
+import com.vztechcore.vztune.ui.icons.media.PlaylistAdd
+import com.vztechcore.vztune.ui.icons.media.TrendingUp
+import com.vztechcore.vztune.ui.icons.navigation.LibraryMusicFilled
 
-@Composable
-internal fun MediaListExpandedHeader(
-    state: MediaListUiState,
-    dominantColor: Color = Color.Black,
-    allTracksDownloaded: Boolean = false,
-    onBackClick: () -> Unit,
-    onTabSelected: (MediaListTab) -> Unit,
-    onPlayAllClick: () -> Unit,
-    onShuffleClick: () -> Unit,
-    onSearchClick: () -> Unit,
-    onMoreClick: () -> Unit,
-    onSortClick: () -> Unit,
-    onShuffleToggle: () -> Unit,
-    onFavoriteClick: () -> Unit,
-    onArtistClick: (() -> Unit)? = null,
-) {
-    // Sem camaleao - fade sempre pra preto AMOLED
-    val chameleonBase = Color.Black
-
-    Column(
-        Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(320.dp)
-        ) {
-            val hasDefaultColorToken = PlaylistCoverPalette.isDefaultColorToken(state.thumbnailUrl)
-            when {
-                state.isLocal && !hasDefaultColorToken && !state.thumbnailUrl.isNullOrBlank() -> {
-                    AsyncImage(
-                        model = state.thumbnailUrl,
-                        contentDescription = state.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-                state.mosaicThumbnails.size >= 4 -> {
-                    PlaylistMosaic(state.mosaicThumbnails)
-                }
-                state.isLocal -> {
-                    DefaultPlaylistCover(
-                        seed = state.listId,
-                        coverPath = state.thumbnailUrl,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-                else -> {
-                    AsyncImage(
-                        model = state.thumbnailUrl,
-                        contentDescription = state.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-            }
-
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colorStops = arrayOf(
-                                0.0f to Color.Black.copy(alpha = 0.42f),
-                                0.48f to Color.Transparent,
-                                0.82f to chameleonBase.copy(alpha = 0.78f),
-                                1.0f to chameleonBase,
-                            )
-                        )
-                    )
-            )
-
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                MediaListCircleButton(VzIcons.Close, "Fechar", onBackClick)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Ordem igual as playlists: Lupa, Favoritar, 3 pontinhos
-                    MediaListCircleButton(VzIcons.Search, "Pesquisar", onSearchClick)
-                    if (state.showFavorite) {
-                        MediaListCircleButton(
-                            icon = if (state.isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
-                            contentDescription = if (state.isFavorite) "Remover dos favoritos" else "Favoritar",
-                            onClick = onFavoriteClick,
-                        )
-                    }
-                    MediaListCircleButton(VzIcons.MoreVert, "Mais opções", onMoreClick)
-                }
-            }
-        }
-
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .offset(y = (-12).dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = state.title,
-                style = MaterialTheme.typography.headlineMedium,
-                color = Color.White,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            val ownerName = state.owner?.takeIf { it.isNotBlank() }
-            if (!ownerName.isNullOrBlank()) {
-                val isClickableOwner = !state.isLocal && onArtistClick != null
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .then(
-                            if (isClickableOwner) {
-                                Modifier
-                                    .clickable { onArtistClick?.invoke() }
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            } else {
-                                Modifier
-                            }
-                        ),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    if (!state.ownerAvatarUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = state.ownerAvatarUrl,
-                            contentDescription = ownerName,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    Text(
-                        text = ownerName,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White.copy(alpha = 0.92f),
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
-            }
-
-            val statsText = if (state.isAlbum) {
-                listOfNotNull(
-                    "Álbum",
-                    state.year?.takeIf { it.isNotBlank() },
-                    state.trackCountLabel.takeIf { state.allTracks.isNotEmpty() },
-                    state.totalDurationLabel.takeIf { it.isNotBlank() },
-                ).joinToString(" • ")
-            } else {
-                listOfNotNull(
-                    "Playlist",
-                    state.year?.takeIf { it.isNotBlank() },
-                    state.trackCountLabel.takeIf { (state.originalTrackCount ?: state.allTracks.size) > 0 },
-                    state.totalDurationLabel.takeIf { it.isNotBlank() },
-                ).joinToString(" • ")
-            }
-
-            if (statsText.isNotBlank()) {
-                Text(
-                    text = statsText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.72f),
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        if (state.showTabs) {
-            MediaListTabs(state.selectedTab, onTabSelected)
-            Spacer(Modifier.height(12.dp))
-        }
-
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(Color(0xFF1E40AF))
-                    .clickable { onPlayAllClick() }
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    VzIcons.Play,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    "Play",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.labelLarge,
-                )
-            }
-
-            Spacer(Modifier.width(8.dp))
-
-            Box(
-                Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.12f))
-                    .clickable { onShuffleClick() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    VzIcons.Shuffle,
-                    contentDescription = "Aleatório",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-
-            if (allTracksDownloaded) {
-                Spacer(Modifier.width(8.dp))
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = VzIcons.DownloadForOffline,
-                        contentDescription = if (state.isAlbum) "Álbum baixado" else "Playlist baixada",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-
-            Spacer(Modifier.weight(1f))
-
-            if (state.isSortEnabled && state.sortOrder == SortOrder.SHUFFLE) {
-                IconButton(onClick = onShuffleToggle) {
-                    Icon(
-                        imageVector = if (state.isShuffling) VzIcons.StopCircle else VzIcons.Sync,
-                        contentDescription = "Sortear animado",
-                        tint = if (state.isShuffling) Color(0xFF1E40AF) else Color.White,
-                    )
-                }
-            }
-
-            if (state.isSortEnabled) {
-                IconButton(onClick = onSortClick) {
-                    Icon(
-                        VzIcons.Sort,
-                        contentDescription = "Ordenar",
-                        tint = Color.White,
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-    }
+/** The five tabs of the Library screen. */
+enum class LibraryTab(val label: String, val icon: ImageVector) {
+    OVERVIEW("Sua biblioteca", VzIcons.LibraryMusicFilled),
+    VZTUNE("Playlists VzTune", VzIcons.StarOutline),
+    MY_PLAYLISTS("Suas playlists", VzIcons.PlaylistAdd),
+    FAVORITES("Playlists favoritas", VzIcons.FavoriteOutline),
+    DOWNLOADS("Playlists baixadas", VzIcons.Download),
 }
 
-@Composable
-internal fun MediaListCollapsedHeader(
-    title: String,
-    thumbnailUrl: String?,
-    onBackClick: () -> Unit,
-    dominantColor: Color = Color.Black,
-    onSearchClick: (() -> Unit)? = null,
-    onMoreClick: (() -> Unit)? = null,
-    circularThumbnail: Boolean = false,
-    showFavorite: Boolean = false,
-    isFavorite: Boolean = false,
-    onFavoriteClick: (() -> Unit)? = null,
-) {
-    val barTint = remember(dominantColor) {
-        lerp(Color.Black, dominantColor, 0.38f)
-    }
+/** The four shortcut cards on top of "Sua biblioteca"; each one opens its own list. */
+enum class LibraryShortcut(val label: String, val icon: ImageVector, val accent: Color) {
+    FAVORITES("Favoritos", VzIcons.FavoriteFilled, Color(0xFFEC4899)),
+    MOST_PLAYED("Mais ouvidas", VzIcons.TrendingUp, Color(0xFF8B5CF6)),
+    FOLLOWED("Seguindo", VzIcons.Groups, Color(0xFF38BDF8)),
+    DOWNLOADS("Baixadas", VzIcons.CloudDownload, Color(0xFF10B981)),
+}
 
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        barTint.copy(alpha = 0.98f),
-                        barTint.copy(alpha = 0.88f),
-                        Color.Transparent,
-                    )
-                )
-            )
-            .statusBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        MediaListCircleButton(VzIcons.Close, "Fechar", onBackClick)
-        Spacer(Modifier.width(12.dp))
-        if (!thumbnailUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = thumbnailUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(40.dp).clip(if (circularThumbnail) CircleShape else RoundedCornerShape(6.dp)),
-            )
-            Spacer(Modifier.width(10.dp))
-        }
-        Text(
-            title,
-            style = MaterialTheme.typography.titleMedium,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
+/** One playlist card of the Library grids (local, favorite or downloaded). */
+data class LibraryPlaylistItem(
+    val id: String,
+    val title: String,
+    val subtitle: String?,
+    val imageUrl: String?,
+    val mosaic: List<String> = emptyList(),
+    val isAlbum: Boolean = false,
+)
+
+data class LibraryUiState(
+    val selectedTab: LibraryTab = LibraryTab.OVERVIEW,
+    val recentTracks: List<Track> = emptyList(),
+    val myPlaylists: List<LibraryPlaylistItem> = emptyList(),
+    val favoritePlaylists: List<LibraryPlaylistItem> = emptyList(),
+    val downloadedPlaylists: List<LibraryPlaylistItem> = emptyList(),
+)
+VZ_EOF_5_FIX3
+
+echo "[6/9] app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/LibraryViewModel.kt"
+mkdir -p "$(dirname "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/LibraryViewModel.kt")"
+cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/LibraryViewModel.kt" <<'VZ_EOF_6_FIX3'
+package com.vztechcore.vztune.ui.screens.library
+
+import android.net.Uri
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.data.player.PlayerController
+import com.vztechcore.vztune.data.prefs.store.FavoritePlaylistsStore
+import com.vztechcore.vztune.data.prefs.models.LocalPlaylist
+import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
+import com.vztechcore.vztune.data.prefs.store.PlayHistoryStore
+import com.vztechcore.vztune.data.prefs.store.PlaylistCoverStorage
+import com.vztechcore.vztune.data.prefs.models.StoredPlaylist
+import com.vztechcore.vztune.data.prefs.models.newLocalPlaylistId
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+@HiltViewModel
+class LibraryViewModel @Inject constructor(
+    historyStore: PlayHistoryStore,
+    private val localStore: LocalPlaylistsStore,
+    favoritesStore: FavoritePlaylistsStore,
+    private val coverStorage: PlaylistCoverStorage,
+    private val playerController: PlayerController,
+) : ViewModel() {
+
+    private val selectedTab = MutableStateFlow(LibraryTab.OVERVIEW)
+
+    private var recentTracks: List<Track> = emptyList()
+
+    val uiState: StateFlow<LibraryUiState> = combine(
+        selectedTab,
+        historyStore.tracks,
+        localStore.items,
+        favoritesStore.items,
+    ) { tab, recent, mine, favorites ->
+        recentTracks = recent
+        LibraryUiState(
+            selectedTab = tab,
+            recentTracks = recent,
+            myPlaylists = mine.map { it.toItem() },
+            favoritePlaylists = favorites.map { it.toItem() },
         )
-        if (onSearchClick != null) {
-            IconButton(onClick = onSearchClick) {
-                Icon(VzIcons.Search, contentDescription = "Pesquisar", tint = Color.White)
-            }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
+
+    fun onTabSelected(tab: LibraryTab) {
+        selectedTab.value = tab
+    }
+
+    fun onTrackClick(track: Track) {
+        val index = recentTracks.indexOfFirst { it.id == track.id && it.source == track.source }
+        if (index >= 0) playerController.playQueue(recentTracks, index)
+        else playerController.playQueue(listOf(track), 0)
+    }
+
+    /** Creates a local playlist; without a cover it shows the thumbnails of its tracks. */
+    fun createPlaylist(name: String, coverUri: Uri?) {
+        viewModelScope.launch {
+            val id = newLocalPlaylistId()
+            val coverPath = coverUri?.let { coverStorage.save(id, it) }
+            localStore.addFirst(LocalPlaylist(id = id, name = name.trim(), coverPath = coverPath))
         }
-        // Colapsado também fica Lupa, Favoritar, 3 pontinhos (quando tem favoritar)
-        if (showFavorite && onFavoriteClick != null) {
-            IconButton(onClick = onFavoriteClick) {
-                Icon(
-                    imageVector = if (isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
-                    contentDescription = if (isFavorite) "Remover dos favoritos" else "Favoritar",
-                    tint = if (isFavorite) Color(0xFFEF4444) else Color.White,
+    }
+
+    private fun LocalPlaylist.toItem() = LibraryPlaylistItem(
+        id = id,
+        title = name,
+        subtitle = "Sua playlist",
+        imageUrl = coverPath ?: mosaic.firstOrNull(),
+        mosaic = if (coverPath == null) mosaic else emptyList(),
+    )
+
+    private fun StoredPlaylist.toItem() = LibraryPlaylistItem(
+        id = id,
+        title = title,
+        subtitle = owner,
+        imageUrl = thumbnailUrl,
+        mosaic = mosaic,
+        isAlbum = isAlbum,
+    )
+}
+VZ_EOF_6_FIX3
+
+echo "[7/9] app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt"
+mkdir -p "$(dirname "app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt")"
+cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt" <<'VZ_EOF_7_FIX3'
+package com.vztechcore.vztune.ui.navigation
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.data.prefs.models.StoredTrack
+import com.vztechcore.vztune.data.prefs.models.isLocalPlaylistId
+import com.vztechcore.vztune.ui.components.AppCredits
+import com.vztechcore.vztune.ui.components.feedback.EclipseBackground
+import com.vztechcore.vztune.ui.components.feedback.rememberDominantColor
+import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
+import com.vztechcore.vztune.ui.components.sheets.TrackMenuContext
+import com.vztechcore.vztune.ui.components.sheets.TrackMenuViewModel
+import com.vztechcore.vztune.ui.components.sheets.TrackOptionsSheet
+import com.vztechcore.vztune.ui.screens.artist.ArtistScreen
+import com.vztechcore.vztune.ui.screens.artist.ArtistViewModel
+import com.vztechcore.vztune.ui.screens.artist.list.ArtistListScreen
+import com.vztechcore.vztune.ui.screens.artist.list.ArtistListViewModel
+import com.vztechcore.vztune.ui.screens.downloads.DownloadBannerViewModel
+import com.vztechcore.vztune.ui.screens.downloads.DownloadsScreen
+import com.vztechcore.vztune.ui.screens.downloads.DownloadsViewModel
+import com.vztechcore.vztune.ui.screens.library.LibraryScreen
+import com.vztechcore.vztune.ui.screens.library.LibraryViewModel
+import com.vztechcore.vztune.ui.screens.library.list.LibraryListScreen
+import com.vztechcore.vztune.ui.screens.library.list.LibraryListViewModel
+import com.vztechcore.vztune.ui.screens.main.MiniPlayerViewModel
+import com.vztechcore.vztune.ui.screens.medialist.MediaListScreen
+import com.vztechcore.vztune.ui.screens.medialist.MediaListViewModel
+import com.vztechcore.vztune.ui.screens.search.SearchScreen
+import com.vztechcore.vztune.ui.screens.search.SearchViewModel
+import com.vztechcore.vztune.ui.screens.trackinfo.TrackInfoScreen
+import com.vztechcore.vztune.ui.screens.trackinfo.TrackInfoViewModel
+import com.vztechcore.vztune.ui.theme.VzOnSurface
+
+private data class ActiveTrackMenu(
+    val track: Track,
+    val context: TrackMenuContext = TrackMenuContext.DEFAULT,
+    val localPlaylistId: String? = null,
+)
+
+@Composable
+fun AppNavHost(modifier: Modifier = Modifier) {
+    val navController = rememberNavController()
+    val backStackEntry by navController.currentBackStackEntryAsState()
+
+    val currentTab = when {
+        backStackEntry?.destination?.hasRoute<Routes.Search>() == true -> AppTab.SEARCH
+        backStackEntry?.destination?.hasRoute<Routes.Analytics>() == true -> AppTab.ANALYTICS
+        backStackEntry?.destination?.hasRoute<Routes.Library>() == true -> AppTab.LIBRARY
+        else -> AppTab.HOME
+    }
+
+    val isMediaListScreen = backStackEntry?.destination?.hasRoute<Routes.MediaList>() == true
+    val isArtistScreen = backStackEntry?.destination?.hasRoute<Routes.Artist>() == true
+    val isArtistListScreen = backStackEntry?.destination?.hasRoute<Routes.ArtistList>() == true
+    val isLibraryListScreen = backStackEntry?.destination?.hasRoute<Routes.LibraryList>() == true
+    val isDownloadsScreen = backStackEntry?.destination?.hasRoute<Routes.Downloads>() == true
+    val isDetailScreen = isMediaListScreen || isArtistScreen || isArtistListScreen || isLibraryListScreen || isDownloadsScreen
+    val isTrackInfoScreen = backStackEntry?.destination?.hasRoute<Routes.TrackInfo>() == true
+
+    val playback = LocalNowPlaying.current
+    val track = playback.currentTrack
+
+    val miniPlayerVm: MiniPlayerViewModel = hiltViewModel()
+    val bannerVm: DownloadBannerViewModel = hiltViewModel()
+    val menuVm: TrackMenuViewModel = hiltViewModel()
+
+    val dominantColor = rememberDominantColor(track?.thumbnailUrl)
+    val isMinimized by miniPlayerVm.isMinimized.collectAsStateWithLifecycle()
+    val bannerTrack by bannerVm.bannerTrack.collectAsStateWithLifecycle()
+
+    val favoriteKeys by menuVm.favoriteKeys.collectAsStateWithLifecycle()
+    val downloadedKeys by menuVm.downloadedKeys.collectAsStateWithLifecycle()
+    val activeDownloads by menuVm.activeDownloads.collectAsStateWithLifecycle()
+    val localPlaylists by menuVm.localPlaylists.collectAsStateWithLifecycle()
+    val resolvedAlbum by menuVm.resolvedAlbum.collectAsStateWithLifecycle()
+
+    var activeMenu by remember { mutableStateOf<ActiveTrackMenu?>(null) }
+
+    fun openTrackMenu(
+        targetTrack: Track,
+        context: TrackMenuContext = TrackMenuContext.DEFAULT,
+        localPlaylistId: String? = null,
+    ) {
+        menuVm.resolveAlbumFor(targetTrack)
+        activeMenu = ActiveTrackMenu(targetTrack, context, localPlaylistId)
+    }
+
+    LaunchedEffect(Unit) {
+        menuVm.navigationEvent.collect { event ->
+            when (event) {
+                is TrackMenuViewModel.MenuNavigationEvent.OpenAlbum -> navController.openAlbum(event.album)
+                is TrackMenuViewModel.MenuNavigationEvent.OpenArtist -> navController.navigate(
+                    Routes.Artist(event.artist.id, event.artist.name, event.artist.thumbnailUrl)
                 )
             }
         }
-        if (onMoreClick != null) {
-            IconButton(onClick = onMoreClick) {
-                Icon(VzIcons.MoreVert, contentDescription = "Mais opções", tint = Color.White)
+    }
+
+    LaunchedEffect(backStackEntry?.destination?.route) {
+        if (backStackEntry?.destination?.hasRoute<Routes.Search>() == true) {
+            miniPlayerVm.setMinimized(true)
+        }
+    }
+
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < -30f) miniPlayerVm.setMinimized(true)
+                else if (available.y > 30f) miniPlayerVm.setMinimized(false)
+                return Offset.Zero
             }
         }
     }
-}
-VZ_EOF_3_FIX2
 
-echo "[4/7] app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreen.kt"
+    activeMenu?.let { menu ->
+        val key = StoredTrack.from(menu.track).key
+        TrackOptionsSheet(
+            track = menu.track,
+            menuContext = menu.context,
+            resolvedAlbum = resolvedAlbum,
+            isFavorite = key in favoriteKeys,
+            isDownloaded = key in downloadedKeys,
+            downloadItem = activeDownloads[key],
+            localPlaylists = localPlaylists,
+            onDismiss = { activeMenu = null },
+            onRemoveFromRecentHistory = menuVm::onRemoveFromRecentHistory,
+            onRemoveFromLocalPlaylist = { t ->
+                menu.localPlaylistId?.let { pid -> menuVm.onRemoveFromLocalPlaylist(pid, t) }
+            },
+            onToggleFavorite = menuVm::onToggleFavorite,
+            onAddToPlaylist = menuVm::onAddToPlaylist,
+            onPlayNext = menuVm::onPlayNext,
+            onAddToQueue = menuVm::onAddToQueue,
+            onDownload = menuVm::onDownload,
+            onRemoveDownload = menuVm::onRemoveDownload,
+            onOpenDownloadsScreen = { navController.navigate(Routes.Downloads) },
+            onOpenAlbum = { album -> navController.openAlbum(album) },
+            onOpenAlbumForTrack = menuVm::onOpenAlbumForTrack,
+            onOpenArtistByName = menuVm::onOpenArtistByName,
+            onTrackInfo = { t -> navController.navigateToTrackInfo(t) },
+        )
+    }
+
+    EclipseBackground(baseColor = dominantColor) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .nestedScroll(nestedScrollConnection)
+        ) {
+            NavHost(
+                navController = navController,
+                startDestination = Routes.Home,
+            ) {
+                composable<Routes.Home> { Placeholder("Home — coming soon") }
+                composable<Routes.Analytics> { Placeholder("Analytics — coming soon") }
+
+                composable<Routes.Library> {
+                    val vm: LibraryViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    LibraryScreen(
+                        state = state,
+                        onTabSelected = vm::onTabSelected,
+                        onShortcutClick = { navController.navigate(Routes.LibraryList(it.name)) },
+                        onTrackClick = vm::onTrackClick,
+                        onTrackInfoClick = { t ->
+                            openTrackMenu(t, context = TrackMenuContext.RECENT_HISTORY)
+                        },
+                        onPlaylistClick = { item ->
+                            navController.navigate(
+                                Routes.MediaList(
+                                    id = item.id,
+                                    // Favorito de álbum abre como álbum, senão crashava com key duplicada
+                                    isAlbum = item.isAlbum,
+                                    title = item.title,
+                                    subtitle = item.subtitle,
+                                    thumbnailUrl = item.imageUrl,
+                                )
+                            )
+                        },
+                        onCreatePlaylist = vm::createPlaylist,
+                    )
+                }
+
+                composable<Routes.LibraryList> {
+                    val vm: LibraryListViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    LibraryListScreen(
+                        state = state,
+                        onBackClick = { navController.popBackStack() },
+                        onTrackClick = vm::onTrackClick,
+                        onTrackInfoClick = { t -> openTrackMenu(t, context = TrackMenuContext.DEFAULT) },
+                        onArtistClick = { artist ->
+                            navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl))
+                        },
+                        onShuffleClick = vm::onShuffleClick,
+                        onPlayAllClick = vm::onPlayAllClick,
+                        onDownloadsHistoryClick = { navController.navigate(Routes.Downloads) },
+                    )
+                }
+
+                composable<Routes.Downloads> {
+                    val vm: DownloadsViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    DownloadsScreen(
+                        state = state,
+                        onBackClick = { navController.popBackStack() },
+                        onTabSelected = vm::onTabSelected,
+                        onTogglePauseResume = vm::onTogglePauseResume,
+                        onCancelDownload = vm::onCancelDownload,
+                        onDeleteDownload = vm::onDeleteDownload,
+                        onPlayTrack = vm::onPlayTrack,
+                        onPauseAll = vm::onPauseAll,
+                        onResumeAll = vm::onResumeAll,
+                        onCancelAll = vm::onCancelAll,
+                    )
+                }
+
+                composable<Routes.Search> {
+                    val vm: SearchViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+
+                    LaunchedEffect(Unit) {
+                        vm.navigationEvent.collect { event ->
+                            when (event) {
+                                is SearchViewModel.NavigationEvent.OpenPlaylist -> navController.navigate(
+                                    Routes.MediaList(
+                                        id = event.id,
+                                        isAlbum = false,
+                                        title = event.title,
+                                        subtitle = event.owner,
+                                        thumbnailUrl = event.thumbnailUrl,
+                                    )
+                                )
+                                is SearchViewModel.NavigationEvent.OpenArtist -> navController.navigate(
+                                    Routes.Artist(
+                                        id = event.id,
+                                        name = event.name,
+                                        thumbnailUrl = event.thumbnailUrl,
+                                    )
+                                )
+                                is SearchViewModel.NavigationEvent.OpenAlbum -> navController.navigate(
+                                    Routes.MediaList(
+                                        id = event.id,
+                                        isAlbum = true,
+                                        title = event.title,
+                                        subtitle = event.artist,
+                                        thumbnailUrl = event.thumbnailUrl,
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    SearchScreen(
+                        state = state,
+                        favoriteKeys = favoriteKeys,
+                        downloadedKeys = downloadedKeys,
+                        activeDownloads = activeDownloads,
+                        localPlaylists = localPlaylists,
+                        resolvedAlbum = resolvedAlbum,
+                        onQueryChange = vm::onQueryChange,
+                        onFocusChanged = vm::onFocusChanged,
+                        onFilterSelect = vm::onFilterSelect,
+                        onSubmit = vm::onSubmit,
+                        onRefresh = vm::onRefresh,
+                        onRemoveHistory = vm::onRemoveHistory,
+                        onClearHistory = vm::onClearHistory,
+                        onLoadMore = vm::onLoadMore,
+                        onHitClick = vm::onHitClick,
+                        onPlayNextClick = vm::onPlayNextClick,
+                        onAddToQueueClick = vm::onAddToQueueClick,
+                        onToggleFavorite = vm::onToggleFavorite,
+                        onAddToPlaylist = vm::onAddToPlaylist,
+                        onDownloadTrack = vm::onDownloadTrack,
+                        onRemoveDownload = vm::onRemoveDownload,
+                        onOpenDownloadsScreen = { navController.navigate(Routes.Downloads) },
+                        onPrepareTrackMenu = menuVm::resolveAlbumFor,
+                        onOpenAlbum = { album -> navController.openAlbum(album) },
+                        onOpenArtistByName = vm::onOpenArtistByName,
+                        onTrackInfoClick = { navController.navigateToTrackInfo(it) },
+                    )
+                }
+
+                composable<Routes.MediaList> {
+                    val vm: MediaListViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    val playlistId = state.listId
+                    val menuCtx = when {
+                        state.isAlbum -> TrackMenuContext.DEFAULT
+                        state.isLocal || isLocalPlaylistId(playlistId) -> TrackMenuContext.LOCAL_PLAYLIST
+                        else -> TrackMenuContext.EXTERNAL_PLAYLIST
+                    }
+
+                    LaunchedEffect(Unit) {
+                        vm.navigationEvent.collect { event ->
+                            when (event) {
+                                is MediaListViewModel.NavigationEvent.OpenArtist -> navController.navigate(
+                                    Routes.Artist(event.artist.id, event.artist.name, event.artist.thumbnailUrl)
+                                )
+                                MediaListViewModel.NavigationEvent.CloseScreen -> navController.popBackStack()
+                            }
+                        }
+                    }
+
+                    MediaListScreen(
+                        state = state,
+                        activeDownloads = activeDownloads,
+                        onBackClick = { navController.popBackStack() },
+                        onTabSelected = vm::onTabSelected,
+                        onTrackClick = vm::onTrackClick,
+                        onPlayAllClick = vm::onPlayAll,
+                        onShuffleClick = vm::onShuffle,
+                        onSortSelected = vm::onSortOrderSelected,
+                        onReorder = vm::onReorder,
+                        onStartShuffle = vm::startShuffle,
+                        onShuffleOnce = vm::shuffleOnce,
+                        onStopShuffle = vm::stopShuffle,
+                        onPlayNextClick = vm::onPlayNextClick,
+                        onTrackInfoClick = { t ->
+                            openTrackMenu(
+                                targetTrack = t,
+                                context = menuCtx,
+                                localPlaylistId = playlistId.takeIf { menuCtx == TrackMenuContext.LOCAL_PLAYLIST },
+                            )
+                        },
+                        onFavoriteClick = vm::onFavoriteClick,
+                        onPlayNextAll = vm::onPlayNextAll,
+                        onAddToQueueAll = vm::onAddToQueueAll,
+                        onDownloadAll = vm::onDownloadAll,
+                        onOpenDownloadsScreen = { navController.navigate(Routes.Downloads) },
+                        onOpenArtistByName = vm::onOpenArtistByName,
+                        onOpenArtist = vm::onOpenArtist,
+                        onAlbumClick = { album ->
+                            if (album.id != state.listId) navController.openAlbum(album)
+                        },
+                        onDeleteLocalPlaylist = vm::onDeleteLocalPlaylist,
+                        onRenameLocalPlaylist = vm::onRenameLocalPlaylist,
+                        onChangeLocalPlaylistCover = vm::onChangeLocalPlaylistCover,
+                    )
+                }
+
+                composable<Routes.Artist> {
+                    val vm: ArtistViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    ArtistScreen(
+                        state = state,
+                        onBackClick = { navController.popBackStack() },
+                        onRandomClick = vm::onRandomClick,
+                        onFollowClick = vm::onFollowClick,
+                        onSongClick = vm::onSongClick,
+                        onVideoClick = vm::onVideoClick,
+                        onTrackInfoClick = { t -> openTrackMenu(t, context = TrackMenuContext.DEFAULT) },
+                        onAlbumClick = { navController.openAlbum(it) },
+                        onPlaylistClick = { navController.openPlaylist(it) },
+                        onArtistClick = { artist ->
+                            navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl))
+                        },
+                        onSeeAllClick = { kind, ref ->
+                            navController.navigate(
+                                Routes.ArtistList(
+                                    artistId = state.artistId,
+                                    artistName = state.name,
+                                    kind = kind.name,
+                                    browseId = ref.browseId,
+                                    params = ref.params,
+                                )
+                            )
+                        },
+                    )
+                }
+
+                composable<Routes.ArtistList> {
+                    val vm: ArtistListViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    ArtistListScreen(
+                        state = state,
+                        onBackClick = { navController.popBackStack() },
+                        onLoadMore = vm::onLoadMore,
+                        onTrackClick = vm::onTrackClick,
+                        onTrackInfoClick = { t -> openTrackMenu(t, context = TrackMenuContext.DEFAULT) },
+                        onAlbumClick = { navController.openAlbum(it) },
+                        onPlaylistClick = { navController.openPlaylist(it) },
+                    )
+                }
+
+                composable<Routes.TrackInfo> {
+                    val vm: TrackInfoViewModel = hiltViewModel()
+                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    TrackInfoScreen(
+                        state = state,
+                        isDownloaded = state.isDownloaded,
+                        onBackClick = { navController.popBackStack() },
+                        onFavoriteClick = vm::onFavoriteClick,
+                        onAddToPlaylist = vm::onAddToPlaylist,
+                        onDownloadClick = {
+                            if (state.isDownloaded) vm.onRemoveDownloadClick() else vm.onDownloadClick()
+                        },
+                    )
+                }
+            }
+
+            PlaybackChrome(
+                navController = navController,
+                currentTab = currentTab,
+                playback = playback,
+                track = track,
+                dominantColor = dominantColor,
+                miniPlayerVm = miniPlayerVm,
+                isMinimized = isMinimized,
+                isDetailScreen = isDetailScreen,
+                isTrackInfoScreen = isTrackInfoScreen,
+                bannerTrack = bannerTrack,
+                onDismissBanner = bannerVm::dismissBanner,
+                onViewDownloadsClick = { navController.navigate(Routes.Downloads) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun Placeholder(message: String) {
+    Box(Modifier.fillMaxSize()) {
+        Text(text = message, color = VzOnSurface, modifier = Modifier.align(Alignment.Center))
+        AppCredits(Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp))
+    }
+}
+VZ_EOF_7_FIX3
+
+echo "[8/9] app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreen.kt"
 mkdir -p "$(dirname "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreen.kt")"
-cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreen.kt" <<'VZ_EOF_4_FIX2'
+cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreen.kt" <<'VZ_EOF_8_FIX3'
 package com.vztechcore.vztune.ui.screens.medialist
 
 import android.net.Uri
@@ -1085,7 +1902,8 @@ fun MediaListScreen(
                 }
                 else -> itemsIndexed(
                     items = displayedTracks,
-                    key = { _, t -> "${t.source.name}_${t.id}" },
+                    // Key com índice: mesmo se o InnerTube devolver a mesma faixa 2x, nunca duplica e nunca crasha
+                    key = { index, t -> "${t.source.name}_${t.id}_$index" },
                 ) { index, track ->
                     val isCurrent = nowPlaying.isCurrent(track.id, track.source)
                     val isPlaying = isCurrent && nowPlaying.isPlaying
@@ -1102,7 +1920,7 @@ fun MediaListScreen(
                             onMoreClick = { onTrackInfoClick(track) },
                         )
                     } else if (canReorder) {
-                        val itemKey = "${track.source.name}_${track.id}"
+                        val itemKey = "${track.source.name}_${track.id}_$index"
                         ReorderableItem(reorderableState, key = itemKey) { isDragging ->
                             MediaListTrackRow(
                                 track = track,
@@ -1176,651 +1994,41 @@ fun MediaListScreen(
         }
     }
 }
-VZ_EOF_4_FIX2
+VZ_EOF_8_FIX3
 
-echo "[5/7] app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistHeader.kt"
-mkdir -p "$(dirname "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistHeader.kt")"
-cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistHeader.kt" <<'VZ_EOF_5_FIX2'
-package com.vztechcore.vztune.ui.screens.artist
+echo "[9/9] app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListSearchOverlay.kt"
+mkdir -p "$(dirname "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListSearchOverlay.kt")"
+cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListSearchOverlay.kt" <<'VZ_EOF_9_FIX3'
+package com.vztechcore.vztune.ui.screens.medialist
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import com.vztechcore.vztune.ui.components.feedback.fadeOutBottom
-import com.vztechcore.vztune.ui.icons.VzIcons
-import com.vztechcore.vztune.ui.icons.actions.ArrowBack
-import com.vztechcore.vztune.ui.icons.actions.PersonAdd
-import com.vztechcore.vztune.ui.icons.actions.PersonCheck
-import com.vztechcore.vztune.ui.icons.actions.Share
-import com.vztechcore.vztune.ui.icons.media.Artist
-import com.vztechcore.vztune.ui.icons.player.Shuffle
-import com.vztechcore.vztune.ui.screens.medialist.MediaListCircleButton
-
-private val HeroMinHeight = 300.dp
-private val ButtonHeight = 44.dp
-
-// Camaleão desativado - sempre preto AMOLED. Mantido pra compatibilidade.
-@Composable
-fun rememberArtistAccent(thumbnailUrl: String?): Color = Color.Black
-
-// Camaleão desativado - sempre preto sólido. Mantido pra compatibilidade.
-@Composable
-fun rememberArtistChameleonBrush(accent: Color): Brush =
-    Brush.verticalGradient(listOf(Color.Black, Color.Black))
-
-/**
- * Hero do artista como era antes: foto cheia em cima, nome e stats embaixo à esquerda,
- * botões pill embaixo: Seguir na esquerda, Aleatório na direita.
- * Fundo sempre preto AMOLED, sem camaleão.
- * Barra superior: Voltar na esquerda, Compartilhar na direita.
- */
-@Composable
-fun ArtistHeader(
-    state: ArtistUiState,
-    accent: Color,
-    onBackClick: () -> Unit,
-    onRandomClick: () -> Unit,
-    onFollowClick: () -> Unit,
-    onShareClick: () -> Unit = {},
-    modifier: Modifier = Modifier,
-) {
-    val hasPlayableItems = state.topSongs.isNotEmpty() || state.videos.isNotEmpty()
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(Color.Black)
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = HeroMinHeight)
-                .animateContentSize()
-        ) {
-            ArtistPhoto(imageUrl = state.thumbnailUrl, name = state.name)
-
-            // Sombra em cima pra barra ficar legível
-            Box(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .fillMaxWidth()
-                    .height(120.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent)
-                        )
-                    )
-            )
-
-            // Barra superior: Voltar esquerda, Compartilhar direita
-            Row(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                MediaListCircleButton(VzIcons.ArrowBack, "Voltar", onBackClick)
-                MediaListCircleButton(VzIcons.Share, "Compartilhar artista", onShareClick)
-            }
-
-            Column(
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 20.dp, end = 20.dp, bottom = 12.dp)
-            ) {
-                Text(
-                    text = state.name,
-                    style = MaterialTheme.typography.displaySmall.copy(
-                        letterSpacing = (-0.5).sp,
-                        shadow = Shadow(
-                            color = Color.Black.copy(alpha = 0.45f),
-                            offset = Offset(0f, 3f),
-                            blurRadius = 12f,
-                        ),
-                    ),
-                    color = Color.White,
-                    fontWeight = FontWeight.ExtraBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (state.statsLabel.isNotBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = state.statsLabel,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.8f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
-
-        // Botões como era antes, mas com Seguir na esquerda e Aleatório na direita
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            FollowButton(
-                isFollowing = state.isFollowing,
-                onClick = onFollowClick,
-            )
-            if (hasPlayableItems) {
-                PillButton(
-                    label = "Aleatório",
-                    icon = VzIcons.Shuffle,
-                    containerColor = Color.White,
-                    contentColor = Color.Black,
-                    onClick = onRandomClick,
-                )
-            }
-        }
-    }
-}
-
-/**
- * Foto cheia, FillWidth, sem crop forçado, com fade pra preto embaixo.
- * Sem foto, ícone grande no fundo preto.
- */
-@Composable
-private fun ArtistPhoto(imageUrl: String?, name: String) {
-    if (imageUrl.isNullOrBlank()) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(HeroMinHeight),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = VzIcons.Artist,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.12f),
-                modifier = Modifier.size(140.dp),
-            )
-        }
-        return
-    }
-    val context = LocalContext.current
-    val request = remember(imageUrl) {
-        ImageRequest.Builder(context)
-            .data(imageUrl)
-            .crossfade(400)
-            .build()
-    }
-    AsyncImage(
-        model = request,
-        contentDescription = name,
-        contentScale = ContentScale.FillWidth,
-        alignment = Alignment.TopCenter,
-        modifier = Modifier
-            .fillMaxWidth()
-            .fadeOutBottom(fadeFraction = 0.55f),
-    )
-}
-
-@Composable
-private fun FollowButton(
-    isFollowing: Boolean,
-    onClick: () -> Unit,
-) {
-    if (isFollowing) {
-        PillButton(
-            label = "Seguindo",
-            icon = VzIcons.PersonCheck,
-            containerColor = Color.White.copy(alpha = 0.12f),
-            contentColor = Color.White,
-            borderColor = Color.White.copy(alpha = 0.35f),
-            onClick = onClick,
-        )
-    } else {
-        PillButton(
-            label = "Seguir",
-            icon = VzIcons.PersonAdd,
-            containerColor = Color.Transparent,
-            contentColor = Color.White,
-            borderColor = Color.White.copy(alpha = 0.35f),
-            onClick = onClick,
-        )
-    }
-}
-
-/** Pill com ícone + texto. Igual era antes. */
-@Composable
-private fun PillButton(
-    label: String,
-    icon: ImageVector,
-    containerColor: Color,
-    contentColor: Color,
-    onClick: () -> Unit,
-    borderColor: Color? = null,
-) {
-    val shape = RoundedCornerShape(50)
-    Row(
-        modifier = Modifier
-            .height(ButtonHeight)
-            .clip(shape)
-            .background(containerColor)
-            .then(if (borderColor != null) Modifier.border(1.dp, borderColor, shape) else Modifier)
-            .clickable { onClick() }
-            .padding(horizontal = 20.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = contentColor,
-            modifier = Modifier.size(18.dp),
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = contentColor,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-}
-VZ_EOF_5_FIX2
-
-echo "[6/7] app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistScreen.kt"
-mkdir -p "$(dirname "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistScreen.kt")"
-cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistScreen.kt" <<'VZ_EOF_6_FIX2'
-package com.vztechcore.vztune.ui.screens.artist
-
-import androidx.compose.animation.animateContentSize
-import android.content.Intent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import com.vztechcore.vztune.core.domain.music.Album
-import com.vztechcore.vztune.core.domain.music.Artist
-import com.vztechcore.vztune.core.domain.music.ArtistListKind
-import com.vztechcore.vztune.core.domain.music.BrowseRef
-import com.vztechcore.vztune.core.domain.music.Playlist
-import com.vztechcore.vztune.core.domain.music.Track
-import com.vztechcore.vztune.ui.components.AppCredits
-import com.vztechcore.vztune.ui.components.cards.ArtistCircleCard
-import com.vztechcore.vztune.ui.components.cards.CoverCard
-import com.vztechcore.vztune.ui.components.cards.TrackListRow
-import com.vztechcore.vztune.ui.components.feedback.VzLoading
-import com.vztechcore.vztune.ui.components.layout.SectionHeader
-import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
-import com.vztechcore.vztune.ui.components.player.playbackOf
-import com.vztechcore.vztune.ui.screens.medialist.CollapsedHeaderHost
-import com.vztechcore.vztune.ui.screens.medialist.MediaListCollapsedHeader
-import com.vztechcore.vztune.ui.screens.medialist.MediaListVideoCard
-import com.vztechcore.vztune.ui.screens.medialist.rememberHeaderCollapsed
-
-private val RowPadding = PaddingValues(horizontal = 16.dp)
-private val CoverWidth = 160.dp
-private val VideoWidth = 280.dp
-private val RelatedArtistSize = 124.dp
-private val SectionGap = 24.dp
-
-/**
- * Artist profile. Sections (hidden when empty), in order:
- * popular songs, albums, singles, videos, featured, related artists, description, credits.
- * The whole screen sits on a backdrop tinted with the photo color; once the hero scrolls away,
- * a sticky bar (close + photo + name) fades in.
- */
-@Composable
-fun ArtistScreen(
-    state: ArtistUiState,
-    onBackClick: () -> Unit,
-    onRandomClick: () -> Unit,
-    onFollowClick: () -> Unit,
-    onSongClick: (Track) -> Unit,
-    onVideoClick: (Track) -> Unit,
-    onTrackInfoClick: (Track) -> Unit,
-    onAlbumClick: (Album) -> Unit,
-    onPlaylistClick: (Playlist) -> Unit,
-    onArtistClick: (Artist) -> Unit,
-    onSeeAllClick: (ArtistListKind, BrowseRef) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val listState = rememberLazyListState()
-    val isCollapsed by rememberHeaderCollapsed(listState)
-    val nowPlaying = LocalNowPlaying.current
-
-    // Fundo sempre preto AMOLED - camaleao desativado por enquanto
-
-    fun seeAll(kind: ArtistListKind, ref: BrowseRef?): (() -> Unit)? =
-        ref?.let { { onSeeAllClick(kind, it) } }
-
-    val context = LocalContext.current
-    // Compartilhar artista: abre a barra de compartilhar do Android com link do YouTube Music
-    val onShareClick: () -> Unit = {
-        val url = "https://music.youtube.com/browse/${state.artistId}"
-        val shareText = "Confere esse artista no VzTune \uD83C\uDFB�\n${state.name}\n$url"
-        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, state.name)
-            putExtra(Intent.EXTRA_TEXT, shareText)
-        }
-        context.startActivity(Intent.createChooser(sendIntent, "Compartilhar artista"))
-    }
-
-    Box(
-        modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
-        LazyColumn(
-            state = listState,
-            contentPadding = PaddingValues(bottom = 140.dp),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            item(key = "header") {
-                ArtistHeader(
-                    state = state,
-                    accent = Color.Black,
-                    onBackClick = onBackClick,
-                    onRandomClick = onRandomClick,
-                    onFollowClick = onFollowClick,
-                    onShareClick = onShareClick,
-                )
-            }
-
-            when {
-                state.isLoading -> item(key = "loading") {
-                    Box(
-                        Modifier.fillMaxWidth().height(280.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        VzLoading(Modifier.size(160.dp))
-                    }
-                }
-
-                state.errorMessage != null -> item(key = "error") {
-                    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = state.errorMessage,
-                            color = Color.White.copy(alpha = 0.7f),
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                }
-
-                else -> {
-                    // ---------- Popular songs (numbered) ----------
-                    if (state.topSongs.isNotEmpty()) {
-                        item(key = "songs_header") {
-                            SectionHeader(
-                                title = "Músicas populares",
-                                onActionClick = seeAll(ArtistListKind.SONGS, state.songsMore),
-                            )
-                        }
-                        itemsIndexed(state.topSongs.take(5), key = { _, t -> "song_${t.id}" }) { index, track ->
-                            TrackListRow(
-                                track = track,
-                                number = index + 1,
-                                onClick = { onSongClick(track) },
-                                onMoreClick = { onTrackInfoClick(track) },
-                            )
-                        }
-                        item(key = "songs_space") { Spacer(Modifier.height(SectionGap)) }
-                    }
-
-                    rowSection(
-                        key = "albums", title = "Álbuns", items = state.albums,
-                        onMoreClick = seeAll(ArtistListKind.ALBUMS, state.albumsMore),
-                        itemKey = { it.id },
-                    ) { album ->
-                        CoverCard(
-                            title = album.title, subtitle = "Álbum", imageUrl = album.thumbnailUrl,
-                            onClick = { onAlbumClick(album) }, modifier = Modifier.width(CoverWidth),
-                        )
-                    }
-
-                    rowSection(
-                        key = "singles", title = "Singles", items = state.singles,
-                        onMoreClick = seeAll(ArtistListKind.SINGLES, state.singlesMore),
-                        itemKey = { it.id },
-                    ) { single ->
-                        CoverCard(
-                            title = single.title, subtitle = "Single", imageUrl = single.thumbnailUrl,
-                            onClick = { onAlbumClick(single) }, modifier = Modifier.width(CoverWidth),
-                        )
-                    }
-
-                    rowSection(
-                        key = "videos", title = "Vídeos", items = state.videos,
-                        onMoreClick = seeAll(ArtistListKind.VIDEOS, state.videosMore),
-                        itemKey = { it.id },
-                    ) { video ->
-                        val playback = nowPlaying.playbackOf(video)
-                        MediaListVideoCard(
-                            track = video,
-                            isPlaying = playback.isPlaying,
-                            isPaused = playback.isPaused,
-                            onClick = { onVideoClick(video) },
-                            onMoreClick = { onTrackInfoClick(video) },
-                            modifier = Modifier.width(VideoWidth),
-                            // The row already has its own 16dp edge padding; the card's default
-                            // inset would push the thumbnails away from the section title.
-                            horizontalPadding = 0.dp,
-                        )
-                    }
-
-                    rowSection(
-                        key = "featured", title = "Destacado", items = state.featured,
-                        onMoreClick = seeAll(ArtistListKind.FEATURED, state.featuredMore),
-                        itemKey = { it.id },
-                    ) { playlist ->
-                        CoverCard(
-                            title = playlist.title, subtitle = playlist.owner, imageUrl = playlist.thumbnailUrl,
-                            onClick = { onPlaylistClick(playlist) }, modifier = Modifier.width(CoverWidth),
-                        )
-                    }
-
-                    rowSection(
-                        key = "related", title = "Artistas relacionados", items = state.relatedArtists,
-                        onMoreClick = null, spacing = 16.dp,
-                        itemKey = { it.id },
-                    ) { artist ->
-                        ArtistCircleCard(
-                            name = artist.name, imageUrl = artist.thumbnailUrl,
-                            onClick = { onArtistClick(artist) },
-                            size = RelatedArtistSize,
-                        )
-                    }
-
-                    item(key = "description") { ArtistDescription(description = state.description) }
-                }
-            }
-
-            item(key = "credits") { AppCredits() }
-        }
-
-        CollapsedHeaderHost(visible = isCollapsed) {
-            MediaListCollapsedHeader(
-                title = state.name,
-                thumbnailUrl = state.thumbnailUrl,
-                onBackClick = onBackClick,
-                dominantColor = Color.Black,
-                circularThumbnail = true,
-            )
-        }
-    }
-}
-
-/** A titled horizontal row ("Álbuns", "Vídeos"...). Nothing is emitted when [items] is empty. */
-private fun <T> LazyListScope.rowSection(
-    key: String,
-    title: String,
-    items: List<T>,
-    onMoreClick: (() -> Unit)?,
-    itemKey: (T) -> Any,
-    spacing: Dp = 12.dp,
-    itemContent: @Composable (T) -> Unit,
-) {
-    if (items.isEmpty()) return
-
-    item(key = "${key}_header") { SectionHeader(title = title, onActionClick = onMoreClick) }
-    item(key = "${key}_row") {
-        LazyRow(
-            contentPadding = RowPadding,
-            horizontalArrangement = Arrangement.spacedBy(spacing),
-        ) {
-            items(items, key = itemKey) { itemContent(it) }
-        }
-    }
-    item(key = "${key}_space") { Spacer(Modifier.height(SectionGap)) }
-}
-
-/** "About" card: soft translucent surface, expands in place when the text is long. */
-@Composable
-private fun ArtistDescription(description: String?) {
-    var expanded by remember { mutableStateOf(false) }
-    val text = description?.takeIf { it.isNotBlank() }
-    val canExpand = text != null && text.length > 220
-
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.07f))
-            .animateContentSize()
-            .clickable(enabled = canExpand) { expanded = !expanded }
-            .padding(16.dp)
-    ) {
-        Text(
-            text = "Sobre",
-            style = MaterialTheme.typography.titleLarge,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = text ?: "Sem descrição",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = if (text != null) 0.75f else 0.5f),
-            maxLines = if (expanded) Int.MAX_VALUE else 5,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (canExpand) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = if (expanded) "Ver menos" else "Ver mais",
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White.copy(alpha = 0.6f),
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-    }
-}
-VZ_EOF_6_FIX2
-
-echo "[7/7] app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/CreatePlaylistSheet.kt"
-mkdir -p "$(dirname "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/CreatePlaylistSheet.kt")"
-cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/CreatePlaylistSheet.kt" <<'VZ_EOF_7_FIX2'
-package com.vztechcore.vztune.ui.screens.library
-
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -1828,134 +2036,187 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import androidx.compose.ui.unit.sp
+import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.ui.components.AppCredits
+import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.icons.VzIcons
-import com.vztechcore.vztune.ui.icons.actions.AddPhotoAlternate
+import com.vztechcore.vztune.ui.icons.actions.Close
+import com.vztechcore.vztune.ui.icons.navigation.Search
 
-private val SheetBackground = Color(0xFF121829) // Azul marinho igual os outros sheets
-private val AccentBlue = Color(0xFF60A5FA)
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreatePlaylistSheet(
-    onDismiss: () -> Unit,
-    onConfirm: (name: String, coverUri: Uri?) -> Unit,
+internal fun MediaListSearchOverlay(
+    allTracks: List<Track>,
+    isAlbum: Boolean = false,
+    onClose: () -> Unit,
+    onTrackClick: (Track) -> Unit,
+    onPlayNextClick: (Track) -> Unit,
+    onTrackInfoClick: (Track) -> Unit,
 ) {
-    var name by remember { mutableStateOf("") }
-    var cover by remember { mutableStateOf<Uri?>(null) }
+    var query by remember { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val nowPlaying = LocalNowPlaying.current
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) cover = uri
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = SheetBackground,
-        contentColor = Color.White,
-    ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .imePadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp),
-        ) {
-            Text(
-                text = "Nova playlist",
-                style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.height(16.dp))
+    val filteredTracks = remember(allTracks, query) {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) allTracks
+        else allTracks.filter {
+            it.title.lowercase().contains(q) || it.artist.lowercase().contains(q)
+        }
+    }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(alpha = 0.08f))
-                        .clickable {
-                            picker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (cover != null) {
-                        AsyncImage(
-                            model = cover,
-                            contentDescription = "Capa da playlist",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.size(56.dp),
-                        )
-                    } else {
-                        Icon(
-                            VzIcons.AddPhotoAlternate,
-                            contentDescription = "Escolher capa",
-                            tint = Color.White.copy(alpha = 0.8f),
-                        )
-                    }
-                }
-                Spacer(Modifier.width(12.dp))
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    placeholder = { Text("Nome da playlist", color = Color.White.copy(alpha = 0.5f)) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedBorderColor = AccentBlue,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
-                        cursorColor = Color.White,
-                    ),
-                    modifier = Modifier.weight(1f),
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.96f))
+            .statusBarsPadding(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.1f))
+                    .clickable {
+                        keyboardController?.hide()
+                        onClose()
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = VzIcons.Close,
+                    contentDescription = "Fechar pesquisa",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp),
                 )
             }
 
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Sem capa, o VzTune escolhe uma cor aleatória pra sua playlist.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.5f),
-            )
-
-            Spacer(Modifier.height(20.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) {
-                    Text("Cancelar", color = Color.White.copy(alpha = 0.75f))
-                }
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.08f))
+                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(50))
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = VzIcons.Search,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier.size(18.dp),
+                )
                 Spacer(Modifier.width(8.dp))
-                Button(
-                    onClick = { onConfirm(name, cover) },
-                    enabled = name.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentBlue,
-                        contentColor = Color(0xFF0A0F1E),
-                        disabledContainerColor = Color.White.copy(alpha = 0.12f),
-                        disabledContentColor = Color.White.copy(alpha = 0.4f),
-                    ),
-                ) {
-                    Text("Confirmar", fontWeight = FontWeight.Bold)
+                Box(Modifier.weight(1f)) {
+                    if (query.isEmpty()) {
+                        Text(
+                            text = if (isAlbum) "Pesquisar no álbum..." else "Pesquisar na playlist...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.45f),
+                        )
+                    }
+                    BasicTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        singleLine = true,
+                        textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
+                        cursorBrush = SolidColor(Color.White),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester),
+                    )
                 }
+                if (query.isNotEmpty()) {
+                    Icon(
+                        imageVector = VzIcons.Close,
+                        contentDescription = "Limpar texto",
+                        tint = Color.White.copy(alpha = 0.65f),
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable { query = "" },
+                    )
+                }
+            }
+        }
+
+        if (filteredTracks.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Nenhuma faixa encontrada para \"$query\"",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.55f),
+                )
+            }
+        } else {
+            LazyColumn(
+                contentPadding = PaddingValues(top = 4.dp, bottom = 140.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                itemsIndexed(
+                    items = filteredTracks,
+                    key = { index, t -> "search_${t.source.name}_${t.id}_$index" },
+                ) { _, track ->
+                    val isCurrent = nowPlaying.isCurrent(track.id, track.source)
+                    val originalIndex = if (isAlbum) {
+                        allTracks.indexOfFirst { it.id == track.id && it.source == track.source }
+                            .takeIf { it >= 0 }
+                            ?.plus(1)
+                    } else {
+                        null
+                    }
+
+                    MediaListTrackRow(
+                        track = track,
+                        index = originalIndex,
+                        isPlaying = isCurrent && nowPlaying.isPlaying,
+                        isPaused = isCurrent && !nowPlaying.isPlaying,
+                        onClick = {
+                            keyboardController?.hide()
+                            onTrackClick(track)
+                        },
+                        onMoreClick = { onTrackInfoClick(track) },
+                        onPlayNext = { onPlayNextClick(track) },
+                        showDragHandle = false,
+                        dragHandleModifier = Modifier,
+                    )
+                }
+                item(key = "credits_search") { AppCredits() }
             }
         }
     }
 }
-VZ_EOF_7_FIX2
+VZ_EOF_9_FIX3
 
 echo ""
-echo "Pronto! 7 arquivos atualizados:"
-echo " - Álbum: só numeração onde ficaria a thumbnail"
-echo " - Álbum: barra Lupa, Favoritar, 3 pontinhos (igual playlist)"
-echo " - Artista: pills Seguir esq / Aleatório dir, como era antes"
-echo " - Artista: botão compartilhar em cima, link YouTube Music"
-echo " - Criar playlist: fundo azul marinho 0xFF121829 igual outros sheets"
+echo "Pronto! 9 arquivos atualizados."
+echo " - Artista: foto quadrada 1:1 Crop, sem esticar"
+echo " - Album: numero grande sem fundo, tocando = equalizador, pausado = ..."
+echo " - Crash favorito album: abre como album + key unica + dedupe"
 echo "Roda o build agora."

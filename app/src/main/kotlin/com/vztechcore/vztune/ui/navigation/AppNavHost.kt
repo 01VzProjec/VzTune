@@ -311,6 +311,18 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         state.isLocal || isLocalPlaylistId(playlistId) -> TrackMenuContext.LOCAL_PLAYLIST
                         else -> TrackMenuContext.EXTERNAL_PLAYLIST
                     }
+
+                    LaunchedEffect(Unit) {
+                        vm.navigationEvent.collect { event ->
+                            when (event) {
+                                is MediaListViewModel.NavigationEvent.OpenArtist -> navController.navigate(
+                                    Routes.Artist(event.artist.id, event.artist.name, event.artist.thumbnailUrl)
+                                )
+                                MediaListViewModel.NavigationEvent.CloseScreen -> navController.popBackStack()
+                            }
+                        }
+                    }
+
                     MediaListScreen(
                         state = state,
                         onBackClick = { navController.popBackStack() },
@@ -332,6 +344,12 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             )
                         },
                         onFavoriteClick = vm::onFavoriteClick,
+                        onPlayNextAll = vm::onPlayNextAll,
+                        onAddToQueueAll = vm::onAddToQueueAll,
+                        onDownloadAll = vm::onDownloadAll,
+                        onOpenDownloadsScreen = { navController.navigate(Routes.Downloads) },
+                        onOpenArtistByName = vm::onOpenArtistByName,
+                        onDeleteLocalPlaylist = vm::onDeleteLocalPlaylist,
                     )
                 }
 

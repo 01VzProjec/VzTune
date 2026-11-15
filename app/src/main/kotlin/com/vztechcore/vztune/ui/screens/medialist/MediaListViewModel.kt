@@ -4,8 +4,10 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
+import com.vztechcore.vztune.core.domain.music.Artist
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
+import com.vztechcore.vztune.data.download.TrackDownloader
 import com.vztechcore.vztune.data.player.PlayerController
 import com.vztechcore.vztune.data.prefs.models.StoredPlaylist
 import com.vztechcore.vztune.data.prefs.models.isLocalPlaylistId
@@ -17,8 +19,11 @@ import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -29,10 +34,19 @@ class MediaListViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val ytMusicRepository: YTMusicRepository,
     private val playerController: PlayerController,
+    private val trackDownloader: TrackDownloader,
     private val store: MediaListPreferencesStore,
     private val favoritesStore: FavoritePlaylistsStore,
     private val localStore: LocalPlaylistsStore,
 ) : ViewModel() {
+
+    sealed interface NavigationEvent {
+        data class OpenArtist(val artist: Artist) : NavigationEvent
+        data object CloseScreen : NavigationEvent
+    }
+
+    private val _navigationEvent = MutableSharedFlow<NavigationEvent>()
+    val navigationEvent: SharedFlow<NavigationEvent> = _navigationEvent.asSharedFlow()
 
     private val route = savedStateHandle.toRoute<Routes.MediaList>()
 
@@ -216,6 +230,42 @@ class MediaListViewModel @Inject constructor(
     }
 
     fun onPlayNextClick(track: Track) { playerController.addToQueueNext(track) }
+
+    fun onPlayNextAll() {
+        val tracks = _uiState.value.getDisplayTracks()
+        tracks.asReversed().forEach { playerController.addToQueueNext(it) }
+    }
+
+    fun onAddToQueueAll() {
+        val tracks = _uiState.value.getDisplayTracks()
+        tracks.forEach { playerController.addToQueueEnd(it) }
+    }
+
+    fun onDownloadAll() {
+        val tracks = _uiState.value.allTracks
+        if (tracks.isNotEmpty()) {
+            trackDownloader.downloadAll(tracks)
+        }
+    }
+
+    fun onOpenArtistByName(artistName: String) {
+        viewModelScope.launch {
+            val found = runCatching {
+                ytMusicRepository.searchArtists(artistName).firstOrNull()
+            }.getOrNull()
+            if (found != null) {
+                _navigationEvent.emit(NavigationEvent.OpenArtist(found))
+            }
+        }
+    }
+
+    fun onDeleteLocalPlaylist() {
+        if (!_uiState.value.isLocal) return
+        viewModelScope.launch {
+            localStore.delete(route.id)
+            _navigationEvent.emit(NavigationEvent.CloseScreen)
+        }
+    }
 
     fun onPlayAll() {
         val sorted = _uiState.value.getDisplayTracks()

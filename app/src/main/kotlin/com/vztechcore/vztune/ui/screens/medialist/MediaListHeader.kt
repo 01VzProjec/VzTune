@@ -21,8 +21,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
 import com.vztechcore.vztune.core.domain.search.SortOrder
+import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Close
 import com.vztechcore.vztune.ui.icons.actions.FavoriteFilled
@@ -43,6 +43,7 @@ internal fun MediaListExpandedHeader(
     onPlayAllClick: () -> Unit,
     onShuffleClick: () -> Unit,
     onSearchClick: () -> Unit,
+    onMoreClick: () -> Unit,
     onSortClick: () -> Unit,
     onShuffleToggle: () -> Unit,
     onFavoriteClick: () -> Unit,
@@ -102,7 +103,7 @@ internal fun MediaListExpandedHeader(
                         )
                     }
                     MediaListCircleButton(VzIcons.Search, "Pesquisar", onSearchClick)
-                    MediaListCircleButton(VzIcons.MoreVert, "Mais", { })
+                    MediaListCircleButton(VzIcons.MoreVert, "Mais opções", onMoreClick)
                 }
             }
         }
@@ -245,6 +246,7 @@ internal fun MediaListCollapsedHeader(
     thumbnailUrl: String?,
     onBackClick: () -> Unit,
     onSearchClick: (() -> Unit)? = null,
+    onMoreClick: (() -> Unit)? = null,
     circularThumbnail: Boolean = false,
 ) {
     Row(
@@ -282,6 +284,11 @@ internal fun MediaListCollapsedHeader(
         if (onSearchClick != null) {
             IconButton(onClick = onSearchClick) {
                 Icon(VzIcons.Search, contentDescription = "Pesquisar", tint = Color.White)
+            }
+        }
+        if (onMoreClick != null) {
+            IconButton(onClick = onMoreClick) {
+                Icon(VzIcons.MoreVert, contentDescription = "Mais opções", tint = Color.White)
             }
         }
     }

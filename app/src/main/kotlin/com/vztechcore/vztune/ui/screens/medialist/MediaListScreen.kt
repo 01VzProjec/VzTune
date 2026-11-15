@@ -28,8 +28,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
+import com.vztechcore.vztune.data.prefs.models.StoredTrack
+import com.vztechcore.vztune.ui.components.download.LocalDownloadedKeys
 import com.vztechcore.vztune.ui.components.feedback.VzLoading
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
+import com.vztechcore.vztune.ui.components.sheets.MediaListOptionsSheet
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -56,18 +59,32 @@ fun MediaListScreen(
     onPlayNextClick: (Track) -> Unit,
     onTrackInfoClick: (Track) -> Unit,
     onFavoriteClick: () -> Unit,
+    onPlayNextAll: () -> Unit = {},
+    onAddToQueueAll: () -> Unit = {},
+    onDownloadAll: () -> Unit = {},
+    onOpenDownloadsScreen: () -> Unit = {},
+    onOpenArtistByName: (String) -> Unit = {},
+    onDeleteLocalPlaylist: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
     val nowPlaying = LocalNowPlaying.current
+    val downloadedKeys = LocalDownloadedKeys.current
     var showSortSheet by remember { mutableStateOf(false) }
     var showSearchOverlay by remember { mutableStateOf(false) }
+    var showListOptionsSheet by remember { mutableStateOf(false) }
     var shuffleJob by remember { mutableStateOf<Job?>(null) }
 
     val isCollapsed by rememberHeaderCollapsed(listState)
 
     val displayedTracks = remember(state.filteredTracks, state.sortOrder, state.manualOrder, state.selectedTab) {
         state.getDisplayTracks()
+    }
+
+    val allTracksDownloaded = remember(state.allTracks, downloadedKeys) {
+        state.allTracks.isNotEmpty() && state.allTracks.all {
+            StoredTrack.from(it).key in downloadedKeys
+        }
     }
 
     val canReorder = state.sortOrder == SortOrder.MANUAL && state.selectedTab == MediaListTab.ALL
@@ -105,6 +122,21 @@ fun MediaListScreen(
         )
     }
 
+    if (showListOptionsSheet) {
+        MediaListOptionsSheet(
+            state = state,
+            allTracksDownloaded = allTracksDownloaded,
+            onDismiss = { showListOptionsSheet = false },
+            onToggleFavorite = onFavoriteClick,
+            onPlayNextAll = onPlayNextAll,
+            onAddToQueueAll = onAddToQueueAll,
+            onDownloadAll = onDownloadAll,
+            onOpenDownloadsScreen = onOpenDownloadsScreen,
+            onOpenArtistByName = onOpenArtistByName,
+            onDeleteLocalPlaylist = onDeleteLocalPlaylist,
+        )
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -123,6 +155,7 @@ fun MediaListScreen(
                     onPlayAllClick = onPlayAllClick,
                     onShuffleClick = onShuffleClick,
                     onSearchClick = { showSearchOverlay = true },
+                    onMoreClick = { showListOptionsSheet = true },
                     onSortClick = { showSortSheet = true },
                     onShuffleToggle = {
                         if (state.isShuffling) onStopShuffle() else onStartShuffle()
@@ -229,6 +262,7 @@ fun MediaListScreen(
                 thumbnailUrl = state.thumbnailUrl ?: state.mosaicThumbnails.firstOrNull(),
                 onBackClick = onBackClick,
                 onSearchClick = { showSearchOverlay = true },
+                onMoreClick = { showListOptionsSheet = true },
             )
         }
 

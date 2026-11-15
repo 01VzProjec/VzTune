@@ -34,7 +34,7 @@ class YTMusicRepository @Inject constructor(
         val description: String?,
         val views: String?,
         val tracks: List<Track>,
-    )    
+    )
 
     data class PlaylistResult(
         val coverUrl: String?,
@@ -102,6 +102,51 @@ class YTMusicRepository @Inject constructor(
     }
 
     /**
+     * Resolves the official YouTube Music [Album] that contains [track]
+     * so the context menu can display the album title and navigate directly to it.
+     */
+    suspend fun findAlbumForTrack(track: Track): Album? = withContext(Dispatchers.IO) {
+        if (track.source == Source.YOUTUBE) return@withContext null
+
+        val primaryArtist = track.artist
+            .substringBefore(",")
+            .substringBefore("&")
+            .substringBefore("feat.")
+            .trim()
+            .takeIf { it.isNotBlank() && !it.equals("Desconhecido", ignoreCase = true) }
+
+        val albumHint = track.album?.takeIf {
+            it.isNotBlank() && !it.equals("Desconhecido", ignoreCase = true)
+        }
+
+        val query = if (albumHint != null) {
+            listOfNotNull(albumHint, primaryArtist).joinToString(" ")
+        } else {
+            listOfNotNull(track.title, primaryArtist).joinToString(" ")
+        }.trim()
+
+        if (query.isBlank()) return@withContext null
+
+        val json = runCatching { InnerTube.search(query, SearchFilter.ALBUMS.params) }.getOrNull()
+            ?: return@withContext null
+
+        val parsed = YTMusicSearchParser.parseSearchResults(json)
+        val albums = parsed.mapNotNull { YTMusicSearchParser.toHit(it, SearchFilter.ALBUMS) }
+            .filterIsInstance<SearchHit.AlbumHit>()
+            .map { it.album }
+
+        if (albums.isEmpty()) return@withContext null
+
+        if (albumHint != null) {
+            albums.firstOrNull { it.title.equals(albumHint, ignoreCase = true) }
+                ?: albums.firstOrNull { it.title.contains(albumHint, ignoreCase = true) }
+                ?: albums.first()
+        } else {
+            albums.first()
+        }
+    }
+
+    /**
      * Fills missing views / owner on playlist hits that did not come from YouTube Music
      * (e.g. NewPipe results). Cover and mosaic are left untouched.
      */
@@ -129,7 +174,7 @@ class YTMusicRepository @Inject constructor(
                             query.length == 3 -> 4
                             else -> 5
                         }
-                        
+
                         val json = InnerTube.search(query, SearchFilter.SONGS.params)
                         val parsed = YTMusicSearchParser.parseSearchResults(json)
                         parsed.mapNotNull { YTMusicSearchParser.toHit(it, SearchFilter.SONGS) }
@@ -225,9 +270,9 @@ class YTMusicRepository @Inject constructor(
                     topSongs = emptyList(), albums = emptyList(), singles = emptyList(),
                     relatedArtists = emptyList()
                 )
-            
+
             val parsed = YTMusicArtistParser.parseArtistPage(browseId, json)
-            
+
             ArtistResult(
                 browseId = parsed.browseId,
                 name = parsed.name,
@@ -376,7 +421,7 @@ class YTMusicRepository @Inject constructor(
                 node.optJSONObject("musicResponsiveListItemRenderer")?.let { r ->
                     val columns = r.optJSONArray("flexColumns")
                     val title = columns?.let { YTMusicTextUtils.flexText(it, 0) }
-                    
+
                     var videoId = r.optJSONObject("playlistItemData")?.optString("videoId")
                     if (videoId.isNullOrBlank() || videoId == "null") {
                         videoId = r.optJSONObject("navigationEndpoint")?.optJSONObject("watchEndpoint")?.optString("videoId")
@@ -455,7 +500,7 @@ class YTMusicRepository @Inject constructor(
         }
         return null
     }
-    
+
     private fun extractHeaderViews(header: JSONObject): String? {
         val subtitleArrays = listOf(
             header.optJSONObject("subtitle")?.optJSONArray("runs"),

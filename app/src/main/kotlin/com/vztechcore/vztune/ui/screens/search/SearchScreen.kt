@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.vztechcore.vztune.core.domain.music.Album
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchFilter
@@ -44,6 +46,7 @@ fun SearchScreen(
     downloadedKeys: Set<String> = emptySet(),
     activeDownloads: Map<String, TrackDownloadItem> = emptyMap(),
     localPlaylists: List<LocalPlaylist> = emptyList(),
+    resolvedAlbum: Album? = null,
     onQueryChange: (String) -> Unit,
     onFocusChanged: (Boolean) -> Unit,
     onFilterSelect: (SearchFilter) -> Unit,
@@ -60,12 +63,18 @@ fun SearchScreen(
     onDownloadTrack: (Track) -> Unit = {},
     onRemoveDownload: (Track) -> Unit = {},
     onOpenDownloadsScreen: () -> Unit = {},
+    onPrepareTrackMenu: (Track) -> Unit = {},
+    onOpenAlbum: (Album) -> Unit = {},
     onOpenArtistByName: (String) -> Unit = {},
     onTrackInfoClick: (Track) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var playlistFilter by remember { mutableStateOf(PlaylistFilterType.ALL) }
     var selectedTrackForMenu by remember { mutableStateOf<Track?>(null) }
+
+    LaunchedEffect(selectedTrackForMenu) {
+        selectedTrackForMenu?.let { onPrepareTrackMenu(it) }
+    }
 
     selectedTrackForMenu?.let { track ->
         val key = StoredTrack.from(track).key
@@ -74,6 +83,7 @@ fun SearchScreen(
         val downloadItem = activeDownloads[key]
         TrackOptionsSheet(
             track = track,
+            resolvedAlbum = resolvedAlbum,
             isFavorite = isFav,
             isDownloaded = isDownloaded,
             downloadItem = downloadItem,
@@ -86,6 +96,7 @@ fun SearchScreen(
             onDownload = onDownloadTrack,
             onRemoveDownload = onRemoveDownload,
             onOpenDownloadsScreen = onOpenDownloadsScreen,
+            onOpenAlbum = onOpenAlbum,
             onOpenArtistByName = onOpenArtistByName,
             onTrackInfo = onTrackInfoClick,
         )

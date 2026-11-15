@@ -31,8 +31,6 @@ import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.MoreVert
 import com.vztechcore.vztune.ui.icons.media.DownloadForOffline
 
-private val OfflineBadgeGreen = Color(0xFF4ADE80)
-
 @Composable
 fun TrackListRow(
     track: Track,
@@ -83,7 +81,7 @@ fun TrackListRow(
                     Icon(
                         imageVector = VzIcons.DownloadForOffline,
                         contentDescription = "Baixada offline",
-                        tint = OfflineBadgeGreen,
+                        tint = Color.White,
                         modifier = Modifier.size(14.dp),
                     )
                     Spacer(Modifier.width(4.dp))

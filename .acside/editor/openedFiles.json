@@ -35,13 +35,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 22416,
-          "line": 646
+          "index": 24827,
+          "line": 711
         },
         "start": {
           "column": 1,
-          "index": 22416,
-          "line": 646
+          "index": 24827,
+          "line": 711
         }
       }
     },
@@ -170,13 +170,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 9539,
-          "line": 230
+          "index": 9951,
+          "line": 241
         },
         "start": {
           "column": 1,
-          "index": 9539,
-          "line": 230
+          "index": 9951,
+          "line": 241
         }
       }
     },
@@ -215,13 +215,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 17002,
-          "line": 333
+          "index": 20860,
+          "line": 418
         },
         "start": {
           "column": 1,
-          "index": 17002,
-          "line": 333
+          "index": 20860,
+          "line": 418
         }
       }
     },
@@ -290,13 +290,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 3974,
-          "line": 118
+          "index": 3928,
+          "line": 116
         },
         "start": {
           "column": 1,
-          "index": 3974,
-          "line": 118
+          "index": 3928,
+          "line": 116
         }
       }
     },
@@ -305,13 +305,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 4237,
-          "line": 111
+          "index": 4180,
+          "line": 109
         },
         "start": {
           "column": 1,
-          "index": 4237,
-          "line": 111
+          "index": 4180,
+          "line": 109
         }
       }
     },
@@ -389,7 +389,52 @@
           "line": 17
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/icons/actions/DeleteFilled.kt",
+      "selection": {
+        "end": {
+          "column": 5,
+          "index": 687,
+          "line": 9
+        },
+        "start": {
+          "column": 5,
+          "index": 687,
+          "line": 9
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicRepository.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 22162,
+          "line": 525
+        },
+        "start": {
+          "column": 1,
+          "index": 22162,
+          "line": 525
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/sheets/TrackMenuViewModel.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 5002,
+          "line": 125
+        },
+        "start": {
+          "column": 1,
+          "index": 5002,
+          "line": 125
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/download/LocalDownloadedKeys.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchScreen.kt"
 }

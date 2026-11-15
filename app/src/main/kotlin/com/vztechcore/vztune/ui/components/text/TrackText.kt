@@ -29,8 +29,6 @@ import com.vztechcore.vztune.ui.components.download.isTrackDownloaded
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.media.DownloadForOffline
 
-private val OfflineBadgeGreen = Color(0xFF4ADE80)
-
 @Composable
 fun MarqueeText(
     text: String,
@@ -79,7 +77,7 @@ fun ExplicitBadge(modifier: Modifier = Modifier) {
  * Subtitle line for a Track.
  *   Video -> "Video — <channelName>"
  *   Song  -> "Song — <artist1, artist2, ...>"
- * Shows an offline badge to the left of "Song"/"Video" whenever the track is saved locally.
+ * Shows a clean white offline badge to the left of "Song"/"Video" whenever the track is saved locally.
  */
 @Composable
 fun TrackSubtitle(
@@ -99,7 +97,7 @@ fun TrackSubtitle(
             Icon(
                 imageVector = VzIcons.DownloadForOffline,
                 contentDescription = "Baixada offline",
-                tint = OfflineBadgeGreen,
+                tint = Color.White,
                 modifier = Modifier.size(14.dp),
             )
             Spacer(Modifier.width(4.dp))

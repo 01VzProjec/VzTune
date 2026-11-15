@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.vztechcore.vztune.core.domain.music.Album
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.data.download.DownloadStatus
@@ -27,10 +28,12 @@ import com.vztechcore.vztune.data.download.TrackDownloadItem
 import com.vztechcore.vztune.data.prefs.models.LocalPlaylist
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Delete
+import com.vztechcore.vztune.ui.icons.actions.DeleteFilled
 import com.vztechcore.vztune.ui.icons.actions.FavoriteFilled
 import com.vztechcore.vztune.ui.icons.actions.FavoriteOutline
 import com.vztechcore.vztune.ui.icons.actions.Info
 import com.vztechcore.vztune.ui.icons.actions.Share
+import com.vztechcore.vztune.ui.icons.media.Album
 import com.vztechcore.vztune.ui.icons.media.Artist
 import com.vztechcore.vztune.ui.icons.media.Download
 import com.vztechcore.vztune.ui.icons.media.DownloadDone
@@ -43,18 +46,29 @@ private val SheetContainerColor = Color(0xFF121829)
 private val DownloadGreen = Color(0xFF4ADE80)
 private val DangerRed = Color(0xFFF87171)
 
+enum class TrackMenuContext {
+    DEFAULT,
+    RECENT_HISTORY,
+    EXTERNAL_PLAYLIST,
+    LOCAL_PLAYLIST,
+}
+
 /**
- * Context menu opened from the three-dots button on any track card.
+ * Context menu opened from the three-dots button on any track card across the app.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrackOptionsSheet(
     track: Track,
+    menuContext: TrackMenuContext = TrackMenuContext.DEFAULT,
+    resolvedAlbum: Album? = null,
     isFavorite: Boolean,
     isDownloaded: Boolean = false,
     downloadItem: TrackDownloadItem? = null,
     localPlaylists: List<LocalPlaylist>,
     onDismiss: () -> Unit,
+    onRemoveFromRecentHistory: (Track) -> Unit = {},
+    onRemoveFromLocalPlaylist: (Track) -> Unit = {},
     onToggleFavorite: (Track) -> Unit,
     onAddToPlaylist: (playlistId: String, track: Track) -> Unit,
     onPlayNext: (Track) -> Unit,
@@ -62,6 +76,7 @@ fun TrackOptionsSheet(
     onDownload: (Track) -> Unit = {},
     onRemoveDownload: (Track) -> Unit = {},
     onOpenDownloadsScreen: () -> Unit = {},
+    onOpenAlbum: (Album) -> Unit = {},
     onOpenArtistByName: (String) -> Unit,
     onTrackInfo: (Track) -> Unit,
 ) {
@@ -74,6 +89,11 @@ fun TrackOptionsSheet(
     val isDownloading = downloadItem?.status == DownloadStatus.DOWNLOADING ||
         downloadItem?.status == DownloadStatus.QUEUED ||
         downloadItem?.status == DownloadStatus.PAUSED
+
+    val addToPlaylistLabel = when (menuContext) {
+        TrackMenuContext.EXTERNAL_PLAYLIST, TrackMenuContext.LOCAL_PLAYLIST -> "Adicionar à outra playlist"
+        else -> "Adicionar à playlist"
+    }
 
     if (showRemoveDownloadSheet) {
         RemoveDownloadSheet(
@@ -90,6 +110,7 @@ fun TrackOptionsSheet(
 
     if (showPlaylistPicker) {
         PlaylistPickerSheet(
+            title = addToPlaylistLabel,
             playlists = localPlaylists,
             onPick = { playlist ->
                 onAddToPlaylist(playlist.id, track)
@@ -142,7 +163,34 @@ fun TrackOptionsSheet(
                 color = Color.White.copy(alpha = 0.08f),
             )
 
-            // 1. Favorite / Unfavorite (never triggers automatic download)
+            // Context-specific top removal actions
+            if (menuContext == TrackMenuContext.RECENT_HISTORY) {
+                SheetOptionRow(
+                    icon = VzIcons.DeleteFilled,
+                    iconTint = DangerRed,
+                    label = "Apagar",
+                    labelColor = DangerRed,
+                    onClick = {
+                        onRemoveFromRecentHistory(track)
+                        onDismiss()
+                    },
+                )
+            }
+
+            if (menuContext == TrackMenuContext.LOCAL_PLAYLIST) {
+                SheetOptionRow(
+                    icon = VzIcons.DeleteFilled,
+                    iconTint = DangerRed,
+                    label = "Excluir faixa da playlist",
+                    labelColor = DangerRed,
+                    onClick = {
+                        onRemoveFromLocalPlaylist(track)
+                        onDismiss()
+                    },
+                )
+            }
+
+            // 1. Favorite / Unfavorite
             SheetOptionRow(
                 icon = if (isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
                 iconTint = if (isFavorite) Color(0xFFEC4899) else Color.White,
@@ -153,10 +201,10 @@ fun TrackOptionsSheet(
                 },
             )
 
-            // 2. Add to playlist
+            // 2. Add to playlist / Add to another playlist
             SheetOptionRow(
                 icon = VzIcons.PlaylistAdd,
-                label = "Adicionar à playlist",
+                label = addToPlaylistLabel,
                 onClick = { showPlaylistPicker = true },
             )
 
@@ -233,7 +281,23 @@ fun TrackOptionsSheet(
                 },
             )
 
-            // 7. Go to artist(s)
+            // 7. Go to album (universal across all submenus whenever available)
+            val albumTitle = resolvedAlbum?.title ?: track.album?.takeIf {
+                it.isNotBlank() && !it.equals("Desconhecido", ignoreCase = true)
+            }
+            if (resolvedAlbum != null && !albumTitle.isNullOrBlank()) {
+                SheetOptionRow(
+                    icon = VzIcons.Album,
+                    label = "Álbum",
+                    subtitle = albumTitle,
+                    onClick = {
+                        onDismiss()
+                        onOpenAlbum(resolvedAlbum)
+                    },
+                )
+            }
+
+            // 8. Go to artist(s)
             if (artists.isNotEmpty()) {
                 val hasMultiple = artists.size > 1
                 SheetOptionRow(
@@ -251,7 +315,7 @@ fun TrackOptionsSheet(
                 )
             }
 
-            // 8. Track details
+            // 9. Track details
             SheetOptionRow(
                 icon = VzIcons.Info,
                 label = "Ver informações da faixa",
@@ -526,6 +590,7 @@ private fun SheetDownloadProgressRow(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PlaylistPickerSheet(
+    title: String = "Adicionar à playlist",
     playlists: List<LocalPlaylist>,
     onPick: (LocalPlaylist) -> Unit,
     onDismiss: () -> Unit,
@@ -542,7 +607,7 @@ private fun PlaylistPickerSheet(
                 .padding(bottom = 24.dp),
         ) {
             Text(
-                text = "Adicionar à playlist",
+                text = title,
                 style = MaterialTheme.typography.titleLarge,
                 color = Color.White,
                 fontWeight = FontWeight.Bold,

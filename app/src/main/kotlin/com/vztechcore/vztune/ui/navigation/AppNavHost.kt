@@ -7,7 +7,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -22,10 +24,16 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.data.prefs.models.StoredTrack
+import com.vztechcore.vztune.data.prefs.models.isLocalPlaylistId
 import com.vztechcore.vztune.ui.components.AppCredits
 import com.vztechcore.vztune.ui.components.feedback.EclipseBackground
 import com.vztechcore.vztune.ui.components.feedback.rememberDominantColor
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
+import com.vztechcore.vztune.ui.components.sheets.TrackMenuContext
+import com.vztechcore.vztune.ui.components.sheets.TrackMenuViewModel
+import com.vztechcore.vztune.ui.components.sheets.TrackOptionsSheet
 import com.vztechcore.vztune.ui.screens.artist.ArtistScreen
 import com.vztechcore.vztune.ui.screens.artist.ArtistViewModel
 import com.vztechcore.vztune.ui.screens.artist.list.ArtistListScreen
@@ -45,6 +53,12 @@ import com.vztechcore.vztune.ui.screens.search.SearchViewModel
 import com.vztechcore.vztune.ui.screens.trackinfo.TrackInfoScreen
 import com.vztechcore.vztune.ui.screens.trackinfo.TrackInfoViewModel
 import com.vztechcore.vztune.ui.theme.VzOnSurface
+
+private data class ActiveTrackMenu(
+    val track: Track,
+    val context: TrackMenuContext = TrackMenuContext.DEFAULT,
+    val localPlaylistId: String? = null,
+)
 
 @Composable
 fun AppNavHost(modifier: Modifier = Modifier) {
@@ -71,9 +85,39 @@ fun AppNavHost(modifier: Modifier = Modifier) {
 
     val miniPlayerVm: MiniPlayerViewModel = hiltViewModel()
     val bannerVm: DownloadBannerViewModel = hiltViewModel()
+    val menuVm: TrackMenuViewModel = hiltViewModel()
+
     val dominantColor = rememberDominantColor(track?.thumbnailUrl)
     val isMinimized by miniPlayerVm.isMinimized.collectAsStateWithLifecycle()
     val bannerTrack by bannerVm.bannerTrack.collectAsStateWithLifecycle()
+
+    val favoriteKeys by menuVm.favoriteKeys.collectAsStateWithLifecycle()
+    val downloadedKeys by menuVm.downloadedKeys.collectAsStateWithLifecycle()
+    val activeDownloads by menuVm.activeDownloads.collectAsStateWithLifecycle()
+    val localPlaylists by menuVm.localPlaylists.collectAsStateWithLifecycle()
+    val resolvedAlbum by menuVm.resolvedAlbum.collectAsStateWithLifecycle()
+
+    var activeMenu by remember { mutableStateOf<ActiveTrackMenu?>(null) }
+
+    fun openTrackMenu(
+        targetTrack: Track,
+        context: TrackMenuContext = TrackMenuContext.DEFAULT,
+        localPlaylistId: String? = null,
+    ) {
+        menuVm.resolveAlbumFor(targetTrack)
+        activeMenu = ActiveTrackMenu(targetTrack, context, localPlaylistId)
+    }
+
+    LaunchedEffect(Unit) {
+        menuVm.navigationEvent.collect { event ->
+            when (event) {
+                is TrackMenuViewModel.MenuNavigationEvent.OpenAlbum -> navController.openAlbum(event.album)
+                is TrackMenuViewModel.MenuNavigationEvent.OpenArtist -> navController.navigate(
+                    Routes.Artist(event.artist.id, event.artist.name, event.artist.thumbnailUrl)
+                )
+            }
+        }
+    }
 
     LaunchedEffect(backStackEntry?.destination?.route) {
         if (backStackEntry?.destination?.hasRoute<Routes.Search>() == true) {
@@ -89,6 +133,34 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 return Offset.Zero
             }
         }
+    }
+
+    activeMenu?.let { menu ->
+        val key = StoredTrack.from(menu.track).key
+        TrackOptionsSheet(
+            track = menu.track,
+            menuContext = menu.context,
+            resolvedAlbum = resolvedAlbum,
+            isFavorite = key in favoriteKeys,
+            isDownloaded = key in downloadedKeys,
+            downloadItem = activeDownloads[key],
+            localPlaylists = localPlaylists,
+            onDismiss = { activeMenu = null },
+            onRemoveFromRecentHistory = menuVm::onRemoveFromRecentHistory,
+            onRemoveFromLocalPlaylist = { t ->
+                menu.localPlaylistId?.let { pid -> menuVm.onRemoveFromLocalPlaylist(pid, t) }
+            },
+            onToggleFavorite = menuVm::onToggleFavorite,
+            onAddToPlaylist = menuVm::onAddToPlaylist,
+            onPlayNext = menuVm::onPlayNext,
+            onAddToQueue = menuVm::onAddToQueue,
+            onDownload = menuVm::onDownload,
+            onRemoveDownload = menuVm::onRemoveDownload,
+            onOpenDownloadsScreen = { navController.navigate(Routes.Downloads) },
+            onOpenAlbum = { album -> navController.openAlbum(album) },
+            onOpenArtistByName = menuVm::onOpenArtistByName,
+            onTrackInfo = { t -> navController.navigateToTrackInfo(t) },
+        )
     }
 
     EclipseBackground(baseColor = dominantColor) {
@@ -112,7 +184,9 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onTabSelected = vm::onTabSelected,
                         onShortcutClick = { navController.navigate(Routes.LibraryList(it.name)) },
                         onTrackClick = vm::onTrackClick,
-                        onTrackInfoClick = { navController.navigateToTrackInfo(it) },
+                        onTrackInfoClick = { t ->
+                            openTrackMenu(t, context = TrackMenuContext.RECENT_HISTORY)
+                        },
                         onPlaylistClick = { item ->
                             navController.navigate(
                                 Routes.MediaList(
@@ -135,7 +209,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         state = state,
                         onBackClick = { navController.popBackStack() },
                         onTrackClick = vm::onTrackClick,
-                        onTrackInfoClick = { navController.navigateToTrackInfo(it) },
+                        onTrackInfoClick = { t -> openTrackMenu(t, context = TrackMenuContext.DEFAULT) },
                         onArtistClick = { artist ->
                             navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl))
                         },
@@ -162,10 +236,6 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 composable<Routes.Search> {
                     val vm: SearchViewModel = hiltViewModel()
                     val state by vm.uiState.collectAsStateWithLifecycle()
-                    val favoriteKeys by vm.favoriteKeys.collectAsStateWithLifecycle()
-                    val downloadedKeys by vm.downloadedKeys.collectAsStateWithLifecycle()
-                    val activeDownloads by vm.activeDownloads.collectAsStateWithLifecycle()
-                    val localPlaylists by vm.localPlaylists.collectAsStateWithLifecycle()
 
                     LaunchedEffect(Unit) {
                         vm.navigationEvent.collect { event ->
@@ -205,6 +275,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         downloadedKeys = downloadedKeys,
                         activeDownloads = activeDownloads,
                         localPlaylists = localPlaylists,
+                        resolvedAlbum = resolvedAlbum,
                         onQueryChange = vm::onQueryChange,
                         onFocusChanged = vm::onFocusChanged,
                         onFilterSelect = vm::onFilterSelect,
@@ -221,6 +292,8 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onDownloadTrack = vm::onDownloadTrack,
                         onRemoveDownload = vm::onRemoveDownload,
                         onOpenDownloadsScreen = { navController.navigate(Routes.Downloads) },
+                        onPrepareTrackMenu = menuVm::resolveAlbumFor,
+                        onOpenAlbum = { album -> navController.openAlbum(album) },
                         onOpenArtistByName = vm::onOpenArtistByName,
                         onTrackInfoClick = { navController.navigateToTrackInfo(it) },
                     )
@@ -229,6 +302,12 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 composable<Routes.MediaList> {
                     val vm: MediaListViewModel = hiltViewModel()
                     val state by vm.uiState.collectAsStateWithLifecycle()
+                    val routeId = backStackEntry?.arguments?.getString("id")
+                    val menuCtx = when {
+                        state.isAlbum -> TrackMenuContext.DEFAULT
+                        state.isLocal || (routeId != null && isLocalPlaylistId(routeId)) -> TrackMenuContext.LOCAL_PLAYLIST
+                        else -> TrackMenuContext.EXTERNAL_PLAYLIST
+                    }
                     MediaListScreen(
                         state = state,
                         onBackClick = { navController.popBackStack() },
@@ -242,7 +321,13 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onShuffleOnce = vm::shuffleOnce,
                         onStopShuffle = vm::stopShuffle,
                         onPlayNextClick = vm::onPlayNextClick,
-                        onTrackInfoClick = { navController.navigateToTrackInfo(it) },
+                        onTrackInfoClick = { t ->
+                            openTrackMenu(
+                                targetTrack = t,
+                                context = menuCtx,
+                                localPlaylistId = routeId.takeIf { menuCtx == TrackMenuContext.LOCAL_PLAYLIST },
+                            )
+                        },
                         onFavoriteClick = vm::onFavoriteClick,
                     )
                 }
@@ -257,7 +342,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onFollowClick = vm::onFollowClick,
                         onSongClick = vm::onSongClick,
                         onVideoClick = vm::onVideoClick,
-                        onTrackInfoClick = { navController.navigateToTrackInfo(it) },
+                        onTrackInfoClick = { t -> openTrackMenu(t, context = TrackMenuContext.DEFAULT) },
                         onAlbumClick = { navController.openAlbum(it) },
                         onPlaylistClick = { navController.openPlaylist(it) },
                         onArtistClick = { artist ->
@@ -285,7 +370,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onBackClick = { navController.popBackStack() },
                         onLoadMore = vm::onLoadMore,
                         onTrackClick = vm::onTrackClick,
-                        onTrackInfoClick = { navController.navigateToTrackInfo(it) },
+                        onTrackInfoClick = { t -> openTrackMenu(t, context = TrackMenuContext.DEFAULT) },
                         onAlbumClick = { navController.openAlbum(it) },
                         onPlaylistClick = { navController.openPlaylist(it) },
                     )

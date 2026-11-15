@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.vztechcore.vztune.core.domain.music.Album
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
 import com.vztechcore.vztune.data.download.DownloadStatus
@@ -67,7 +68,9 @@ fun MediaListScreen(
     onAddToQueueAll: () -> Unit = {},
     onDownloadAll: () -> Unit = {},
     onOpenDownloadsScreen: () -> Unit = {},
+    onOpenArtist: () -> Unit = {},
     onOpenArtistByName: (String) -> Unit = {},
+    onAlbumClick: (Album) -> Unit = {},
     onDeleteLocalPlaylist: () -> Unit = {},
     onRenameLocalPlaylist: (String) -> Unit = {},
     onChangeLocalPlaylistCover: (Uri) -> Unit = {},
@@ -83,7 +86,7 @@ fun MediaListScreen(
 
     val isCollapsed by rememberHeaderCollapsed(listState)
 
-    val displayedTracks = remember(state.filteredTracks, state.sortOrder, state.manualOrder, state.selectedTab) {
+    val displayedTracks = remember(state.filteredTracks, state.sortOrder, state.manualOrder, state.selectedTab, state.isAlbum) {
         state.getDisplayTracks()
     }
 
@@ -119,7 +122,7 @@ fun MediaListScreen(
         }
     }
 
-    val canReorder = state.sortOrder == SortOrder.MANUAL && state.selectedTab == MediaListTab.ALL
+    val canReorder = !state.isAlbum && state.sortOrder == SortOrder.MANUAL && state.selectedTab == MediaListTab.ALL
 
     val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
         if (!canReorder) return@rememberReorderableLazyListState
@@ -198,6 +201,7 @@ fun MediaListScreen(
                         if (state.isShuffling) onStopShuffle() else onStartShuffle()
                     },
                     onFavoriteClick = onFavoriteClick,
+                    onArtistClick = if (state.isAlbum && !state.owner.isNullOrBlank()) onOpenArtist else null,
                 )
             }
 
@@ -290,7 +294,13 @@ fun MediaListScreen(
                 }
             }
 
-            item(key = "footer") { MediaListFooter(state = state) }
+            item(key = "footer") {
+                MediaListFooter(
+                    state = state,
+                    onAlbumClick = onAlbumClick,
+                    onArtistClick = if (state.isAlbum && !state.owner.isNullOrBlank()) onOpenArtist else null,
+                )
+            }
         }
 
         CollapsedHeaderHost(visible = isCollapsed) {
@@ -306,6 +316,7 @@ fun MediaListScreen(
         if (showSearchOverlay) {
             MediaListSearchOverlay(
                 allTracks = displayedTracks,
+                isAlbum = state.isAlbum,
                 onClose = { showSearchOverlay = false },
                 onTrackClick = onTrackClick,
                 onPlayNextClick = onPlayNextClick,

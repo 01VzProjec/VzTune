@@ -74,7 +74,82 @@
           "line": 657
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/feedback/VzLoading.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        },
+        "start": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListScreen.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 13892,
+          "line": 326
+        },
+        "start": {
+          "column": 1,
+          "index": 13892,
+          "line": 326
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListHeader.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 13388,
+          "line": 352
+        },
+        "start": {
+          "column": 1,
+          "index": 13388,
+          "line": 352
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListFooter.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 4902,
+          "line": 154
+        },
+        "start": {
+          "column": 1,
+          "index": 4902,
+          "line": 154
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListSearchOverlay.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 8735,
+          "line": 212
+        },
+        "start": {
+          "column": 1,
+          "index": 8735,
+          "line": 212
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicRepository.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListSearchOverlay.kt"
 }

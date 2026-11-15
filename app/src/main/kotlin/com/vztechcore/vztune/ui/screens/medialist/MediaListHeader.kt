@@ -49,6 +49,7 @@ internal fun MediaListExpandedHeader(
     onSortClick: () -> Unit,
     onShuffleToggle: () -> Unit,
     onFavoriteClick: () -> Unit,
+    onArtistClick: (() -> Unit)? = null,
 ) {
     Column(
         Modifier
@@ -131,23 +132,60 @@ internal fun MediaListExpandedHeader(
 
             val ownerName = state.owner?.takeIf { it.isNotBlank() }
             if (!ownerName.isNullOrBlank()) {
-                Text(
-                    text = ownerName,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.White.copy(alpha = 0.9f),
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
+                val isClickableArtist = state.isAlbum && onArtistClick != null
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .then(
+                            if (isClickableArtist) {
+                                Modifier
+                                    .clickable { onArtistClick?.invoke() }
+                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                            } else {
+                                Modifier
+                            }
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    if (state.isAlbum && !state.ownerAvatarUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = state.ownerAvatarUrl,
+                            contentDescription = ownerName,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(CircleShape),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(
+                        text = ownerName,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                    )
+                }
                 Spacer(Modifier.height(6.dp))
             }
 
-            val statsText = buildString {
-                if (!state.views.isNullOrBlank()) append(state.views)
-                if (state.totalDurationLabel.isNotBlank()) {
-                    if (isNotEmpty()) append(" • ")
-                    append(state.totalDurationLabel)
+            val statsText = if (state.isAlbum) {
+                listOfNotNull(
+                    "Álbum",
+                    state.year?.takeIf { it.isNotBlank() },
+                    state.trackCountLabel.takeIf { state.allTracks.isNotEmpty() },
+                    state.totalDurationLabel.takeIf { it.isNotBlank() },
+                ).joinToString(" • ")
+            } else {
+                buildString {
+                    if (!state.views.isNullOrBlank()) append(state.views)
+                    if (state.totalDurationLabel.isNotBlank()) {
+                        if (isNotEmpty()) append(" • ")
+                        append(state.totalDurationLabel)
+                    }
                 }
             }
 
@@ -226,7 +264,7 @@ internal fun MediaListExpandedHeader(
                 ) {
                     Icon(
                         imageVector = VzIcons.DownloadForOffline,
-                        contentDescription = "Playlist baixada",
+                        contentDescription = if (state.isAlbum) "Álbum baixado" else "Playlist baixada",
                         tint = Color.White,
                         modifier = Modifier.size(20.dp),
                     )

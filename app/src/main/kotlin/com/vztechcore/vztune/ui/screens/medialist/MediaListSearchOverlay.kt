@@ -45,6 +45,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.ui.components.AppCredits
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Close
@@ -53,6 +54,7 @@ import com.vztechcore.vztune.ui.icons.navigation.Search
 @Composable
 internal fun MediaListSearchOverlay(
     allTracks: List<Track>,
+    isAlbum: Boolean = false,
     onClose: () -> Unit,
     onTrackClick: (Track) -> Unit,
     onPlayNextClick: (Track) -> Unit,
@@ -67,24 +69,71 @@ internal fun MediaListSearchOverlay(
         focusRequester.requestFocus()
     }
 
-    val filtered = remember(allTracks, query) {
-        if (query.isBlank()) allTracks.sortedBy { it.title.lowercase() }
-        else {
-            val q = query.lowercase().trim()
-            allTracks.filter { it.title.lowercase().contains(q) }
+    val filteredTracks = remember(allTracks, query) {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) allTracks
+        else allTracks.filter {
+            it.title.lowercase().contains(q) || it.artist.lowercase().contains(q)
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF0A0F1E))) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Row(
-                    Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.12f))
-                        .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(50)).padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(VzIcons.Search, contentDescription = null, tint = Color.White.copy(alpha = 0.55f), modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(10.dp))
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.96f))
+            .statusBarsPadding(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.1f))
+                    .clickable {
+                        keyboardController?.hide()
+                        onClose()
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = VzIcons.Close,
+                    contentDescription = "Fechar pesquisa",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.08f))
+                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(50))
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = VzIcons.Search,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.weight(1f)) {
+                    if (query.isEmpty()) {
+                        Text(
+                            text = if (isAlbum) "Pesquisar no álbum..." else "Pesquisar na playlist...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.45f),
+                        )
+                    }
                     BasicTextField(
                         value = query,
                         onValueChange = { query = it },
@@ -93,61 +142,71 @@ internal fun MediaListSearchOverlay(
                         cursorBrush = SolidColor(Color.White),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
-                        modifier = Modifier.weight(1f).focusRequester(focusRequester),
-                        decorationBox = { inner ->
-                            Box(contentAlignment = Alignment.CenterStart) {
-                                if (query.isEmpty()) Text("Pesquisar na playlist...", color = Color.White.copy(alpha = 0.45f), fontSize = 15.sp)
-                                inner()
-                            }
-                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester),
                     )
-                    if (query.isNotEmpty()) {
-                        Box(Modifier.size(24.dp).clip(CircleShape).clickable { query = "" }, contentAlignment = Alignment.Center) {
-                            Icon(VzIcons.Close, contentDescription = "Limpar", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
-                        }
-                    }
                 }
-                Spacer(Modifier.width(8.dp))
-                Box(
-                    Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
-                        .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape).clickable { onClose() },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(VzIcons.Close, contentDescription = "Fechar busca", tint = Color.White, modifier = Modifier.size(22.dp))
+                if (query.isNotEmpty()) {
+                    Icon(
+                        imageVector = VzIcons.Close,
+                        contentDescription = "Limpar texto",
+                        tint = Color.White.copy(alpha = 0.65f),
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable { query = "" },
+                    )
                 }
             }
+        }
 
-            Text(
-                text = if (query.isBlank()) "${filtered.size} faixas • A → Z" else "${filtered.size} resultados",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
-
-            if (filtered.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Nada encontrado pra \"$query\"", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.5f))
-                }
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 32.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    itemsIndexed(filtered, key = { _, t -> t.id }) { _, track ->
-                        val isCurrent = nowPlaying.isCurrent(track.id, track.source)
-                        MediaListTrackRow(
-                            track = track,
-                            index = null,
-                            isPlaying = isCurrent && nowPlaying.isPlaying,
-                            isPaused = isCurrent && !nowPlaying.isPlaying,
-                            onClick = { onTrackClick(track) },
-                            onMoreClick = { onTrackInfoClick(track) },
-                            onPlayNext = { onPlayNextClick(track) },
-                            showDragHandle = false,
-                            dragHandleModifier = Modifier,
-                        )
+        if (filteredTracks.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Nenhuma faixa encontrada para \"$query\"",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.55f),
+                )
+            }
+        } else {
+            LazyColumn(
+                contentPadding = PaddingValues(top = 4.dp, bottom = 140.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                itemsIndexed(
+                    items = filteredTracks,
+                    key = { _, t -> "search_${t.source.name}_${t.id}" },
+                ) { _, track ->
+                    val isCurrent = nowPlaying.isCurrent(track.id, track.source)
+                    val originalIndex = if (isAlbum) {
+                        allTracks.indexOfFirst { it.id == track.id && it.source == track.source }
+                            .takeIf { it >= 0 }
+                            ?.plus(1)
+                    } else {
+                        null
                     }
+
+                    MediaListTrackRow(
+                        track = track,
+                        index = originalIndex,
+                        isPlaying = isCurrent && nowPlaying.isPlaying,
+                        isPaused = isCurrent && !nowPlaying.isPlaying,
+                        onClick = {
+                            keyboardController?.hide()
+                            onTrackClick(track)
+                        },
+                        onMoreClick = { onTrackInfoClick(track) },
+                        onPlayNext = { onPlayNextClick(track) },
+                        showDragHandle = false,
+                        dragHandleModifier = Modifier,
+                    )
                 }
+                item(key = "credits_search") { AppCredits() }
             }
         }
     }

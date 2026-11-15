@@ -12,8 +12,9 @@ import javax.inject.Singleton
 
 /** Playlists created by the user inside the app (Library "Suas playlists" tab). */
 @Singleton
-class LocalPlaylistsStore
-@Inject constructor(@ApplicationContext context: Context,) : JsonListStore<LocalPlaylist> (
+class LocalPlaylistsStore @Inject constructor(
+    @ApplicationContext context: Context,
+) : JsonListStore<LocalPlaylist>(
     context = context,
     storeName = "vztune_local_playlists",
     keyName = "playlists",
@@ -21,23 +22,18 @@ class LocalPlaylistsStore
     idOf = { it.id },
 ) {
     /** Emits the playlist with [id], or null when it does not exist (anymore). */
-    fun playlist(id: String) : Flow<LocalPlaylist?> = items.map { list ->
-        list.firstOrNull {
-            it.id == id
-        }
-    }
+    fun playlist(id: String): Flow<LocalPlaylist?> = items.map { list -> list.firstOrNull { it.id == id } }
 
     /** Renames an existing local playlist. */
     suspend fun rename(playlistId: String, newName: String) {
         val clean = newName.trim()
         if (clean.isBlank()) return
-        update(playlistId) { playlist -> playlist.copy(name = clean) }
+        update(playlistId) { playlist ->
+            playlist.copy(name = clean)
+        }
     }
 
-    /**
-     Updates the custom cover image path (or `vz_color:...` token) of an existing local
-     playlist.
-     */
+    /** Updates the custom cover image path (or `vz_color:...` token) of an existing local playlist. */
     suspend fun updateCover(playlistId: String, coverPath: String?) {
         update(playlistId) { playlist ->
             playlist.copy(coverPath = coverPath)
@@ -48,7 +44,9 @@ class LocalPlaylistsStore
     suspend fun ensureRandomDefaultCover(playlistId: String) {
         val token = randomDefaultCoverToken()
         update(playlistId) { playlist ->
-            if (playlist.coverPath.isNullOrBlank()) { playlist.copy(coverPath = token) } else {
+            if (playlist.coverPath.isNullOrBlank()) {
+                playlist.copy(coverPath = token)
+            } else {
                 playlist
             }
         }
@@ -58,20 +56,16 @@ class LocalPlaylistsStore
     suspend fun addTrack(playlistId: String, track: Track) {
         val stored = StoredTrack.from(track)
         update(playlistId) { playlist ->
-            if (playlist.tracks.any {
-                it.key == stored.key
-            })
-            playlist else playlist.copy(tracks = playlist.tracks + stored)
+            if (playlist.tracks.any { it.key == stored.key }) playlist
+            else playlist.copy(tracks = playlist.tracks + stored)
         }
     }
+
     suspend fun removeTrack(playlistId: String, track: Track) {
         val key = StoredTrack.from(track).key
-        update(playlistId) { playlist ->
-            playlist.copy(tracks = playlist.tracks.filterNot {
-                it.key == key
-            })
-        }
+        update(playlistId) { playlist -> playlist.copy(tracks = playlist.tracks.filterNot { it.key == key }) }
     }
+
     companion object {
         const val DEFAULT_COLOR_PREFIX = "vz_color:"
         private val DEFAULT_COLOR_IDS = listOf(
@@ -94,7 +88,8 @@ class LocalPlaylistsStore
             "GRAY",
             "VIOLET",
         )
-        fun randomDefaultCoverToken() : String {
+
+        fun randomDefaultCoverToken(): String {
             return "$DEFAULT_COLOR_PREFIX${DEFAULT_COLOR_IDS.random()}"
         }
     }

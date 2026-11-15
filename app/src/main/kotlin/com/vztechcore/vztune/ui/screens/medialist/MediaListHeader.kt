@@ -55,17 +55,22 @@ internal fun MediaListExpandedHeader(
     onFavoriteClick: () -> Unit,
     onArtistClick: (() -> Unit)? = null,
 ) {
-    val chameleonBase = remember(dominantColor) { lerp(
-        Color.Black,
-        dominantColor,
-        0.56f
-    ) } Column(
+    val chameleonBase = remember(dominantColor) {
+        lerp(Color.Black, dominantColor, 0.56f)
+    }
+
+    Column(
         Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(Modifier.fillMaxWidth().height(320.dp)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(320.dp)
+        ) {
             val hasDefaultColorToken = PlaylistCoverPalette.isDefaultColorToken(state.thumbnailUrl)
-            when { state.isLocal && !hasDefaultColorToken && !state.thumbnailUrl.isNullOrBlank() -> {
+            when {
+                state.isLocal && !hasDefaultColorToken && !state.thumbnailUrl.isNullOrBlank() -> {
                     AsyncImage(
                         model = state.thumbnailUrl,
                         contentDescription = state.title,
@@ -73,7 +78,10 @@ internal fun MediaListExpandedHeader(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                state.mosaicThumbnails.size >= 4 -> { PlaylistMosaic(state.mosaicThumbnails) } state.isLocal -> {
+                state.mosaicThumbnails.size >= 4 -> {
+                    PlaylistMosaic(state.mosaicThumbnails)
+                }
+                state.isLocal -> {
                     DefaultPlaylistCover(
                         seed = state.listId,
                         coverPath = state.thumbnailUrl,
@@ -89,16 +97,16 @@ internal fun MediaListExpandedHeader(
                     )
                 }
             }
+
             Row(
-                Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                MediaListCircleButton(
-                    VzIcons.Close,
-                    "Fechar",
-                    onBackClick
-                )
+                MediaListCircleButton(VzIcons.Close, "Fechar", onBackClick)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (state.showFavorite) {
                         MediaListCircleButton(
@@ -107,21 +115,16 @@ internal fun MediaListExpandedHeader(
                             onClick = onFavoriteClick,
                         )
                     }
-                    MediaListCircleButton(
-                        VzIcons.Search,
-                        "Pesquisar",
-                        onSearchClick
-                    )
-                    MediaListCircleButton(
-                        VzIcons.MoreVert,
-                        "Mais opções",
-                        onMoreClick
-                    )
+                    MediaListCircleButton(VzIcons.Search, "Pesquisar", onSearchClick)
+                    MediaListCircleButton(VzIcons.MoreVert, "Mais opções", onMoreClick)
                 }
             }
         }
+
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 24.dp)
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
                 .offset(y = (-12).dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -134,23 +137,24 @@ internal fun MediaListExpandedHeader(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+
             Spacer(Modifier.height(8.dp))
-            val ownerName = state.owner?.takeIf {
-                it.isNotBlank()
-            }
+
+            val ownerName = state.owner?.takeIf { it.isNotBlank() }
             if (!ownerName.isNullOrBlank()) {
                 val isClickableOwner = !state.isLocal && onArtistClick != null
                 Row(
-                    modifier = Modifier.clip(RoundedCornerShape(50))
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
                         .then(
-                        if (isClickableOwner) {
-                            Modifier.clickable {
-                                onArtistClick?.invoke()
-                            }.padding(horizontal = 10.dp, vertical = 4.dp)
-                        } else {
-                            Modifier
-                        }
-                    ),
+                            if (isClickableOwner) {
+                                Modifier
+                                    .clickable { onArtistClick?.invoke() }
+                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                            } else {
+                                Modifier
+                            }
+                        ),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                 ) {
@@ -159,7 +163,9 @@ internal fun MediaListExpandedHeader(
                             model = state.ownerAvatarUrl,
                             contentDescription = ownerName,
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier.size(24.dp).clip(CircleShape),
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape),
                         )
                         Spacer(Modifier.width(8.dp))
                     }
@@ -175,33 +181,23 @@ internal fun MediaListExpandedHeader(
                 }
                 Spacer(Modifier.height(6.dp))
             }
+
             val statsText = if (state.isAlbum) {
                 listOfNotNull(
                     "Álbum",
-                    state.year?.takeIf {
-                        it.isNotBlank()
-                    },
-                    state.trackCountLabel.takeIf {
-                        state.allTracks.isNotEmpty()
-                    },
-                    state.totalDurationLabel.takeIf {
-                        it.isNotBlank()
-                    },
+                    state.year?.takeIf { it.isNotBlank() },
+                    state.trackCountLabel.takeIf { state.allTracks.isNotEmpty() },
+                    state.totalDurationLabel.takeIf { it.isNotBlank() },
                 ).joinToString(" • ")
             } else {
                 listOfNotNull(
                     "Playlist",
-                    state.year?.takeIf {
-                        it.isNotBlank()
-                    },
-                    state.trackCountLabel.takeIf {
-                        (state.originalTrackCount ?: state.allTracks.size) > 0
-                    },
-                    state.totalDurationLabel.takeIf {
-                        it.isNotBlank()
-                    },
+                    state.year?.takeIf { it.isNotBlank() },
+                    state.trackCountLabel.takeIf { (state.originalTrackCount ?: state.allTracks.size) > 0 },
+                    state.totalDurationLabel.takeIf { it.isNotBlank() },
                 ).joinToString(" • ")
             }
+
             if (statsText.isNotBlank()) {
                 Text(
                     text = statsText,
@@ -211,20 +207,26 @@ internal fun MediaListExpandedHeader(
                 )
             }
         }
+
         Spacer(Modifier.height(8.dp))
+
         if (state.showTabs) {
             MediaListTabs(state.selectedTab, onTabSelected)
             Spacer(Modifier.height(12.dp))
         }
+
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
-                Modifier.clip(RoundedCornerShape(50)).background(Color(0xFF1E40AF))
-                    .clickable {
-                    onPlayAllClick()
-                }.padding(horizontal = 16.dp, vertical = 8.dp),
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0xFF1E40AF))
+                    .clickable { onPlayAllClick() }
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
@@ -241,12 +243,15 @@ internal fun MediaListExpandedHeader(
                     style = MaterialTheme.typography.labelLarge,
                 )
             }
+
             Spacer(Modifier.width(8.dp))
+
             Box(
-                Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
-                    .clickable {
-                    onShuffleClick()
-                },
+                Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.12f))
+                    .clickable { onShuffleClick() },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -256,10 +261,14 @@ internal fun MediaListExpandedHeader(
                     modifier = Modifier.size(20.dp),
                 )
             }
+
             if (allTracksDownloaded) {
                 Spacer(Modifier.width(8.dp))
                 Box(
-                    Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f)),
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -270,7 +279,9 @@ internal fun MediaListExpandedHeader(
                     )
                 }
             }
+
             Spacer(Modifier.weight(1f))
+
             if (state.isSortEnabled && state.sortOrder == SortOrder.SHUFFLE) {
                 IconButton(onClick = onShuffleToggle) {
                     Icon(
@@ -280,6 +291,7 @@ internal fun MediaListExpandedHeader(
                     )
                 }
             }
+
             if (state.isSortEnabled) {
                 IconButton(onClick = onSortClick) {
                     Icon(
@@ -290,9 +302,11 @@ internal fun MediaListExpandedHeader(
                 }
             }
         }
+
         Spacer(Modifier.height(8.dp))
     }
 }
+
 @Composable
 internal fun MediaListCollapsedHeader(
     title: String,
@@ -303,20 +317,19 @@ internal fun MediaListCollapsedHeader(
     onMoreClick: (() -> Unit)? = null,
     circularThumbnail: Boolean = false,
 ) {
-    val barTint = remember(dominantColor) { lerp(
-        Color.Black,
-        dominantColor,
-        0.38f
-    ) } Row(
-        Modifier.fillMaxWidth().background(barTint).statusBarsPadding()
+    val barTint = remember(dominantColor) {
+        lerp(Color.Black, dominantColor, 0.38f)
+    }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(barTint)
+            .statusBarsPadding()
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MediaListCircleButton(
-            VzIcons.Close,
-            "Fechar",
-            onBackClick
-        )
+        MediaListCircleButton(VzIcons.Close, "Fechar", onBackClick)
         Spacer(Modifier.width(12.dp))
         if (!thumbnailUrl.isNullOrBlank()) {
             AsyncImage(
@@ -338,20 +351,12 @@ internal fun MediaListCollapsedHeader(
         )
         if (onSearchClick != null) {
             IconButton(onClick = onSearchClick) {
-                Icon(
-                    VzIcons.Search,
-                    contentDescription = "Pesquisar",
-                    tint = Color.White
-                )
+                Icon(VzIcons.Search, contentDescription = "Pesquisar", tint = Color.White)
             }
         }
         if (onMoreClick != null) {
             IconButton(onClick = onMoreClick) {
-                Icon(
-                    VzIcons.MoreVert,
-                    contentDescription = "Mais opções",
-                    tint = Color.White
-                )
+                Icon(VzIcons.MoreVert, contentDescription = "Mais opções", tint = Color.White)
             }
         }
     }

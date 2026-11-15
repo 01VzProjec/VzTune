@@ -37,8 +37,7 @@ import java.io.FileOutputStream
 import javax.inject.Inject
 
 @HiltViewModel
-class MediaListViewModel
-@Inject constructor(
+class MediaListViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     @ApplicationContext private val context: Context,
     private val ytMusicRepository: YTMusicRepository,
@@ -48,47 +47,48 @@ class MediaListViewModel
     private val favoritesStore: FavoritePlaylistsStore,
     private val localStore: LocalPlaylistsStore,
 ) : ViewModel() {
+
     sealed interface NavigationEvent {
         data class OpenArtist(val artist: Artist) : NavigationEvent
-        data object CloseScreen: NavigationEvent
+        data object CloseScreen : NavigationEvent
     }
-    private val _navigationEvent = MutableSharedFlow<NavigationEvent> ()
+
+    private val _navigationEvent = MutableSharedFlow<NavigationEvent>()
     val navigationEvent: SharedFlow<NavigationEvent> = _navigationEvent.asSharedFlow()
-    private val route = savedStateHandle.toRoute<Routes.MediaList> ()
-    private val _uiState = MutableStateFlow(MediaListUiState(
-        listId = route.id,
-        title = route.title,
-        subtitle = route.subtitle,
-        thumbnailUrl = route.thumbnailUrl,
-        isAlbum = route.isAlbum,
-        isLocal = isLocalPlaylistId(route.id),
-    ))
+
+    private val route = savedStateHandle.toRoute<Routes.MediaList>()
+
+    private val _uiState = MutableStateFlow(
+        MediaListUiState(
+            listId = route.id,
+            title = route.title,
+            subtitle = route.subtitle,
+            thumbnailUrl = route.thumbnailUrl,
+            isAlbum = route.isAlbum,
+            isLocal = isLocalPlaylistId(route.id),
+        )
+    )
     val uiState: StateFlow<MediaListUiState> = _uiState.asStateFlow()
+
     init {
         val savedSort = store.getSortOrder(route.id)
         val savedManual = store.getManualOrder(route.id)
-        _uiState.update {
-            it.copy(sortOrder = savedSort, manualOrder = savedManual)
-        }
+        _uiState.update { it.copy(sortOrder = savedSort, manualOrder = savedManual) }
         loadContent()
         viewModelScope.launch {
             favoritesStore.contains(route.id).collect { favorite ->
-                _uiState.update {
-                    it.copy(isFavorite = favorite)
-                }
+                _uiState.update { it.copy(isFavorite = favorite) }
             }
         }
     }
+
     private fun observeLocalPlaylist() {
         viewModelScope.launch {
             localStore.ensureRandomDefaultCover(route.id)
             localStore.playlist(route.id).collect { playlist ->
                 _uiState.update {
                     if (playlist == null) {
-                        it.copy(
-                            isLoading = false,
-                            errorMessage = "Playlist não encontrada."
-                        )
+                        it.copy(isLoading = false, errorMessage = "Playlist não encontrada.")
                     } else {
                         it.copy(
                             isLoading = false,
@@ -98,32 +98,33 @@ class MediaListViewModel
                             subtitle = "Você",
                             thumbnailUrl = playlist.coverPath,
                             mosaicThumbnails = playlist.mosaic,
-                            allTracks = playlist.tracks.mapNotNull { stored ->
-                                stored.toTrack()
-                            },
+                            allTracks = playlist.tracks.mapNotNull { stored -> stored.toTrack() },
                         )
                     }
                 }
             }
         }
     }
+
     private fun loadContent() {
-        if (_uiState.value.isLocal) { observeLocalPlaylist() return
-        } viewModelScope.launch {
-            _uiState.update {
-                it.copy(isLoading = true, errorMessage = null)
-            }
+        if (_uiState.value.isLocal) {
+            observeLocalPlaylist()
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             runCatching {
                 if (route.isAlbum) {
                     val album = ytMusicRepository.browseAlbum(route.id)
+
                     val resolvedArtist = listOfNotNull(
                         album.artist,
                         route.subtitle,
                         _uiState.value.subtitle,
-                    ).firstOrNull {
-                        YTMusicOwnerValidator.isValidOwnerName(it)
-                    }
+                    ).firstOrNull { YTMusicOwnerValidator.isValidOwnerName(it) }
+
                     val resolvedTitle = album.title ?: _uiState.value.title
+
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -139,6 +140,7 @@ class MediaListViewModel
                             allTracks = album.tracks,
                         )
                     }
+
                     loadMoreAlbumsByArtist(
                         artistName = resolvedArtist,
                         artistId = album.artistId,
@@ -150,13 +152,13 @@ class MediaListViewModel
                         delay(1000)
                         playlist = ytMusicRepository.browsePlaylist(route.id)
                     }
+
                     val resolvedOwner = listOfNotNull(
                         playlist.owner,
                         route.subtitle,
                         _uiState.value.subtitle,
-                    ).firstOrNull {
-                        YTMusicOwnerValidator.isValidOwnerName(it)
-                    }
+                    ).firstOrNull { YTMusicOwnerValidator.isValidOwnerName(it) }
+
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -169,30 +171,34 @@ class MediaListViewModel
                             originalTrackCount = playlist.trackCount,
                             thumbnailUrl = playlist.coverUrl ?: it.thumbnailUrl,
                             description = playlist.description,
-                            mosaicThumbnails = playlist.tracks.asSequence()
-                                .mapNotNull { t ->
-                                t.thumbnailUrl
-                            }.distinct().take(4).toList(),
+                            mosaicThumbnails = playlist.tracks
+                                .asSequence()
+                                .mapNotNull { t -> t.thumbnailUrl }
+                                .distinct()
+                                .take(4)
+                                .toList(),
                             allTracks = playlist.tracks,
                         )
                     }
-                    if (playlist.ownerAvatarUrl.isNullOrBlank() && !resolvedOwner.isNullOrBlank()) { loadPlaylistOwnerAvatar(resolvedOwner) }
+
+                    if (playlist.ownerAvatarUrl.isNullOrBlank() && !resolvedOwner.isNullOrBlank()) {
+                        loadPlaylistOwnerAvatar(resolvedOwner)
+                    }
                 }
             }.onFailure { e ->
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = "Erro: ${e.message}"
-                    )
-                }
+                _uiState.update { it.copy(isLoading = false, errorMessage = "Erro: ${e.message}") }
             }
         }
     }
+
     private fun loadPlaylistOwnerAvatar(ownerName: String) {
         viewModelScope.launch {
-            val primary = ownerName.substringBefore(",").substringBefore("&").trim()
-            if (primary.isBlank() || primary.equals("YouTube Music", ignoreCase = true)) return
-        @launch val resolved = runCatching {
+            val primary = ownerName
+                .substringBefore(",")
+                .substringBefore("&")
+                .trim()
+            if (primary.isBlank() || primary.equals("YouTube Music", ignoreCase = true)) return@launch
+            val resolved = runCatching {
                 ytMusicRepository.findChannelOrArtist(primary)
             }.getOrNull()
             if (resolved != null) {
@@ -205,13 +211,14 @@ class MediaListViewModel
             }
         }
     }
+
     private fun loadMoreAlbumsByArtist(
         artistName: String?,
         artistId: String?,
         excludeAlbumTitle: String?,
     ) {
         viewModelScope.launch {
-            val(artist, moreAlbums) = ytMusicRepository.getMoreAlbumsByArtist(
+            val (artist, moreAlbums) = ytMusicRepository.getMoreAlbumsByArtist(
                 artistName = artistName,
                 artistId = artistId,
                 excludeAlbumId = route.id,
@@ -226,19 +233,18 @@ class MediaListViewModel
             }
         }
     }
+
     fun onTabSelected(tab: MediaListTab) {
         if (tab == _uiState.value.selectedTab) return
-        _uiState.update {
-            it.copy(selectedTab = tab)
-        }
+        _uiState.update { it.copy(selectedTab = tab) }
     }
+
     fun onSortOrderSelected(order: SortOrder) {
         if (order == _uiState.value.sortOrder) return
-        _uiState.update {
-            it.copy(sortOrder = order, isShuffling = false)
-        }
+        _uiState.update { it.copy(sortOrder = order, isShuffling = false) }
         store.setSortOrder(route.id, order)
     }
+
     fun onReorder(fromIndex: Int, toIndex: Int) {
         val currentTracks = _uiState.value.getDisplayTracks()
         if (fromIndex !in currentTracks.indices) return
@@ -246,103 +252,92 @@ class MediaListViewModel
         val newList = currentTracks.toMutableList()
         val item = newList.removeAt(fromIndex)
         newList.add(toIndex, item)
-        val newOrderIds = newList.map {
-            it.id
-        }
-        _uiState.update {
-            it.copy(
-                manualOrder = newOrderIds,
-                sortOrder = SortOrder.MANUAL
-            )
-        }
+        val newOrderIds = newList.map { it.id }
+        _uiState.update { it.copy(manualOrder = newOrderIds, sortOrder = SortOrder.MANUAL) }
         store.setManualOrder(route.id, newOrderIds)
         store.setSortOrder(route.id, SortOrder.MANUAL)
     }
-    fun startShuffle() {
-        _uiState.update {
-            it.copy(isShuffling = true)
-        }
-    }
+
+    fun startShuffle() { _uiState.update { it.copy(isShuffling = true) } }
+
     fun shuffleOnce() {
         val currentTracks = _uiState.value.allTracks
         if (currentTracks.isEmpty()) return
-        val newOrderIds = currentTracks.map {
-            it.id
-        }.shuffled()
-        _uiState.update {
-            it.copy(
-                manualOrder = newOrderIds,
-                sortOrder = SortOrder.SHUFFLE
-            )
-        }
+        val newOrderIds = currentTracks.map { it.id }.shuffled()
+        _uiState.update { it.copy(manualOrder = newOrderIds, sortOrder = SortOrder.SHUFFLE) }
     }
+
     fun stopShuffle() {
-        _uiState.update {
-            it.copy(isShuffling = false)
-        }
+        _uiState.update { it.copy(isShuffling = false) }
         store.setManualOrder(route.id, _uiState.value.manualOrder)
         store.setSortOrder(route.id, SortOrder.SHUFFLE)
     }
+
     fun onTrackClick(track: Track) {
         val sorted = _uiState.value.getDisplayTracks()
-        val idx = sorted.indexOfFirst {
-            it.id == track.id && it.source == track.source
-        }
-        if (idx >= 0)
-        playerController.playQueue(sorted, idx) else playerController.playQueue(listOf(track), 0)
+        val idx = sorted.indexOfFirst { it.id == track.id && it.source == track.source }
+        if (idx >= 0) playerController.playQueue(sorted, idx)
+        else playerController.playQueue(listOf(track), 0)
     }
+
     fun onFavoriteClick() {
         val state = _uiState.value
         viewModelScope.launch {
-            favoritesStore.toggle(StoredPlaylist(
-                id = route.id,
-                title = state.title,
-                owner = state.owner,
-                thumbnailUrl = state.thumbnailUrl,
-                mosaic = state.mosaicThumbnails,
-            ))
+            favoritesStore.toggle(
+                StoredPlaylist(
+                    id = route.id,
+                    title = state.title,
+                    owner = state.owner,
+                    thumbnailUrl = state.thumbnailUrl,
+                    mosaic = state.mosaicThumbnails,
+                )
+            )
         }
     }
-    fun onPlayNextClick(track: Track) {
-        playerController.addToQueueNext(track)
-    }
+
+    fun onPlayNextClick(track: Track) { playerController.addToQueueNext(track) }
+
     fun onPlayNextAll() {
         val tracks = _uiState.value.getDisplayTracks()
-        tracks.asReversed().forEach {
-            playerController.addToQueueNext(it)
-        }
+        tracks.asReversed().forEach { playerController.addToQueueNext(it) }
     }
+
     fun onAddToQueueAll() {
         val tracks = _uiState.value.getDisplayTracks()
-        tracks.forEach {
-            playerController.addToQueueEnd(it)
-        }
+        tracks.forEach { playerController.addToQueueEnd(it) }
     }
+
     fun onDownloadAll() {
         val tracks = _uiState.value.allTracks
-        if (tracks.isNotEmpty()) { trackDownloader.downloadAll(tracks) }
+        if (tracks.isNotEmpty()) {
+            trackDownloader.downloadAll(tracks)
+        }
     }
+
     fun onOpenArtist() {
         val state = _uiState.value
-        val directId = state.artistId?.takeIf {
-            it.startsWith("UC")
-        }
-        val artistName = state.owner?.takeIf {
-            it.isNotBlank()
-        }
+        val directId = state.artistId?.takeIf { it.startsWith("UC") }
+        val artistName = state.owner?.takeIf { it.isNotBlank() }
         if (directId != null && artistName != null) {
             viewModelScope.launch {
-                _navigationEvent.emit(NavigationEvent.OpenArtist(Artist(
-                    id = directId,
-                    name = artistName,
-                    thumbnailUrl = state.ownerAvatarUrl,
-                    source = Source.YOUTUBE_MUSIC,
-                )))
+                _navigationEvent.emit(
+                    NavigationEvent.OpenArtist(
+                        Artist(
+                            id = directId,
+                            name = artistName,
+                            thumbnailUrl = state.ownerAvatarUrl,
+                            source = Source.YOUTUBE_MUSIC,
+                        )
+                    )
+                )
             }
             return
         }
-        if (artistName != null) { onOpenArtistByName(artistName) }
+        if (artistName != null) {
+            onOpenArtistByName(artistName)
+        }
     }
+
     fun onOpenArtistByName(artistName: String) {
         viewModelScope.launch {
             val found = runCatching {
@@ -353,6 +348,7 @@ class MediaListViewModel
             }
         }
     }
+
     fun onDeleteLocalPlaylist() {
         if (!_uiState.value.isLocal) return
         viewModelScope.launch {
@@ -360,6 +356,7 @@ class MediaListViewModel
             _navigationEvent.emit(NavigationEvent.CloseScreen)
         }
     }
+
     fun onRenameLocalPlaylist(newTitle: String) {
         if (!_uiState.value.isLocal) return
         val clean = newTitle.trim()
@@ -368,20 +365,16 @@ class MediaListViewModel
             localStore.rename(route.id, clean)
         }
     }
+
     fun onChangeLocalPlaylistCover(coverUri: Uri) {
         if (!_uiState.value.isLocal) return
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
-                val coversDir = File(context.filesDir, "playlist_covers")
-                    .apply {
-                    if (!exists())
-                    mkdirs()
+                val coversDir = File(context.filesDir, "playlist_covers").apply {
+                    if (!exists()) mkdirs()
                 }
                 val safeId = route.id.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-                val destFile = File(
-                    coversDir,
-                    "${safeId}_${System.currentTimeMillis()}.jpg"
-                )
+                val destFile = File(coversDir, "${safeId}_${System.currentTimeMillis()}.jpg")
                 context.contentResolver.openInputStream(coverUri)?.use { input ->
                     FileOutputStream(destFile).use { output ->
                         input.copyTo(output)
@@ -391,9 +384,7 @@ class MediaListViewModel
                     _uiState.value.thumbnailUrl?.let { oldPath ->
                         val oldFile = File(oldPath)
                         if (oldFile.exists() && oldFile.parentFile == coversDir) {
-                            runCatching {
-                                oldFile.delete()
-                            }
+                            runCatching { oldFile.delete() }
                         }
                     }
                     localStore.updateCover(route.id, destFile.absolutePath)
@@ -401,20 +392,22 @@ class MediaListViewModel
             }
         }
     }
+
+
     fun onChangeCoverColor(colorToken: String) {
         if (!_uiState.value.isLocal) return
         viewModelScope.launch {
             localStore.updateCover(route.id, colorToken)
         }
     }
+
     fun onPlayAll() {
         val sorted = _uiState.value.getDisplayTracks()
-        if (sorted.isNotEmpty())
-        playerController.playQueue(sorted, 0)
+        if (sorted.isNotEmpty()) playerController.playQueue(sorted, 0)
     }
+
     fun onShuffle() {
         val shuffled = _uiState.value.filteredTracks.shuffled()
-        if (shuffled.isNotEmpty())
-        playerController.playQueue(shuffled, 0)
+        if (shuffled.isNotEmpty()) playerController.playQueue(shuffled, 0)
     }
 }

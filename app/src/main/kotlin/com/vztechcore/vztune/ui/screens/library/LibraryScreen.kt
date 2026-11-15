@@ -56,22 +56,18 @@ fun LibraryScreen(
     onTrackClick: (Track) -> Unit,
     onTrackInfoClick: (Track) -> Unit,
     onPlaylistClick: (LibraryPlaylistItem) -> Unit,
-    onCreatePlaylist: (
-        name: String,
-        coverUri: Uri?,
-        colorToken: String?
-    ) -> Unit,
+    onCreatePlaylist: (name: String, coverUri: Uri?, colorToken: String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var showCreateSheet by remember {
-        mutableStateOf(false)
-    }
+    var showCreateSheet by remember { mutableStateOf(false) }
+
     Box(modifier.fillMaxSize()) {
         LazyColumn(
             contentPadding = PaddingValues(bottom = 200.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            item(key = "title") { LibraryTitle() } item(key = "tabs") {
+            item(key = "title") { LibraryTitle() }
+            item(key = "tabs") {
                 VzChipRow(
                     items = LibraryTab.entries,
                     selected = state.selectedTab,
@@ -81,59 +77,58 @@ fun LibraryScreen(
                 )
                 Spacer(Modifier.height(16.dp))
             }
-            when (state.selectedTab) { LibraryTab.OVERVIEW ->
-                overviewTab(
-                    state.recentTracks,
-                    onShortcutClick,
-                    onTrackClick,
-                    onTrackInfoClick
-                )
-                LibraryTab.VZTUNE ->
-                item(key = "vztune_soon") {
+
+            when (state.selectedTab) {
+                LibraryTab.OVERVIEW -> overviewTab(state.recentTracks, onShortcutClick, onTrackClick, onTrackInfoClick)
+
+                LibraryTab.VZTUNE -> item(key = "vztune_soon") {
                     EmptyMessage("As playlists do VzTune vão aparecer aqui em breve.")
                 }
-                LibraryTab.MY_PLAYLISTS ->
-                playlistGrid(
+
+                LibraryTab.MY_PLAYLISTS -> playlistGrid(
                     items = state.myPlaylists,
                     emptyText = "Toque em \"Nova playlist\" para criar a primeira.",
                     showCreateCard = true,
                     onCreateClick = { showCreateSheet = true },
                     onPlaylistClick = onPlaylistClick,
                 )
-                LibraryTab.FAVORITES ->
-                playlistGrid(
+
+                LibraryTab.FAVORITES -> playlistGrid(
                     items = state.favoritePlaylists,
                     emptyText = "Favorite uma playlist (coração na tela dela) para ela aparecer aqui.",
                     onPlaylistClick = onPlaylistClick,
                 )
-                LibraryTab.DOWNLOADS ->
-                playlistGrid(
+
+                LibraryTab.DOWNLOADS -> playlistGrid(
                     items = state.downloadedPlaylists,
                     emptyText = "Nenhuma playlist baixada ainda.",
                     onPlaylistClick = onPlaylistClick,
                 )
             }
+
             item(key = "credits") { AppCredits() }
         }
+
         if (showCreateSheet) {
             CreatePlaylistSheet(
                 onDismiss = { showCreateSheet = false },
-                onConfirm = { name,
-                    cover,
-                    colorToken ->
-                    onCreatePlaylist(
-                        name,
-                        cover,
-                        colorToken
-                    ) showCreateSheet = false
+                onConfirm = { name, cover, colorToken ->
+                    onCreatePlaylist(name, cover, colorToken)
+                    showCreateSheet = false
                 },
             )
         }
     }
 }
+
 @Composable
 private fun LibraryTitle() {
-    Column(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+    ) {
         Text(
             text = "Sua Biblioteca",
             style = MaterialTheme.typography.headlineMedium,
@@ -147,43 +142,33 @@ private fun LibraryTitle() {
         )
     }
 }
+
 private fun LazyListScope.overviewTab(
     recentTracks: List<Track>,
     onShortcutClick: (LibraryShortcut) -> Unit,
     onTrackClick: (Track) -> Unit,
     onTrackInfoClick: (Track) -> Unit,
 ) {
-    items(
-        LibraryShortcut.entries.chunked(2),
-        key = { row -> row.first().name }
-    ) { row ->
+    items(LibraryShortcut.entries.chunked(2), key = { row -> row.first().name }) { row ->
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             row.forEach { shortcut ->
-                ShortcutCard(
-                    shortcut,
-                    { onShortcutClick(shortcut) },
-                    Modifier.weight(1f)
-                )
+                ShortcutCard(shortcut, { onShortcutClick(shortcut) }, Modifier.weight(1f))
             }
         }
     }
+
     item(key = "recent_header") {
         Spacer(Modifier.height(16.dp))
         SectionHeader(title = "Recentemente tocadas")
     }
+
     if (recentTracks.isEmpty()) {
-        item(key = "recent_empty") {
-            EmptyMessage("Nada tocado ainda. Toque uma faixa e ela aparece aqui.")
-        }
+        item(key = "recent_empty") { EmptyMessage("Nada tocado ainda. Toque uma faixa e ela aparece aqui.") }
     } else {
-        itemsIndexed(
-            recentTracks,
-            key = { _,
-            t -> "recent_${t.source.name}_${t.id}" }
-        ) { _, track ->
+        itemsIndexed(recentTracks, key = { _, t -> "recent_${t.source.name}_${t.id}" }) { _, track ->
             TrackListRow(
                 track = track,
                 onClick = { onTrackClick(track) },
@@ -192,32 +177,21 @@ private fun LazyListScope.overviewTab(
         }
     }
 }
+
 @Composable
-private fun ShortcutCard(
-    shortcut: LibraryShortcut,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
+private fun ShortcutCard(shortcut: LibraryShortcut, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(16.dp)
     Row(
-        modifier.height(54.dp).clip(shape).background(shortcut.accent.copy(alpha = 0.14f))
-            .border(
-            BorderStroke(
-                1.5.dp,
-                shortcut.accent.copy(alpha = 0.55f)
-            ),
-            shape
-        ).clickable {
-            onClick()
-        }.padding(horizontal = 14.dp),
+        modifier
+            .height(54.dp)
+            .clip(shape)
+            .background(shortcut.accent.copy(alpha = 0.14f))
+            .border(BorderStroke(1.5.dp, shortcut.accent.copy(alpha = 0.55f)), shape)
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            shortcut.icon,
-            contentDescription = null,
-            tint = shortcut.accent,
-            modifier = Modifier.size(22.dp)
-        )
+        Icon(shortcut.icon, contentDescription = null, tint = shortcut.accent, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(10.dp))
         Text(
             text = shortcut.label,
@@ -228,16 +202,14 @@ private fun ShortcutCard(
         )
     }
 }
+
+
 private sealed interface GridCell {
     val key: String
-    data object Create: GridCell {
-        override val key = "create"
-    }
-    data class Playlist(val item: LibraryPlaylistItem) : GridCell {
-        override val key
-        get() = item.id
-    }
+    data object Create : GridCell { override val key = "create" }
+    data class Playlist(val item: LibraryPlaylistItem) : GridCell { override val key get() = item.id }
 }
+
 private fun LazyListScope.playlistGrid(
     items: List<LibraryPlaylistItem>,
     emptyText: String,
@@ -246,28 +218,23 @@ private fun LazyListScope.playlistGrid(
     onCreateClick: () -> Unit = {},
 ) {
     val cells = buildList<GridCell> {
-        if (showCreateCard)
-        add(GridCell.Create)
-        items.forEach {
-            add(GridCell.Playlist(it))
-        }
+        if (showCreateCard) add(GridCell.Create)
+        items.forEach { add(GridCell.Playlist(it)) }
     }
     val columns = 3
-    items(
-        cells.chunked(columns),
-        key = { row ->
-            row.joinToString("|") { it.key }
-        }
-    ) { row ->
+
+    items(cells.chunked(columns), key = { row -> row.joinToString("|") { it.key } }) { row ->
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             row.forEach { cell ->
                 Box(Modifier.weight(1f)) {
-                    when (cell) { GridCell.Create ->
-                        CreatePlaylistCard(onCreateClick) is GridCell.Playlist ->
-                        CoverCard(
+                    when (cell) {
+                        GridCell.Create -> CreatePlaylistCard(onCreateClick)
+                        is GridCell.Playlist -> CoverCard(
                             title = cell.item.title,
                             subtitle = cell.item.subtitle,
                             imageUrl = cell.item.imageUrl,
@@ -277,21 +244,27 @@ private fun LazyListScope.playlistGrid(
                     }
                 }
             }
-            repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+            repeat(columns - row.size) {
+                Spacer(Modifier.weight(1f))
+            }
         }
     }
-    if (items.isEmpty())
-    item(key = "grid_empty") { EmptyMessage(emptyText) }
+
+    if (items.isEmpty()) item(key = "grid_empty") { EmptyMessage(emptyText) }
 }
+
 @Composable
 private fun CreatePlaylistCard(onClick: () -> Unit) {
     Column(
-        Modifier.clip(RoundedCornerShape(10.dp)).clickable {
-            onClick()
-        },
+        Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { onClick() },
     ) {
         Box(
-            Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(10.dp))
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(10.dp))
                 .background(Color.White.copy(alpha = 0.08f)),
             contentAlignment = Alignment.Center,
         ) {
@@ -312,12 +285,10 @@ private fun CreatePlaylistCard(onClick: () -> Unit) {
         )
     }
 }
+
 @Composable
 internal fun EmptyMessage(text: String, modifier: Modifier = Modifier) {
-    Box(
-        modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 40.dp),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 40.dp), contentAlignment = Alignment.Center) {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,

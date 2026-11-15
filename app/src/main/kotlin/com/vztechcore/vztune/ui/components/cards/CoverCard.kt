@@ -29,8 +29,7 @@ import com.vztechcore.vztune.ui.components.player.PlaylistCoverPalette
 
 /**
  * Square cover with title and subtitle below. Used for albums, singles, playlists
- * (artist screen, "see all" grids and the Library). A mosaic of 4+ thumbnails wins
- over [imageUrl].
+ * (artist screen, "see all" grids and the Library). A mosaic of 4+ thumbnails wins over [imageUrl].
  *
  * When there is neither a mosaic nor a cover (a brand-new local playlist with no
  * tracks and no chosen cover), the card is drawn with a black background and the
@@ -46,33 +45,37 @@ fun CoverCard(
     mosaic: List<String> = emptyList(),
 ) {
     val isEmpty = mosaic.isEmpty() && imageUrl == null
+
     Column(
-        modifier.clip(RoundedCornerShape(12.dp)).clickable {
-            onClick()
-        },
+        modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() },
     ) {
         Box(
-            Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp))
-                .background(if (isEmpty) Color.Black else Color.White.copy(alpha = 0.08f)),
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    if (isEmpty) Color.Black
+                    else Color.White.copy(alpha = 0.08f)
+                ),
             contentAlignment = Alignment.Center,
         ) {
-            when { mosaic.size >= 4 ->
-                PlaylistMosaic(mosaic)
-                PlaylistCoverPalette.isDefaultColorToken(imageUrl) ->
-                DefaultPlaylistCover(
+            when {
+                mosaic.size >= 4 -> PlaylistMosaic(mosaic)
+                PlaylistCoverPalette.isDefaultColorToken(imageUrl) -> DefaultPlaylistCover(
                     seed = title,
                     coverPath = imageUrl,
                     modifier = Modifier.fillMaxSize(),
                 )
-                imageUrl != null ->
-                AsyncImage(
+                imageUrl != null -> AsyncImage(
                     model = imageUrl,
                     contentDescription = title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
-                else ->
-                VzLogoStatic(Modifier.fillMaxSize(0.9f))
+                else -> VzLogoStatic(Modifier.fillMaxSize(0.9f))
             }
         }
         Spacer(Modifier.height(8.dp))

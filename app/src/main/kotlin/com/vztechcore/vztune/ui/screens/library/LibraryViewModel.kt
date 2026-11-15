@@ -22,16 +22,18 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class LibraryViewModel
-@Inject constructor(
+class LibraryViewModel @Inject constructor(
     historyStore: PlayHistoryStore,
     private val localStore: LocalPlaylistsStore,
     favoritesStore: FavoritePlaylistsStore,
     private val coverStorage: PlaylistCoverStorage,
     private val playerController: PlayerController,
 ) : ViewModel() {
+
     private val selectedTab = MutableStateFlow(LibraryTab.OVERVIEW)
+
     private var recentTracks: List<Track> = emptyList()
+
     val uiState: StateFlow<LibraryUiState> = combine(
         selectedTab,
         historyStore.tracks,
@@ -42,56 +44,38 @@ class LibraryViewModel
         LibraryUiState(
             selectedTab = tab,
             recentTracks = recent,
-            myPlaylists = mine.map {
-                it.toItem()
-            },
-            favoritePlaylists = favorites.map {
-                it.toItem()
-            },
+            myPlaylists = mine.map { it.toItem() },
+            favoritePlaylists = favorites.map { it.toItem() },
         )
-    }.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5_000),
-        LibraryUiState()
-    )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
+
     fun onTabSelected(tab: LibraryTab) {
         selectedTab.value = tab
     }
+
     fun onTrackClick(track: Track) {
-        val index = recentTracks.indexOfFirst {
-            it.id == track.id && it.source == track.source
-        }
-        if (index >= 0)
-        playerController.playQueue(recentTracks, index) else playerController.playQueue(listOf(track), 0)
+        val index = recentTracks.indexOfFirst { it.id == track.id && it.source == track.source }
+        if (index >= 0) playerController.playQueue(recentTracks, index)
+        else playerController.playQueue(listOf(track), 0)
     }
 
     /**
      * Creates a local playlist.
-     * Priority: photo cover wins, then Vz color token, then no cover (mosaic
-     fallback).
+     * Priority: photo cover wins, then Vz color token, then no cover (mosaic fallback).
      * The [colorToken] param has a default so old 2-arg calls still compile.
      */
-    fun createPlaylist(
-        name: String,
-        coverUri: Uri?,
-        colorToken: String? = null
-    ) {
+    fun createPlaylist(name: String, coverUri: Uri?, colorToken: String? = null) {
         viewModelScope.launch {
             val id = newLocalPlaylistId()
-            val coverPath = when { coverUri != null ->
-                coverStorage.save(id, coverUri)
-                !colorToken.isNullOrBlank() ->
-                colorToken
-                else ->
-                null
+            val coverPath = when {
+                coverUri != null -> coverStorage.save(id, coverUri)
+                !colorToken.isNullOrBlank() -> colorToken
+                else -> null
             }
-            localStore.addFirst(LocalPlaylist(
-                id = id,
-                name = name.trim(),
-                coverPath = coverPath
-            ))
+            localStore.addFirst(LocalPlaylist(id = id, name = name.trim(), coverPath = coverPath))
         }
     }
+
     private fun LocalPlaylist.toItem() = LibraryPlaylistItem(
         id = id,
         title = name,
@@ -99,6 +83,7 @@ class LibraryViewModel
         imageUrl = coverPath ?: mosaic.firstOrNull(),
         mosaic = if (coverPath == null) mosaic else emptyList(),
     )
+
     private fun StoredPlaylist.toItem() = LibraryPlaylistItem(
         id = id,
         title = title,

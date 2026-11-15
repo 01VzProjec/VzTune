@@ -47,6 +47,7 @@ import com.vztechcore.vztune.ui.icons.actions.AddPhotoAlternate
 
 private val SheetBackground = Color(0xFF141B30)
 private val AccentBlue = Color(0xFF60A5FA)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreatePlaylistSheet(
@@ -55,41 +56,36 @@ fun CreatePlaylistSheet(
 ) {
     CreatePlaylistSheet(
         onDismiss = onDismiss,
-        onConfirm = { name,
-            cover,
-            _ ->
-            onConfirm(name, cover)
-        },
+        onConfirm = { name, cover, _ -> onConfirm(name, cover) },
     )
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreatePlaylistSheet(
     onDismiss: () -> Unit,
-    onConfirm: (
-        name: String,
-        coverUri: Uri?,
-        colorToken: String?
-    ) -> Unit,
+    onConfirm: (name: String, coverUri: Uri?, colorToken: String?) -> Unit,
 ) {
-    var name by remember {
-        mutableStateOf("")
+    var name by remember { mutableStateOf("") }
+    var cover by remember { mutableStateOf<Uri?>(null) }
+    var selectedColorToken by remember { mutableStateOf<String?>(null) }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) cover = uri
     }
-    var cover by remember {
-        mutableStateOf<Uri?> (null)
-    }
-    var selectedColorToken by remember {
-        mutableStateOf<String?> (null)
-    }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null)
-    cover = uri } ModalBottomSheet(
+
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = SheetBackground,
         contentColor = Color.White,
     ) {
         Column(
-            Modifier.fillMaxWidth().imePadding().navigationBarsPadding()
-                .padding(horizontal = 20.dp).padding(bottom = 24.dp),
+            Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
         ) {
             Text(
                 text = "Nova playlist",
@@ -98,13 +94,18 @@ fun CreatePlaylistSheet(
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(16.dp))
+
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.size(56.dp).clip(RoundedCornerShape(12.dp))
+                    Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .background(Color.White.copy(alpha = 0.08f))
                         .clickable {
-                        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    },
+                            picker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
                     if (cover != null) {
@@ -126,12 +127,7 @@ fun CreatePlaylistSheet(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    placeholder = {
-                        Text(
-                            "Nome da playlist",
-                            color = Color.White.copy(alpha = 0.5f)
-                        )
-                    },
+                    placeholder = { Text("Nome da playlist", color = Color.White.copy(alpha = 0.5f)) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
@@ -145,6 +141,7 @@ fun CreatePlaylistSheet(
                     modifier = Modifier.weight(1f),
                 )
             }
+
             Spacer(Modifier.height(8.dp))
             if (cover == null) {
                 Text(
@@ -165,26 +162,15 @@ fun CreatePlaylistSheet(
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White.copy(alpha = 0.5f),
             )
+
             Spacer(Modifier.height(20.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onDismiss) {
-                    Text(
-                        "Cancelar",
-                        color = Color.White.copy(alpha = 0.75f)
-                    )
+                    Text("Cancelar", color = Color.White.copy(alpha = 0.75f))
                 }
                 Spacer(Modifier.width(8.dp))
                 Button(
-                    onClick = {
-                        onConfirm(
-                            name,
-                            cover,
-                            if (cover != null) null else selectedColorToken
-                        )
-                    },
+                    onClick = { onConfirm(name, cover, if (cover != null) null else selectedColorToken) },
                     enabled = name.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AccentBlue,

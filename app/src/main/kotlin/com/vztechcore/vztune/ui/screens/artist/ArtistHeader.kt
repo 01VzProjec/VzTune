@@ -52,54 +52,48 @@ import com.vztechcore.vztune.ui.icons.player.Shuffle
 import com.vztechcore.vztune.ui.screens.medialist.MediaListCircleButton
 
 /** Brightest tone the backdrop may reach, so white text stays readable on vivid photos. */
-private
-const val MAX_BACKDROP_LUMINANCE = 0.30f
+private const val MAX_BACKDROP_LUMINANCE = 0.30f
+
 private val HeroMinHeight = 300.dp
 private val ButtonHeight = 44.dp
+
 /**
  * Accent color extracted from the artist photo, animated so the screen
  * blends from black into the artist's color instead of popping in.
  */
 @Composable
-fun rememberArtistAccent(thumbnailUrl: String?) : Color {
+fun rememberArtistAccent(thumbnailUrl: String?): Color {
     val extracted = rememberDominantColor(thumbnailUrl)
     val animated by animateColorAsState(
         targetValue = extracted,
         animationSpec = tween(durationMillis = 700),
         label = "artistAccent",
-    ) return animated
+    )
+    return animated
 }
 
 /** Darkens overly bright accents; dark accents are returned untouched. */
-private fun Color.toBackdropTone() : Color {
-    val lum = luminance() return
-    if (lum > MAX_BACKDROP_LUMINANCE)
-    lerp(
-        Color.Black,
-        this,
-        MAX_BACKDROP_LUMINANCE / lum
-    ) else this
+private fun Color.toBackdropTone(): Color {
+    val lum = luminance()
+    return if (lum > MAX_BACKDROP_LUMINANCE) lerp(Color.Black, this, MAX_BACKDROP_LUMINANCE / lum) else this
 }
 
 /**
- * Full-screen "chameleon" backdrop: the artist color on top, fading into
- near-black at the bottom.
- * It is drawn once behind the whole screen, so the hero photo can fade straight
- into it (no seams).
+ * Full-screen "chameleon" backdrop: the artist color on top, fading into near-black at the bottom.
+ * It is drawn once behind the whole screen, so the hero photo can fade straight into it (no seams).
  */
 /**
  * Solid backdrop: same tone everywhere, no gradient to black.
  * Kept with the same name so ArtistScreen still compiles.
  */
 @Composable
-fun rememberArtistChameleonBrush(accent: Color) : Brush = remember(accent) {
+fun rememberArtistChameleonBrush(accent: Color): Brush = remember(accent) {
     val tone = accent.toBackdropTone()
     Brush.verticalGradient(listOf(tone, tone))
 }
 
 /**
- * Artist hero: full-width photo that fades into the backdrop, the name and stats
- over it,
+ * Artist hero: full-width photo that fades into the backdrop, the name and stats over it,
  * and the shuffle / follow buttons right below.
  */
 @Composable
@@ -112,56 +106,63 @@ fun ArtistHeader(
     modifier: Modifier = Modifier,
 ) {
     val hasPlayableItems = state.topSongs.isNotEmpty() || state.videos.isNotEmpty()
+
     Column(modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxWidth().heightIn(min = HeroMinHeight)
-            .animateContentSize()) {
-            ArtistPhoto(
-                imageUrl = state.thumbnailUrl,
-                name = state.name
-            )
-            Box(Modifier.align(Alignment.TopStart).statusBarsPadding()
-                .padding(12.dp)) {
-                MediaListCircleButton(
-                    VzIcons.ArrowBack,
-                    "Voltar",
-                    onBackClick
-                )
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = HeroMinHeight)
+                .animateContentSize()
+        ) {
+            ArtistPhoto(imageUrl = state.thumbnailUrl, name = state.name)
+
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(12.dp)
+            ) {
+                MediaListCircleButton(VzIcons.ArrowBack, "Voltar", onBackClick)
             }
+
         }
-        Column(Modifier.fillMaxWidth().padding(
-            start = 20.dp,
-            end = 20.dp,
-            top = 8.dp,
-            bottom = 4.dp
-        )) {
-            Text(
-                text = state.name,
-                style = MaterialTheme.typography.displaySmall.copy(
-                    letterSpacing = (-0.5).sp,
-                    shadow = Shadow(
-                        color = Color.Black.copy(alpha = 0.45f),
-                        offset = Offset(0f, 3f),
-                        blurRadius = 12f,
-                    ),
-                ),
-                color = Color.White,
-                fontWeight = FontWeight.ExtraBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (state.statsLabel.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
+
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 4.dp)
+        ) {
                 Text(
-                    text = state.statsLabel,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.8f),
+                    text = state.name,
+                    style = MaterialTheme.typography.displaySmall.copy(
+                        letterSpacing = (-0.5).sp,
+                        shadow = Shadow(
+                            color = Color.Black.copy(alpha = 0.45f),
+                            offset = Offset(0f, 3f),
+                            blurRadius = 12f,
+                        ),
+                    ),
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (state.statsLabel.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = state.statsLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.8f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-        }
+
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -191,7 +192,9 @@ fun ArtistHeader(
 private fun ArtistPhoto(imageUrl: String?, name: String) {
     if (imageUrl.isNullOrBlank()) {
         Box(
-            Modifier.fillMaxWidth().height(HeroMinHeight),
+            Modifier
+                .fillMaxWidth()
+                .height(HeroMinHeight),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -203,9 +206,12 @@ private fun ArtistPhoto(imageUrl: String?, name: String) {
         }
         return
     }
+
     val context = LocalContext.current
     val request = remember(imageUrl) {
-        ImageRequest.Builder(context).data(imageUrl).crossfade(400)
+        ImageRequest.Builder(context)
+            .data(imageUrl)
+            .crossfade(400)
             .build()
     }
     AsyncImage(
@@ -213,9 +219,12 @@ private fun ArtistPhoto(imageUrl: String?, name: String) {
         contentDescription = name,
         contentScale = ContentScale.Fit,
         alignment = Alignment.Center,
-        modifier = Modifier.fillMaxWidth().heightIn(min = HeroMinHeight, max = 520.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = HeroMinHeight, max = 520.dp),
     )
 }
+
 @Composable
 private fun FollowButton(
     isFollowing: Boolean,
@@ -224,11 +233,7 @@ private fun FollowButton(
 ) {
     if (isFollowing) {
         // Lightened accent keeps the label readable even when the photo color is dark
-        val tint = lerp(
-            accent,
-            Color.White,
-            0.55f
-        )
+        val tint = lerp(accent, Color.White, 0.55f)
         PillButton(
             label = "Seguindo",
             icon = VzIcons.PersonCheck,
@@ -261,14 +266,13 @@ private fun PillButton(
 ) {
     val shape = RoundedCornerShape(50)
     Row(
-        modifier = Modifier.height(ButtonHeight).clip(shape).background(containerColor)
-            .then(if (borderColor != null) Modifier.border(
-            1.dp,
-            borderColor,
-            shape
-        ) else Modifier).clickable {
-            onClick()
-        }.padding(horizontal = 20.dp),
+        modifier = Modifier
+            .height(ButtonHeight)
+            .clip(shape)
+            .background(containerColor)
+            .then(if (borderColor != null) Modifier.border(1.dp, borderColor, shape) else Modifier)
+            .clickable { onClick() }
+            .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {

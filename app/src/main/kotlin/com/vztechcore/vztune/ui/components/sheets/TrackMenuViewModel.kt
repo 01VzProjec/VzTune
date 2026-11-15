@@ -94,7 +94,10 @@ class TrackMenuViewModel @Inject constructor(
     }
 
     fun onRemoveFromRecentHistory(track: Track) {
-        viewModelScope.launch { playHistoryStore.remove(track) }
+        viewModelScope.launch {
+            val key = StoredTrack.from(track).key
+            playHistoryStore.remove(key)
+        }
     }
 
     fun onPlayNext(track: Track) {

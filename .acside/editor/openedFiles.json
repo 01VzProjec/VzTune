@@ -1,0 +1,20 @@
+{
+  "allFiles": [
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistScreen.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 13583,
+          "line": 319
+        },
+        "start": {
+          "column": 0,
+          "index": 13583,
+          "line": 319
+        }
+      }
+    }
+  ],
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistScreen.kt"
+}

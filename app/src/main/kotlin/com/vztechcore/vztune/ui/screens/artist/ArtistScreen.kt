@@ -98,7 +98,7 @@ fun ArtistScreen(
     // Compartilhar artista: abre a barra de compartilhar do Android com link do YouTube Music
     val onShareClick: () -> Unit = {
         val url = "https://music.youtube.com/browse/${state.artistId}"
-        val shareText = "Confere esse artista no VzTune \uD83C\uDFB�\n${state.name}\n$url"
+        val shareText = "Confere esse artista no VzTune 🎧\n${state.name}\n$url"
         val sendIntent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_SUBJECT, state.name)

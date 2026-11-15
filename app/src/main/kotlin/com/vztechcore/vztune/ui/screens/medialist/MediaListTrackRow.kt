@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
@@ -155,6 +156,11 @@ internal fun MediaListTrackRow(
     }
 }
 
+/**
+ * 16:9 video card with title, channel and the "more" button.
+ * [horizontalPadding] is the card's inner side inset; pass 0.dp when the parent already
+ * provides the edge padding (e.g. horizontal rows on the artist screen).
+ */
 @Composable
 internal fun MediaListVideoCard(
     track: Track,
@@ -163,12 +169,13 @@ internal fun MediaListVideoCard(
     onClick: () -> Unit,
     onMoreClick: () -> Unit,
     modifier: Modifier = Modifier,
+    horizontalPadding: Dp = 12.dp,
 ) {
     Column(
         modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(horizontal = horizontalPadding, vertical = 8.dp)
     ) {
         Box(
             Modifier
@@ -264,3 +271,4 @@ internal fun PlayableVideoCard(
         modifier = modifier,
     )
 }
+

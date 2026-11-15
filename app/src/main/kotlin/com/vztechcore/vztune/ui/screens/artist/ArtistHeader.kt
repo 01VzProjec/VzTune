@@ -1,214 +1,244 @@
 package com.vztechcore.vztune.ui.screens.artist
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.vztechcore.vztune.ui.components.feedback.fadeOutBottom
 import com.vztechcore.vztune.ui.components.feedback.rememberDominantColor
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.ArrowBack
 import com.vztechcore.vztune.ui.icons.actions.PersonAdd
 import com.vztechcore.vztune.ui.icons.actions.PersonCheck
+import com.vztechcore.vztune.ui.icons.media.Artist
 import com.vztechcore.vztune.ui.icons.player.Shuffle
+import com.vztechcore.vztune.ui.screens.medialist.MediaListCircleButton
+
+/** Brightest tone the backdrop may reach, so white text stays readable on vivid photos. */
+private const val MAX_BACKDROP_LUMINANCE = 0.30f
+
+private val HeroMinHeight = 300.dp
+private val ButtonHeight = 44.dp
 
 /**
- * Computes a full-screen chameleon background brush from the artist's photo.
+ * Accent color extracted from the artist photo, animated so the screen
+ * blends from black into the artist's color instead of popping in.
  */
 @Composable
-fun rememberArtistChameleonBrush(thumbnailUrl: String?): Brush {
-    val dominantColor = rememberDominantColor(thumbnailUrl)
-    return remember(dominantColor) {
-        Brush.verticalGradient(
-            colorStops = arrayOf(
-                0.0f to lerp(Color.Black, dominantColor, 0.65f),
-                0.35f to lerp(Color.Black, dominantColor, 0.42f),
-                0.70f to lerp(Color.Black, dominantColor, 0.24f),
-                1.0f to lerp(Color.Black, dominantColor, 0.12f),
-            )
-        )
-    }
+fun rememberArtistAccent(thumbnailUrl: String?): Color {
+    val extracted = rememberDominantColor(thumbnailUrl)
+    val animated by animateColorAsState(
+        targetValue = extracted,
+        animationSpec = tween(durationMillis = 700),
+        label = "artistAccent",
+    )
+    return animated
 }
 
+/** Darkens overly bright accents; dark accents are returned untouched. */
+private fun Color.toBackdropTone(): Color {
+    val lum = luminance()
+    return if (lum > MAX_BACKDROP_LUMINANCE) lerp(Color.Black, this, MAX_BACKDROP_LUMINANCE / lum) else this
+}
+
+/**
+ * Full-screen "chameleon" backdrop: the artist color on top, fading into near-black at the bottom.
+ * It is drawn once behind the whole screen, so the hero photo can fade straight into it (no seams).
+ */
+@Composable
+fun rememberArtistChameleonBrush(accent: Color): Brush = remember(accent) {
+    val tone = accent.toBackdropTone()
+    Brush.verticalGradient(
+        colorStops = arrayOf(
+            0.00f to lerp(Color.Black, tone, 0.72f),
+            0.30f to lerp(Color.Black, tone, 0.46f),
+            0.65f to lerp(Color.Black, tone, 0.20f),
+            1.00f to lerp(Color.Black, tone, 0.06f),
+        )
+    )
+}
+
+/**
+ * Artist hero: full-width photo that fades into the backdrop, the name and stats over it,
+ * and the shuffle / follow buttons right below.
+ */
 @Composable
 fun ArtistHeader(
     state: ArtistUiState,
+    accent: Color,
     onBackClick: () -> Unit,
     onRandomClick: () -> Unit,
     onFollowClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val dominantColor = rememberDominantColor(state.thumbnailUrl)
     val hasPlayableItems = state.topSongs.isNotEmpty() || state.videos.isNotEmpty()
 
-    val chameleonHeaderBrush = remember(dominantColor) {
-        Brush.verticalGradient(
-            colorStops = arrayOf(
-                0.0f to lerp(Color.Black, dominantColor, 0.65f),
-                0.65f to lerp(Color.Black, dominantColor, 0.45f),
-                1.0f to lerp(Color.Black, dominantColor, 0.36f),
-            )
-        )
-    }
-
-    val chameleonBottomFade = remember(dominantColor) {
-        lerp(Color.Black, dominantColor, 0.42f)
-    }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(chameleonHeaderBrush)
-    ) {
+    Column(modifier.fillMaxWidth()) {
         Box(
-            modifier = Modifier
+            Modifier
                 .fillMaxWidth()
-                .height(275.dp)
-                .background(chameleonHeaderBrush),
+                .heightIn(min = HeroMinHeight)
+                .animateContentSize()
         ) {
-            if (state.thumbnailUrl != null) {
-                // Displays the artist's original photo without cropping or artificial zoom
-                AsyncImage(
-                    model = state.thumbnailUrl,
-                    contentDescription = state.name,
-                    alignment = Alignment.Center,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .padding(top = 8.dp, bottom = 28.dp),
-                )
-            } else {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(dominantColor.copy(alpha = 0.65f), chameleonBottomFade)
-                            )
-                        )
-                )
-            }
+            ArtistPhoto(imageUrl = state.thumbnailUrl, name = state.name)
 
+            // Darkens the top so the status bar and the back button stay readable over any photo
             Box(
                 Modifier
-                    .matchParentSize()
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .height(120.dp)
                     .background(
                         Brush.verticalGradient(
-                            colorStops = arrayOf(
-                                0.0f to Color.Black.copy(alpha = 0.30f),
-                                0.55f to Color.Transparent,
-                                0.85f to chameleonBottomFade.copy(alpha = 0.78f),
-                                1.0f to chameleonBottomFade,
-                            )
+                            listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent)
                         )
                     )
             )
 
-            // Back button at top-left
-            IconButton(
-                onClick = onBackClick,
-                modifier = Modifier
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
                     .statusBarsPadding()
                     .padding(12.dp)
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.45f)),
             ) {
-                Icon(
-                    imageVector = VzIcons.ArrowBack,
-                    contentDescription = "Voltar",
-                    tint = Color.White,
-                )
+                MediaListCircleButton(VzIcons.ArrowBack, "Voltar", onBackClick)
             }
 
-            // Artist name & stats
             Column(
-                modifier = Modifier
+                Modifier
                     .align(Alignment.BottomStart)
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                    .padding(start = 20.dp, end = 20.dp, bottom = 12.dp)
             ) {
                 Text(
                     text = state.name,
-                    style = MaterialTheme.typography.headlineLarge,
+                    style = MaterialTheme.typography.displaySmall.copy(
+                        letterSpacing = (-0.5).sp,
+                        shadow = Shadow(
+                            color = Color.Black.copy(alpha = 0.45f),
+                            offset = Offset(0f, 3f),
+                            blurRadius = 12f,
+                        ),
+                    ),
                     color = Color.White,
                     fontWeight = FontWeight.ExtraBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (state.statsLabel.isNotBlank()) {
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         text = state.statsLabel,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.78f),
-                        maxLines = 1,
+                        color = Color.White.copy(alpha = 0.8f),
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
         }
 
-        // Action row: Follow / Following + Shuffle
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 10.dp),
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (hasPlayableItems) {
+                PillButton(
+                    label = "Aleatório",
+                    icon = VzIcons.Shuffle,
+                    containerColor = Color.White,
+                    contentColor = Color.Black,
+                    onClick = onRandomClick,
+                )
+            }
             FollowButton(
                 isFollowing = state.isFollowing,
-                accent = dominantColor,
+                accent = accent,
                 onClick = onFollowClick,
             )
-
-            Spacer(Modifier.weight(1f))
-
-            if (hasPlayableItems) {
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(Color.White.copy(alpha = 0.12f))
-                        .clickable { onRandomClick() }
-                        .padding(horizontal = 16.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = VzIcons.Shuffle,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "Aleatório",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
         }
     }
+}
+
+/**
+ * The photo is shown whole (never cropped) at full width, and its bottom edge fades out
+ * so it melts into the screen backdrop. Without a photo, a big faint icon fills the hero.
+ */
+@Composable
+private fun ArtistPhoto(imageUrl: String?, name: String) {
+    if (imageUrl.isNullOrBlank()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(HeroMinHeight),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = VzIcons.Artist,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.12f),
+                modifier = Modifier.size(140.dp),
+            )
+        }
+        return
+    }
+
+    val context = LocalContext.current
+    val request = remember(imageUrl) {
+        ImageRequest.Builder(context)
+            .data(imageUrl)
+            .crossfade(400)
+            .build()
+    }
+    AsyncImage(
+        model = request,
+        contentDescription = name,
+        contentScale = ContentScale.FillWidth,
+        alignment = Alignment.TopCenter,
+        modifier = Modifier
+            .fillMaxWidth()
+            .fadeOutBottom(fadeFraction = 0.55f),
+    )
 }
 
 @Composable
@@ -217,30 +247,61 @@ private fun FollowButton(
     accent: Color,
     onClick: () -> Unit,
 ) {
-    val bg = if (isFollowing) accent.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.10f)
-    val border = if (isFollowing) accent.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.24f)
-    val content = if (isFollowing) accent else Color.White
+    if (isFollowing) {
+        // Lightened accent keeps the label readable even when the photo color is dark
+        val tint = lerp(accent, Color.White, 0.55f)
+        PillButton(
+            label = "Seguindo",
+            icon = VzIcons.PersonCheck,
+            containerColor = accent.copy(alpha = 0.30f),
+            contentColor = tint,
+            borderColor = tint.copy(alpha = 0.70f),
+            onClick = onClick,
+        )
+    } else {
+        PillButton(
+            label = "Seguir",
+            icon = VzIcons.PersonAdd,
+            containerColor = Color.Transparent,
+            contentColor = Color.White,
+            borderColor = Color.White.copy(alpha = 0.35f),
+            onClick = onClick,
+        )
+    }
+}
 
+/** Rounded pill with icon + label. Shared by the shuffle and follow buttons. */
+@Composable
+private fun PillButton(
+    label: String,
+    icon: ImageVector,
+    containerColor: Color,
+    contentColor: Color,
+    onClick: () -> Unit,
+    borderColor: Color? = null,
+) {
+    val shape = RoundedCornerShape(50)
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(bg)
-            .border(1.dp, border, RoundedCornerShape(50))
+            .height(ButtonHeight)
+            .clip(shape)
+            .background(containerColor)
+            .then(if (borderColor != null) Modifier.border(1.dp, borderColor, shape) else Modifier)
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 9.dp),
+            .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(
-            imageVector = if (isFollowing) VzIcons.PersonCheck else VzIcons.PersonAdd,
+            imageVector = icon,
             contentDescription = null,
-            tint = content,
+            tint = contentColor,
             modifier = Modifier.size(18.dp),
         )
-        Spacer(Modifier.width(8.dp))
         Text(
-            text = if (isFollowing) "Seguindo" else "Seguir",
+            text = label,
             style = MaterialTheme.typography.labelLarge,
-            color = content,
+            color = contentColor,
             fontWeight = FontWeight.Bold,
         )
     }

@@ -1,5 +1,6 @@
 package com.vztechcore.vztune.ui.screens.artist
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -43,10 +46,10 @@ import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.ui.components.AppCredits
 import com.vztechcore.vztune.ui.components.cards.ArtistCircleCard
 import com.vztechcore.vztune.ui.components.cards.CoverCard
-import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
-import com.vztechcore.vztune.ui.components.layout.SectionHeader
 import com.vztechcore.vztune.ui.components.cards.TrackListRow
 import com.vztechcore.vztune.ui.components.feedback.VzLoading
+import com.vztechcore.vztune.ui.components.layout.SectionHeader
+import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.player.playbackOf
 import com.vztechcore.vztune.ui.screens.medialist.CollapsedHeaderHost
 import com.vztechcore.vztune.ui.screens.medialist.MediaListCollapsedHeader
@@ -54,13 +57,16 @@ import com.vztechcore.vztune.ui.screens.medialist.MediaListVideoCard
 import com.vztechcore.vztune.ui.screens.medialist.rememberHeaderCollapsed
 
 private val RowPadding = PaddingValues(horizontal = 16.dp)
-private val CoverWidth = 168.dp
+private val CoverWidth = 160.dp
 private val VideoWidth = 280.dp
+private val RelatedArtistSize = 124.dp
+private val SectionGap = 24.dp
 
 /**
  * Artist profile. Sections (hidden when empty), in order:
  * popular songs, albums, singles, videos, featured, related artists, description, credits.
- * Once the header scrolls away, a sticky bar (close + photo + name) fades in.
+ * The whole screen sits on a backdrop tinted with the photo color; once the hero scrolls away,
+ * a sticky bar (close + photo + name) fades in.
  */
 @Composable
 fun ArtistScreen(
@@ -81,13 +87,17 @@ fun ArtistScreen(
     val isCollapsed by rememberHeaderCollapsed(listState)
     val nowPlaying = LocalNowPlaying.current
 
+    // Photo color is extracted once and shared by the backdrop, the hero and the sticky bar
+    val accent = rememberArtistAccent(state.thumbnailUrl)
+    val backdrop = rememberArtistChameleonBrush(accent)
+
     fun seeAll(kind: ArtistListKind, ref: BrowseRef?): (() -> Unit)? =
         ref?.let { { onSeeAllClick(kind, it) } }
 
     Box(
         modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(backdrop)
     ) {
         LazyColumn(
             state = listState,
@@ -97,6 +107,7 @@ fun ArtistScreen(
             item(key = "header") {
                 ArtistHeader(
                     state = state,
+                    accent = accent,
                     onBackClick = onBackClick,
                     onRandomClick = onRandomClick,
                     onFollowClick = onFollowClick,
@@ -140,7 +151,7 @@ fun ArtistScreen(
                                 onMoreClick = { onTrackInfoClick(track) },
                             )
                         }
-                        item(key = "songs_space") { Spacer(Modifier.height(16.dp)) }
+                        item(key = "songs_space") { Spacer(Modifier.height(SectionGap)) }
                     }
 
                     rowSection(
@@ -178,6 +189,9 @@ fun ArtistScreen(
                             onClick = { onVideoClick(video) },
                             onMoreClick = { onTrackInfoClick(video) },
                             modifier = Modifier.width(VideoWidth),
+                            // The row already has its own 16dp edge padding; the card's default
+                            // inset would push the thumbnails away from the section title.
+                            horizontalPadding = 0.dp,
                         )
                     }
 
@@ -200,6 +214,7 @@ fun ArtistScreen(
                         ArtistCircleCard(
                             name = artist.name, imageUrl = artist.thumbnailUrl,
                             onClick = { onArtistClick(artist) },
+                            size = RelatedArtistSize,
                         )
                     }
 
@@ -215,6 +230,7 @@ fun ArtistScreen(
                 title = state.name,
                 thumbnailUrl = state.thumbnailUrl,
                 onBackClick = onBackClick,
+                dominantColor = accent,
                 circularThumbnail = true,
             )
         }
@@ -242,18 +258,25 @@ private fun <T> LazyListScope.rowSection(
             items(items, key = itemKey) { itemContent(it) }
         }
     }
-    item(key = "${key}_space") { Spacer(Modifier.height(20.dp)) }
+    item(key = "${key}_space") { Spacer(Modifier.height(SectionGap)) }
 }
 
+/** "About" card: soft translucent surface, expands in place when the text is long. */
 @Composable
 private fun ArtistDescription(description: String?) {
     var expanded by remember { mutableStateOf(false) }
     val text = description?.takeIf { it.isNotBlank() }
+    val canExpand = text != null && text.length > 220
 
     Column(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.07f))
+            .animateContentSize()
+            .clickable(enabled = canExpand) { expanded = !expanded }
+            .padding(16.dp)
     ) {
         Text(
             text = "Sobre",
@@ -268,16 +291,14 @@ private fun ArtistDescription(description: String?) {
             color = Color.White.copy(alpha = if (text != null) 0.75f else 0.5f),
             maxLines = if (expanded) Int.MAX_VALUE else 5,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.clickable(enabled = text != null) { expanded = !expanded },
         )
-        if (text != null && text.length > 220) {
-            Spacer(Modifier.height(4.dp))
+        if (canExpand) {
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = if (expanded) "Ver menos" else "Ver mais",
                 style = MaterialTheme.typography.labelLarge,
                 color = Color.White.copy(alpha = 0.6f),
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clickable { expanded = !expanded },
             )
         }
     }

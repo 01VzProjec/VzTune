@@ -304,14 +304,14 @@
       "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistHeader.kt",
       "selection": {
         "end": {
-          "column": 1,
-          "index": 8994,
-          "line": 246
+          "column": 0,
+          "index": 10765,
+          "line": 308
         },
         "start": {
-          "column": 1,
-          "index": 8994,
-          "line": 246
+          "column": 0,
+          "index": 10765,
+          "line": 308
         }
       }
     },
@@ -329,7 +329,22 @@
           "line": 247
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistScreen.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 12955,
+          "line": 305
+        },
+        "start": {
+          "column": 0,
+          "index": 12955,
+          "line": 305
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/components/ArtistHeader.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistScreen.kt"
 }

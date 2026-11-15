@@ -39,6 +39,12 @@ class DownloadedTracksStore @Inject constructor(
             .toSet()
     }
 
+    /** Emits whether [track] is currently downloaded and exists on disk. */
+    fun containsTrack(track: Track): Flow<Boolean> {
+        val key = StoredTrack.from(track).key
+        return downloadedKeys.map { key in it }
+    }
+
     /** Tracks completed within the last 7 days. */
     val recentCompleted7Days: Flow<List<DownloadedTrack>> = items.map { list ->
         val now = System.currentTimeMillis()

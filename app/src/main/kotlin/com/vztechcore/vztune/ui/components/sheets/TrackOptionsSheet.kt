@@ -6,7 +6,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -81,6 +83,7 @@ fun TrackOptionsSheet(
     onTrackInfo: (Track) -> Unit,
 ) {
     val context = LocalContext.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showPlaylistPicker by remember { mutableStateOf(false) }
     var showArtistPicker by remember { mutableStateOf(false) }
     var showRemoveDownloadSheet by remember { mutableStateOf(false) }
@@ -137,6 +140,7 @@ fun TrackOptionsSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = SheetContainerColor,
         contentColor = Color.White,
         dragHandle = {
@@ -153,6 +157,7 @@ fun TrackOptionsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp),
         ) {
@@ -338,8 +343,10 @@ fun RemoveDownloadSheet(
     onConfirmRemove: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = SheetContainerColor,
         contentColor = Color.White,
         dragHandle = {
@@ -595,14 +602,17 @@ private fun PlaylistPickerSheet(
     onPick: (LocalPlaylist) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = SheetContainerColor,
         contentColor = Color.White,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp),
         ) {
@@ -646,14 +656,17 @@ private fun ArtistPickerSheet(
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = SheetContainerColor,
         contentColor = Color.White,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp),
         ) {

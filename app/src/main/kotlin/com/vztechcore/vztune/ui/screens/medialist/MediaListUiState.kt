@@ -1,5 +1,6 @@
 package com.vztechcore.vztune.ui.screens.medialist
 
+import com.vztechcore.vztune.core.domain.music.Album
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
@@ -18,6 +19,8 @@ data class MediaListUiState(
     val subtitle: String? = null,
     val owner: String? = null,
     val ownerAvatarUrl: String? = null,
+    val artistId: String? = null,
+    val moreAlbumsByArtist: List<Album> = emptyList(),
     val year: String? = null,
     val views: String? = null,
     val originalTrackCount: Int? = null,
@@ -38,7 +41,9 @@ data class MediaListUiState(
 
     // Only YouTube playlists can be favorited (albums and local playlists cannot).
     val showFavorite: Boolean get() = !isAlbum && !isLocal
-    val isSortEnabled: Boolean get() = selectedTab == MediaListTab.ALL
+
+    // Albums keep their official tracklist order without sorting controls.
+    val isSortEnabled: Boolean get() = !isAlbum && selectedTab == MediaListTab.ALL
 
     val filteredTracks: List<Track>
         get() = when (selectedTab) {
@@ -64,6 +69,7 @@ data class MediaListUiState(
     }
 
     fun getDisplayTracks(): List<Track> {
+        if (isAlbum) return allTracks
         val filtered = filteredTracks
         return if (isSortEnabled) {
             applySort(filtered)

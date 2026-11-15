@@ -34,6 +34,8 @@ class YTMusicRepository @Inject constructor(
         val description: String?,
         val views: String?,
         val tracks: List<Track>,
+        val artistId: String? = null,
+        val year: String? = null,
     )
 
     data class PlaylistResult(
@@ -229,6 +231,7 @@ class YTMusicRepository @Inject constructor(
         val artist = headerInfo?.artist
         val views = headerInfo?.views
         val desc = extractDescription(json)
+        val (artistId, year) = extractAlbumHeaderExtras(json)
 
         // Check both musicShelfRenderer and musicPlaylistShelfRenderer used by two-column album layouts
         val primaryShelf = YTMusicTextUtils.findFirst(json, "musicShelfRenderer")
@@ -266,7 +269,58 @@ class YTMusicRepository @Inject constructor(
 
         val finalTracks = enricher.enrichTracks(normalizedTracks, artist)
 
-        AlbumResult(cover, artist, title, desc, views, finalTracks)
+        AlbumResult(
+            coverUrl = cover,
+            artist = artist,
+            title = title,
+            description = desc,
+            views = views,
+            tracks = finalTracks,
+            artistId = artistId,
+            year = year,
+        )
+    }
+
+    /**
+     * Fetches the artist profile and other albums/singles by the same artist,
+     * excluding the currently opened album.
+     */
+    suspend fun getMoreAlbumsByArtist(
+        artistName: String?,
+        artistId: String?,
+        excludeAlbumId: String,
+        excludeAlbumTitle: String?,
+    ): Pair<Artist?, List<Album>> = withContext(Dispatchers.IO) {
+        val resolvedId = artistId?.takeIf { it.startsWith("UC") }
+            ?: artistName?.takeIf { it.isNotBlank() && !it.equals("Desconhecido", ignoreCase = true) }
+                ?.let { name ->
+                    val primary = name.substringBefore(",").substringBefore("&").trim()
+                    runCatching { searchArtists(primary).firstOrNull()?.id }.getOrNull()
+                }
+            ?: return@withContext (null to emptyList())
+
+        val artistDetail = runCatching { browseArtist(resolvedId) }.getOrNull()
+            ?: return@withContext (null to emptyList())
+
+        val artist = Artist(
+            id = artistDetail.browseId,
+            name = artistDetail.name,
+            thumbnailUrl = artistDetail.thumbnailUrl,
+            source = Source.YOUTUBE_MUSIC,
+        )
+
+        val cleanExcludeId = excludeAlbumId.removePrefix("VL")
+        val otherReleases = (artistDetail.albums + artistDetail.singles)
+            .distinctBy { it.id }
+            .filter { candidate ->
+                val sameId = candidate.id == excludeAlbumId || candidate.id.removePrefix("VL") == cleanExcludeId
+                val sameTitle = !excludeAlbumTitle.isNullOrBlank() &&
+                    candidate.title.equals(excludeAlbumTitle, ignoreCase = true)
+                !sameId && !sameTitle
+            }
+            .take(15)
+
+        artist to otherReleases
     }
 
     suspend fun browsePlaylist(playlistId: String): PlaylistResult = withContext(Dispatchers.IO) {
@@ -459,6 +513,40 @@ class YTMusicRepository @Inject constructor(
         }
 
     // ================= HELPERS =================
+
+    private fun extractAlbumHeaderExtras(json: JSONObject): Pair<String?, String?> {
+        var artistId: String? = null
+        var year: String? = null
+
+        val header = YTMusicTextUtils.findFirst(json, "musicResponsiveHeaderRenderer")
+            ?: YTMusicTextUtils.findFirst(json, "musicDetailHeaderRenderer")
+            ?: return (null to null)
+
+        val runArrays = listOfNotNull(
+            header.optJSONObject("straplineTextOne")?.optJSONArray("runs"),
+            header.optJSONObject("subtitle")?.optJSONArray("runs"),
+            header.optJSONObject("secondSubtitle")?.optJSONArray("runs"),
+        )
+
+        for (runs in runArrays) {
+            for (i in 0 until runs.length()) {
+                val run = runs.optJSONObject(i) ?: continue
+                val text = run.optString("text").trim()
+                val browseId = run.optJSONObject("navigationEndpoint")
+                    ?.optJSONObject("browseEndpoint")
+                    ?.optString("browseId")
+                    ?.takeIf { it.isNotBlank() && it != "null" }
+
+                if (artistId == null && browseId != null && browseId.startsWith("UC")) {
+                    artistId = browseId
+                }
+                if (year == null && YTMusicTextUtils.isYear(text)) {
+                    year = text
+                }
+            }
+        }
+        return artistId to year
+    }
 
     private fun findAlbumAudioPlaylistId(node: Any?): String? {
         when (node) {

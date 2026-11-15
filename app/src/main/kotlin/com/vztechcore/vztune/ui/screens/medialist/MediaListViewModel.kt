@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.vztechcore.vztune.core.domain.music.Artist
+import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
 import com.vztechcore.vztune.data.download.TrackDownloader
@@ -121,19 +122,29 @@ class MediaListViewModel @Inject constructor(
                         _uiState.value.subtitle,
                     ).firstOrNull { YTMusicOwnerValidator.isValidOwnerName(it) }
 
+                    val resolvedTitle = album.title ?: _uiState.value.title
+
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            title = album.title ?: it.title,
+                            title = resolvedTitle,
                             subtitle = resolvedArtist ?: it.subtitle,
                             owner = resolvedArtist,
                             ownerAvatarUrl = null,
+                            artistId = album.artistId,
+                            year = album.year,
                             thumbnailUrl = album.coverUrl ?: it.thumbnailUrl,
                             description = album.description,
                             views = album.views,
                             allTracks = album.tracks,
                         )
                     }
+
+                    loadMoreAlbumsByArtist(
+                        artistName = resolvedArtist,
+                        artistId = album.artistId,
+                        excludeAlbumTitle = resolvedTitle,
+                    )
                 } else {
                     var playlist = ytMusicRepository.browsePlaylist(route.id)
                     if (playlist.tracks.isEmpty()) {
@@ -171,6 +182,28 @@ class MediaListViewModel @Inject constructor(
                 }
             }.onFailure { e ->
                 _uiState.update { it.copy(isLoading = false, errorMessage = "Erro: ${e.message}") }
+            }
+        }
+    }
+
+    private fun loadMoreAlbumsByArtist(
+        artistName: String?,
+        artistId: String?,
+        excludeAlbumTitle: String?,
+    ) {
+        viewModelScope.launch {
+            val (artist, moreAlbums) = ytMusicRepository.getMoreAlbumsByArtist(
+                artistName = artistName,
+                artistId = artistId,
+                excludeAlbumId = route.id,
+                excludeAlbumTitle = excludeAlbumTitle,
+            )
+            _uiState.update { current ->
+                current.copy(
+                    artistId = artist?.id ?: current.artistId,
+                    ownerAvatarUrl = artist?.thumbnailUrl ?: current.ownerAvatarUrl,
+                    moreAlbumsByArtist = moreAlbums,
+                )
             }
         }
     }
@@ -255,6 +288,30 @@ class MediaListViewModel @Inject constructor(
         }
     }
 
+    fun onOpenArtist() {
+        val state = _uiState.value
+        val directId = state.artistId?.takeIf { it.startsWith("UC") }
+        val artistName = state.owner?.takeIf { it.isNotBlank() }
+        if (directId != null && artistName != null) {
+            viewModelScope.launch {
+                _navigationEvent.emit(
+                    NavigationEvent.OpenArtist(
+                        Artist(
+                            id = directId,
+                            name = artistName,
+                            thumbnailUrl = state.ownerAvatarUrl,
+                            source = Source.YOUTUBE_MUSIC,
+                        )
+                    )
+                )
+            }
+            return
+        }
+        if (artistName != null) {
+            onOpenArtistByName(artistName)
+        }
+    }
+
     fun onOpenArtistByName(artistName: String) {
         viewModelScope.launch {
             val found = runCatching {
@@ -298,7 +355,6 @@ class MediaListViewModel @Inject constructor(
                     }
                 }
                 if (destFile.exists() && destFile.length() > 0L) {
-                    // Clean up previous cover file if stored locally
                     _uiState.value.thumbnailUrl?.let { oldPath ->
                         val oldFile = File(oldPath)
                         if (oldFile.exists() && oldFile.parentFile == coversDir) {

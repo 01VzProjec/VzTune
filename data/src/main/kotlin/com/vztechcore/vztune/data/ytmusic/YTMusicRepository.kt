@@ -82,6 +82,11 @@ class YTMusicRepository @Inject constructor(
         val description: String?,
     )
 
+    private data class ResolvedAlbumRef(
+        val browseId: String,
+        val title: String,
+    )
+
     // ================= SEARCH =================
 
     suspend fun search(
@@ -102,16 +107,15 @@ class YTMusicRepository @Inject constructor(
     }
 
     /**
-     * Resolves the official YouTube Music [Album] that contains [track]
-     * so the context menu can display the album title and navigate directly to it.
+     * Resolves the official YouTube Music [Album] (or Single/EP) that contains [track]
+     * using the song's exact `MPREb_` browseId from InnerTube instead of guessing.
      */
     suspend fun findAlbumForTrack(track: Track): Album? = withContext(Dispatchers.IO) {
-        if (track.source == Source.YOUTUBE) return@withContext null
-
         val primaryArtist = track.artist
             .substringBefore(",")
             .substringBefore("&")
             .substringBefore("feat.")
+            .substringBefore("ft.")
             .trim()
             .takeIf { it.isNotBlank() && !it.equals("Desconhecido", ignoreCase = true) }
 
@@ -119,15 +123,35 @@ class YTMusicRepository @Inject constructor(
             it.isNotBlank() && !it.equals("Desconhecido", ignoreCase = true)
         }
 
-        val query = if (albumHint != null) {
-            listOfNotNull(albumHint, primaryArtist).joinToString(" ")
+        // 1. Search the exact song in YT Music to read its official MPREb_ album reference
+        val songQuery = listOfNotNull(track.title, primaryArtist).joinToString(" ").trim()
+        val exactRef = if (songQuery.isNotBlank()) {
+            runCatching {
+                val songJson = InnerTube.search(songQuery, SearchFilter.SONGS.params)
+                extractAlbumRefFromSongSearch(songJson, track)
+            }.getOrNull()
         } else {
-            listOfNotNull(track.title, primaryArtist).joinToString(" ")
-        }.trim()
+            null
+        }
 
-        if (query.isBlank()) return@withContext null
+        if (exactRef != null) {
+            val header = runCatching { YTMusicAlbumParser.parseAlbumHeader(exactRef.browseId) }.getOrNull()
+            return@withContext Album(
+                id = exactRef.browseId,
+                title = header?.title?.takeIf { it.isNotBlank() } ?: exactRef.title,
+                artist = header?.artist?.takeIf { it.isNotBlank() } ?: primaryArtist ?: track.artist,
+                thumbnailUrl = header?.coverUrl ?: track.thumbnailUrl,
+                views = header?.views,
+                source = Source.YOUTUBE_MUSIC,
+            )
+        }
 
-        val json = runCatching { InnerTube.search(query, SearchFilter.ALBUMS.params) }.getOrNull()
+        // 2. Fallback only when track already carried an explicit album name
+        val targetTitle = albumHint ?: return@withContext null
+        val albumSearchQuery = listOfNotNull(targetTitle, primaryArtist).joinToString(" ").trim()
+        if (albumSearchQuery.isBlank()) return@withContext null
+
+        val json = runCatching { InnerTube.search(albumSearchQuery, SearchFilter.ALBUMS.params) }.getOrNull()
             ?: return@withContext null
 
         val parsed = YTMusicSearchParser.parseSearchResults(json)
@@ -135,14 +159,13 @@ class YTMusicRepository @Inject constructor(
             .filterIsInstance<SearchHit.AlbumHit>()
             .map { it.album }
 
-        if (albums.isEmpty()) return@withContext null
-
-        if (albumHint != null) {
-            albums.firstOrNull { it.title.equals(albumHint, ignoreCase = true) }
-                ?: albums.firstOrNull { it.title.contains(albumHint, ignoreCase = true) }
-                ?: albums.first()
-        } else {
-            albums.first()
+        albums.firstOrNull { album ->
+            val titleMatches = album.title.equals(targetTitle, ignoreCase = true) ||
+                album.title.contains(targetTitle, ignoreCase = true)
+            val artistMatches = primaryArtist == null ||
+                album.artist.contains(primaryArtist, ignoreCase = true) ||
+                primaryArtist.contains(album.artist, ignoreCase = true)
+            titleMatches && artistMatches
         }
     }
 
@@ -194,21 +217,54 @@ class YTMusicRepository @Inject constructor(
     // ================= BROWSE =================
 
     suspend fun browseAlbum(albumId: String): AlbumResult = withContext(Dispatchers.IO) {
-        val json = runCatching { InnerTube.browse(albumId) }.getOrNull()
+        // Normalize OLAK5uy_ playlist-backed album IDs so InnerTube browse always resolves them
+        val browseId = if (albumId.startsWith("OLAK5uy_")) "VL$albumId" else albumId
+
+        val json = runCatching { InnerTube.browse(browseId) }.getOrNull()
             ?: return@withContext AlbumResult(null, null, null, null, null, emptyList())
 
-        val header = YTMusicTextUtils.findFirst(json, "musicDetailHeaderRenderer")
-            ?: YTMusicTextUtils.findFirst(json, "musicResponsiveHeaderRenderer")
-
-        val cover = header?.let { YTMusicThumbnailUtils.extractHeaderCover(it) }
-        val title = header?.let { YTMusicArtistParser.extractHeaderTitle(it) }
-        val artist = header?.let { extractHeaderArtist(it) }
-        val views = header?.let { extractHeaderViews(it) }
+        val headerInfo = YTMusicAlbumParser.parseFromJson(json)
+        val cover = headerInfo?.coverUrl
+        val title = headerInfo?.title
+        val artist = headerInfo?.artist
+        val views = headerInfo?.views
         val desc = extractDescription(json)
 
-        val rawTracks = collectMusicItems(json).distinctBy { it.id }
-        val albumTracks = rawTracks.filter { it.source == Source.YOUTUBE_MUSIC }
-        val finalTracks = enricher.enrichTracks(albumTracks, artist)
+        // Check both musicShelfRenderer and musicPlaylistShelfRenderer used by two-column album layouts
+        val primaryShelf = YTMusicTextUtils.findFirst(json, "musicShelfRenderer")
+            ?: YTMusicTextUtils.findFirst(json, "musicPlaylistShelfRenderer")
+
+        var rawTracks = (primaryShelf?.let { collectMusicItems(it) } ?: emptyList())
+            .ifEmpty { collectMusicItems(json) }
+            .distinctBy { it.id }
+
+        // Fallback: some MPREb_ pages only expose the album's OLAK5uy_ playlistId in the Play button
+        if (rawTracks.isEmpty()) {
+            val fallbackPlaylistId = findAlbumAudioPlaylistId(json)
+            if (!fallbackPlaylistId.isNullOrBlank() && fallbackPlaylistId != browseId) {
+                val playlistFallback = runCatching { browsePlaylist(fallbackPlaylistId) }.getOrNull()
+                if (playlistFallback != null && playlistFallback.tracks.isNotEmpty()) {
+                    rawTracks = playlistFallback.tracks
+                }
+            }
+        }
+
+        val normalizedTracks = rawTracks.map { item ->
+            val resolvedArtist = if (item.artist.isBlank() || item.artist.equals("Desconhecido", ignoreCase = true)) {
+                artist ?: item.artist
+            } else {
+                item.artist
+            }
+            val resolvedAlbum = item.album?.takeIf { it.isNotBlank() } ?: title
+            item.copy(
+                artist = resolvedArtist,
+                album = resolvedAlbum,
+                thumbnailUrl = item.thumbnailUrl ?: cover,
+                source = Source.YOUTUBE_MUSIC,
+            )
+        }
+
+        val finalTracks = enricher.enrichTracks(normalizedTracks, artist)
 
         AlbumResult(cover, artist, title, desc, views, finalTracks)
     }
@@ -404,6 +460,126 @@ class YTMusicRepository @Inject constructor(
 
     // ================= HELPERS =================
 
+    private fun findAlbumAudioPlaylistId(node: Any?): String? {
+        when (node) {
+            is JSONObject -> {
+                val pid = node.optJSONObject("watchPlaylistEndpoint")?.optString("playlistId")
+                if (!pid.isNullOrBlank() && pid != "null" && pid.startsWith("OLAK5uy_")) {
+                    return pid
+                }
+                val keys = node.keys()
+                while (keys.hasNext()) {
+                    findAlbumAudioPlaylistId(node.opt(keys.next()))?.let { return it }
+                }
+            }
+            is JSONArray -> {
+                for (i in 0 until node.length()) {
+                    findAlbumAudioPlaylistId(node.opt(i))?.let { return it }
+                }
+            }
+        }
+        return null
+    }
+
+    private fun extractAlbumRefFromSongSearch(
+        node: Any?,
+        targetTrack: Track,
+        candidates: MutableList<Pair<Boolean, ResolvedAlbumRef>> = mutableListOf(),
+    ): ResolvedAlbumRef? {
+        when (node) {
+            is JSONObject -> {
+                node.optJSONObject("musicResponsiveListItemRenderer")?.let { r ->
+                    val columns = r.optJSONArray("flexColumns")
+                    val rowTitle = columns?.let { YTMusicTextUtils.flexText(it, 0) }.orEmpty()
+                    val videoId = extractVideoIdFromRenderer(r, columns)
+
+                    val exactIdMatch = !videoId.isNullOrBlank() && videoId == targetTrack.id
+                    val titleMatch = rowTitle.isNotBlank() &&
+                        rowTitle.equals(targetTrack.title, ignoreCase = true)
+
+                    if ((exactIdMatch || titleMatch) && columns != null) {
+                        val albumRef = findAlbumRunInColumns(columns)
+                        if (albumRef != null) {
+                            candidates += (exactIdMatch to albumRef)
+                        }
+                    }
+                }
+                val keys = node.keys()
+                while (keys.hasNext()) {
+                    extractAlbumRefFromSongSearch(node.opt(keys.next()), targetTrack, candidates)
+                }
+            }
+            is JSONArray -> {
+                for (i in 0 until node.length()) {
+                    extractAlbumRefFromSongSearch(node.opt(i), targetTrack, candidates)
+                }
+            }
+        }
+        return candidates.firstOrNull { it.first }?.second ?: candidates.firstOrNull()?.second
+    }
+
+    private fun findAlbumRunInColumns(columns: JSONArray): ResolvedAlbumRef? {
+        for (c in 0 until columns.length()) {
+            val runs = columns.optJSONObject(c)
+                ?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
+                ?.optJSONObject("text")
+                ?.optJSONArray("runs") ?: continue
+
+            for (i in 0 until runs.length()) {
+                val run = runs.optJSONObject(i) ?: continue
+                val browseId = run.optJSONObject("navigationEndpoint")
+                    ?.optJSONObject("browseEndpoint")
+                    ?.optString("browseId")
+                    ?.takeIf { it.isNotBlank() && it != "null" } ?: continue
+
+                if (browseId.startsWith("MPREb_")) {
+                    val albumTitle = run.optString("text").trim()
+                    if (albumTitle.isNotBlank()) {
+                        return ResolvedAlbumRef(browseId = browseId, title = albumTitle)
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    private fun extractVideoIdFromRenderer(r: JSONObject, columns: JSONArray?): String? {
+        // 1. Standard playlist/search item data
+        r.optJSONObject("playlistItemData")?.optString("videoId")
+            ?.takeIf { it.isNotBlank() && it != "null" }
+            ?.let { return it }
+
+        // 2. Top-level navigationEndpoint
+        r.optJSONObject("navigationEndpoint")?.optJSONObject("watchEndpoint")?.optString("videoId")
+            ?.takeIf { it.isNotBlank() && it != "null" }
+            ?.let { return it }
+
+        // 3. First column title run navigationEndpoint (common on album tracklists)
+        columns?.optJSONObject(0)
+            ?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
+            ?.optJSONObject("text")
+            ?.optJSONArray("runs")
+            ?.optJSONObject(0)
+            ?.optJSONObject("navigationEndpoint")
+            ?.optJSONObject("watchEndpoint")
+            ?.optString("videoId")
+            ?.takeIf { it.isNotBlank() && it != "null" }
+            ?.let { return it }
+
+        // 4. Overlay play button endpoint (used on newer YTMusic album rows without playlistItemData)
+        r.optJSONObject("overlay")
+            ?.optJSONObject("musicItemThumbnailOverlayRenderer")
+            ?.optJSONObject("content")
+            ?.optJSONObject("musicPlayButtonRenderer")
+            ?.optJSONObject("playNavigationEndpoint")
+            ?.optJSONObject("watchEndpoint")
+            ?.optString("videoId")
+            ?.takeIf { it.isNotBlank() && it != "null" }
+            ?.let { return it }
+
+        return null
+    }
+
     private fun extractDescription(json: JSONObject): String? {
         val shelf = YTMusicTextUtils.findFirst(json, "musicDescriptionShelfRenderer")
             ?: return null
@@ -421,26 +597,21 @@ class YTMusicRepository @Inject constructor(
                 node.optJSONObject("musicResponsiveListItemRenderer")?.let { r ->
                     val columns = r.optJSONArray("flexColumns")
                     val title = columns?.let { YTMusicTextUtils.flexText(it, 0) }
+                    val videoId = extractVideoIdFromRenderer(r, columns)
 
-                    var videoId = r.optJSONObject("playlistItemData")?.optString("videoId")
-                    if (videoId.isNullOrBlank() || videoId == "null") {
-                        videoId = r.optJSONObject("navigationEndpoint")?.optJSONObject("watchEndpoint")?.optString("videoId")
-                    }
-                    if (videoId.isNullOrBlank() || videoId == "null") {
-                        val nav = columns?.optJSONObject(0)?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
-                            ?.optJSONObject("text")?.optJSONArray("runs")?.optJSONObject(0)?.optJSONObject("navigationEndpoint")
-                        videoId = nav?.optJSONObject("watchEndpoint")?.optString("videoId")
-                    }
-
-                    if (title != null && !videoId.isNullOrBlank() && videoId != "null") {
+                    if (title != null && !videoId.isNullOrBlank()) {
                         val subtitleCol = columns.optJSONObject(1)
                             ?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
                         val subtitle = YTMusicTextUtils.runsText(subtitleCol)
                         val source = YTMusicSearchParser.detectSource(videoId, r)
                         val uploader = YTMusicSearchParser.extractArtistFromSubtitle(subtitleCol, subtitle)
                             ?: subtitle.substringBefore("•").trim().ifBlank { "Desconhecido" }
+                        val albumTitle = columns.let { findAlbumRunInColumns(it)?.title }
                         out += Track(
-                            id = videoId, title = title, artist = uploader,
+                            id = videoId,
+                            title = title,
+                            artist = uploader,
+                            album = albumTitle,
                             thumbnailUrl = YTMusicThumbnailUtils
                                 .thumbnailOf(r.optJSONObject("thumbnail")),
                             durationSeconds = YTMusicTextUtils
@@ -476,45 +647,6 @@ class YTMusicRepository @Inject constructor(
             }
         }
         return out
-    }
-
-    private fun extractHeaderArtist(header: JSONObject): String? {
-        val subtitleRuns = header.optJSONObject("subtitle")?.optJSONArray("runs")
-        if (subtitleRuns != null) {
-            val artists = mutableListOf<String>()
-            for (i in 0 until subtitleRuns.length()) {
-                val run = subtitleRuns.optJSONObject(i) ?: continue
-                val text = run.optString("text").trim()
-                if (text.isBlank() || text == "•" || text == "·") continue
-                val browseId = run.optJSONObject("navigationEndpoint")
-                    ?.optJSONObject("browseEndpoint")?.optString("browseId")
-                when {
-                    browseId?.startsWith("MPREb_") == true -> break
-                    browseId?.startsWith("VL") == true -> break
-                    browseId?.startsWith("UC") == true -> {
-                        if (text !in artists) artists += text
-                    }
-                }
-            }
-            if (artists.isNotEmpty()) return artists.joinToString(", ")
-        }
-        return null
-    }
-
-    private fun extractHeaderViews(header: JSONObject): String? {
-        val subtitleArrays = listOf(
-            header.optJSONObject("subtitle")?.optJSONArray("runs"),
-            header.optJSONObject("secondSubtitle")?.optJSONArray("runs"),
-        )
-        for (runs in subtitleArrays) {
-            if (runs == null) continue
-            for (i in 0 until runs.length()) {
-                val text = runs.optJSONObject(i)?.optString("text")?.trim() ?: continue
-                if (text.isBlank()) continue
-                if (YTMusicTextUtils.isViewCount(text)) return text
-            }
-        }
-        return null
     }
 
     private fun formatNumber(n: Long): String = when {

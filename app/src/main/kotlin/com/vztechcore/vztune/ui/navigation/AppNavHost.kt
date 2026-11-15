@@ -158,6 +158,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             onRemoveDownload = menuVm::onRemoveDownload,
             onOpenDownloadsScreen = { navController.navigate(Routes.Downloads) },
             onOpenAlbum = { album -> navController.openAlbum(album) },
+            onOpenAlbumForTrack = menuVm::onOpenAlbumForTrack,
             onOpenArtistByName = menuVm::onOpenArtistByName,
             onTrackInfo = { t -> navController.navigateToTrackInfo(t) },
         )

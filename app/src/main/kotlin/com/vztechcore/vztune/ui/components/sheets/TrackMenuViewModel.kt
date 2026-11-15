@@ -64,11 +64,14 @@ class TrackMenuViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val albumCache = mutableMapOf<String, Album?>()
+    private var activeAlbumKey: String? = null
+
     private val _resolvedAlbum = MutableStateFlow<Album?>(null)
     val resolvedAlbum: StateFlow<Album?> = _resolvedAlbum.asStateFlow()
 
     fun resolveAlbumFor(track: Track) {
         val key = StoredTrack.from(track).key
+        activeAlbumKey = key
         if (albumCache.containsKey(key)) {
             _resolvedAlbum.value = albumCache[key]
             return
@@ -77,7 +80,30 @@ class TrackMenuViewModel @Inject constructor(
         viewModelScope.launch {
             val found = runCatching { ytMusicRepository.findAlbumForTrack(track) }.getOrNull()
             albumCache[key] = found
-            _resolvedAlbum.value = found
+            if (activeAlbumKey == key) {
+                _resolvedAlbum.value = found
+            }
+        }
+    }
+
+    fun onOpenAlbumForTrack(track: Track) {
+        val key = StoredTrack.from(track).key
+        val cached = albumCache[key]
+        if (cached != null) {
+            viewModelScope.launch {
+                _navigationEvent.emit(MenuNavigationEvent.OpenAlbum(cached))
+            }
+            return
+        }
+        viewModelScope.launch {
+            val found = runCatching { ytMusicRepository.findAlbumForTrack(track) }.getOrNull()
+            albumCache[key] = found
+            if (activeAlbumKey == key) {
+                _resolvedAlbum.value = found
+            }
+            if (found != null) {
+                _navigationEvent.emit(MenuNavigationEvent.OpenAlbum(found))
+            }
         }
     }
 

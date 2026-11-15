@@ -79,6 +79,7 @@ fun TrackOptionsSheet(
     onRemoveDownload: (Track) -> Unit = {},
     onOpenDownloadsScreen: () -> Unit = {},
     onOpenAlbum: (Album) -> Unit = {},
+    onOpenAlbumForTrack: (Track) -> Unit = {},
     onOpenArtistByName: (String) -> Unit,
     onTrackInfo: (Track) -> Unit,
 ) {
@@ -286,18 +287,22 @@ fun TrackOptionsSheet(
                 },
             )
 
-            // 7. Go to album (universal across all submenus whenever available)
+            // 7. Go to album (shows immediately when track.album is known or once resolved)
             val albumTitle = resolvedAlbum?.title ?: track.album?.takeIf {
                 it.isNotBlank() && !it.equals("Desconhecido", ignoreCase = true)
             }
-            if (resolvedAlbum != null && !albumTitle.isNullOrBlank()) {
+            if (!albumTitle.isNullOrBlank()) {
                 SheetOptionRow(
                     icon = VzIcons.Album,
                     label = "Álbum",
                     subtitle = albumTitle,
                     onClick = {
                         onDismiss()
-                        onOpenAlbum(resolvedAlbum)
+                        if (resolvedAlbum != null) {
+                            onOpenAlbum(resolvedAlbum)
+                        } else {
+                            onOpenAlbumForTrack(track)
+                        }
                     },
                 )
             }

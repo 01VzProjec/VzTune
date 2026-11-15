@@ -19,6 +19,7 @@ internal object YTMusicSearchParser {
             val videoId: String,
             val title: String,
             val artist: String,
+            val album: String? = null,
             val thumbnailUrl: String?,
             val durationSeconds: Long,
             val source: Source,
@@ -92,6 +93,7 @@ internal object YTMusicSearchParser {
                         id = item.videoId,
                         title = item.title,
                         artist = item.artist,
+                        album = item.album,
                         durationSeconds = item.durationSeconds,
                         thumbnailUrl = item.thumbnailUrl,
                         source = item.source,
@@ -221,7 +223,17 @@ internal object YTMusicSearchParser {
         if (!videoId.isNullOrBlank() && videoId != "null") {
             val source = detectSource(videoId, r)
             val uploader = extractArtistFromSubtitle(subtitleCol, subtitle) ?: extractChannelName(subtitleCol) ?: "Unknown"
-            out += ParsedItem.Song(videoId, title, uploader, thumb, YTMusicTextUtils.parseDuration(YTMusicTextUtils.fixedText(r)), source, hasExplicitBadge(r))
+            val albumTitle = extractAlbumTitleFromColumns(columns)
+            out += ParsedItem.Song(
+                videoId = videoId,
+                title = title,
+                artist = uploader,
+                album = albumTitle,
+                thumbnailUrl = thumb,
+                durationSeconds = YTMusicTextUtils.parseDuration(YTMusicTextUtils.fixedText(r)),
+                source = source,
+                isExplicit = hasExplicitBadge(r),
+            )
             return
         }
 
@@ -261,6 +273,30 @@ internal object YTMusicSearchParser {
             }
             browseId.startsWith("UC") -> out += ParsedItem.Artist(browseId, title, thumb)
         }
+    }
+
+    /** Extracts the album name from any flexColumn run pointing to an `MPREb_` browseId. */
+    private fun extractAlbumTitleFromColumns(columns: JSONArray): String? {
+        for (c in 0 until columns.length()) {
+            val runs = columns.optJSONObject(c)
+                ?.optJSONObject("musicResponsiveListItemFlexColumnRenderer")
+                ?.optJSONObject("text")
+                ?.optJSONArray("runs") ?: continue
+
+            for (i in 0 until runs.length()) {
+                val run = runs.optJSONObject(i) ?: continue
+                val browseId = run.optJSONObject("navigationEndpoint")
+                    ?.optJSONObject("browseEndpoint")
+                    ?.optString("browseId")
+                    ?.takeIf { it.isNotBlank() && it != "null" } ?: continue
+
+                if (browseId.startsWith("MPREb_")) {
+                    val albumTitle = run.optString("text").trim()
+                    if (albumTitle.isNotBlank()) return albumTitle
+                }
+            }
+        }
+        return null
     }
 
     private fun extractAlbumArtist(subtitleCol: JSONObject?): String? {
@@ -348,7 +384,7 @@ internal object YTMusicSearchParser {
                 } else {
                     val lower = textTrimmed.lowercase()
                     if (lower in setOf(",", "&", "e", "and", "x", "feat.", "feat", "ft.", "ft", "com", "with", "/", ";")) continue
-                    
+
                     if (textTrimmed.contains(",") || textTrimmed.contains("&")) {
                         splitArtists(textTrimmed).forEach { part ->
                             val c = YTMusicTextUtils.cleanArtistName(part)
@@ -384,11 +420,11 @@ internal object YTMusicSearchParser {
             val splitted = splitArtists(firstBlock)
             val valid = splitted.filter { seg ->
                 seg.isNotBlank() &&
-                !YTMusicTextUtils.isTypeWord(seg) &&
-                !YTMusicTextUtils.isDuration(seg) &&
-                !YTMusicTextUtils.isYear(seg) &&
-                !YTMusicTextUtils.isDate(seg) &&
-                seg.length <= 80
+                    !YTMusicTextUtils.isTypeWord(seg) &&
+                    !YTMusicTextUtils.isDuration(seg) &&
+                    !YTMusicTextUtils.isYear(seg) &&
+                    !YTMusicTextUtils.isDate(seg) &&
+                    seg.length <= 80
             }
             if (valid.isNotEmpty()) return valid.joinToString(", ")
         }

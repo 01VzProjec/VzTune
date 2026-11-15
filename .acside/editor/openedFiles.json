@@ -1,0 +1,80 @@
+{
+  "allFiles": [
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/sheets/TrackMenuViewModel.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 5922,
+          "line": 154
+        },
+        "start": {
+          "column": 1,
+          "index": 5922,
+          "line": 154
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/sheets/TrackOptionsSheet.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 25758,
+          "line": 729
+        },
+        "start": {
+          "column": 1,
+          "index": 25758,
+          "line": 729
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 22276,
+          "line": 443
+        },
+        "start": {
+          "column": 1,
+          "index": 22276,
+          "line": 443
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicSearchParser.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 21555,
+          "line": 460
+        },
+        "start": {
+          "column": 1,
+          "index": 21555,
+          "line": 460
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicRepository.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 27742,
+          "line": 657
+        },
+        "start": {
+          "column": 1,
+          "index": 27742,
+          "line": 657
+        }
+      }
+    }
+  ],
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicRepository.kt"
+}

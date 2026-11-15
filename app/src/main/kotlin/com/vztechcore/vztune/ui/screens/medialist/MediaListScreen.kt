@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,8 +28,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
-import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.feedback.VzLoading
+import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -116,7 +115,7 @@ fun MediaListScreen(
             contentPadding = PaddingValues(bottom = 140.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            item {
+            item(key = "header") {
                 MediaListExpandedHeader(
                     state = state,
                     onBackClick = onBackClick,
@@ -134,27 +133,38 @@ fun MediaListScreen(
 
             when {
                 state.isLoading -> item(key = "loading") {
-                    // Playlists and albums load with the VzTechCore logo animation
                     Box(
-                        Modifier.fillMaxWidth().height(280.dp),
+                        Modifier
+                            .fillMaxWidth()
+                            .height(280.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         VzLoading(Modifier.size(160.dp))
                     }
                 }
-                state.errorMessage != null -> item {
-                    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                state.errorMessage != null -> item(key = "error") {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Text(state.errorMessage, color = Color.Red)
                     }
                 }
-                displayedTracks.isEmpty() -> item {
-                    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                displayedTracks.isEmpty() -> item(key = "empty") {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Text("Nenhuma faixa por aqui.", color = Color.White.copy(alpha = 0.6f))
                     }
                 }
                 else -> itemsIndexed(
                     items = displayedTracks,
-                    key = { _, t -> t.id },
+                    key = { _, t -> "${t.source.name}_${t.id}" },
                 ) { index, track ->
                     val isCurrent = nowPlaying.isCurrent(track.id, track.source)
                     val isPlaying = isCurrent && nowPlaying.isPlaying
@@ -171,7 +181,8 @@ fun MediaListScreen(
                             onMoreClick = { onTrackInfoClick(track) },
                         )
                     } else if (canReorder) {
-                        ReorderableItem(reorderableState, key = track.id) { isDragging ->
+                        val itemKey = "${track.source.name}_${track.id}"
+                        ReorderableItem(reorderableState, key = itemKey) { isDragging ->
                             MediaListTrackRow(
                                 track = track,
                                 index = if (state.isAlbum) index + 1 else null,
@@ -183,8 +194,11 @@ fun MediaListScreen(
                                 showDragHandle = true,
                                 dragHandleModifier = Modifier.longPressDraggableHandle(),
                                 modifier = Modifier
-                                    .animateItemPlacement(
-                                        spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
+                                    .animateItem(
+                                        placementSpec = spring(
+                                            dampingRatio = Spring.DampingRatioNoBouncy,
+                                            stiffness = Spring.StiffnessMedium,
+                                        )
                                     )
                                     .background(Color.Black.copy(alpha = if (isDragging) 0.5f else 0f)),
                             )
@@ -206,7 +220,7 @@ fun MediaListScreen(
                 }
             }
 
-            item { MediaListFooter(state = state) }
+            item(key = "footer") { MediaListFooter(state = state) }
         }
 
         CollapsedHeaderHost(visible = isCollapsed) {

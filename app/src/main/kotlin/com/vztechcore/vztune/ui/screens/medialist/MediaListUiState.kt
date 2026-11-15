@@ -11,6 +11,7 @@ enum class MediaListTab(val label: String) {
 }
 
 data class MediaListUiState(
+    val listId: String = "",
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
     val title: String = "",

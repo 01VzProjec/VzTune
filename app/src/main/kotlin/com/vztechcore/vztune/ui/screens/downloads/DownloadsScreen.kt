@@ -24,6 +24,7 @@ import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.data.download.DownloadStatus
 import com.vztechcore.vztune.data.download.TrackDownloadItem
+import com.vztechcore.vztune.data.download.TrackDownloader
 import com.vztechcore.vztune.data.prefs.models.DownloadedTrack
 import com.vztechcore.vztune.ui.components.AppCredits
 import com.vztechcore.vztune.ui.components.layout.DetailTopBar
@@ -48,6 +49,9 @@ fun DownloadsScreen(
     onCancelDownload: (Track) -> Unit,
     onDeleteDownload: (Track) -> Unit,
     onPlayTrack: (Track) -> Unit,
+    onPauseAll: () -> Unit = {},
+    onResumeAll: () -> Unit = {},
+    onCancelAll: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var trackPendingDeletion by remember { mutableStateOf<Track?>(null) }
@@ -77,15 +81,24 @@ fun DownloadsScreen(
             onTabSelected = onTabSelected,
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
 
         when (state.selectedTab) {
             DownloadsTab.IN_PROGRESS -> {
                 if (state.activeDownloads.isEmpty()) {
                     EmptyDownloadsState(message = "Nenhum download em andamento no momento.")
                 } else {
+                    QueueStatusHeader(
+                        state = state,
+                        onPauseAll = onPauseAll,
+                        onResumeAll = onResumeAll,
+                        onCancelAll = onCancelAll,
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
                     LazyColumn(
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 140.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 140.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
@@ -129,6 +142,73 @@ fun DownloadsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun QueueStatusHeader(
+    state: DownloadsUiState,
+    onPauseAll: () -> Unit,
+    onResumeAll: () -> Unit,
+    onCancelAll: () -> Unit,
+) {
+    val summaryParts = buildList {
+        add("${state.downloadingCount}/${TrackDownloader.MAX_CONCURRENT_DOWNLOADS} simultâneos")
+        if (state.queuedCount > 0) add("${state.queuedCount} na fila")
+        if (state.pausedCount > 0) add("${state.pausedCount} pausados")
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = summaryParts.joinToString(" • "),
+            style = MaterialTheme.typography.labelMedium,
+            color = Color.White.copy(alpha = 0.65f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+
+        if (state.activeDownloads.size > 1) {
+            Spacer(Modifier.width(8.dp))
+            if (state.hasRunningOrQueued) {
+                QueueActionChip(label = "Pausar tudo", onClick = onPauseAll)
+            } else if (state.hasPausedOrFailed) {
+                QueueActionChip(label = "Retomar tudo", onClick = onResumeAll)
+            }
+            Spacer(Modifier.width(6.dp))
+            QueueActionChip(label = "Limpar", isDanger = true, onClick = onCancelAll)
+        }
+    }
+}
+
+@Composable
+private fun QueueActionChip(
+    label: String,
+    isDanger: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val borderColor = if (isDanger) DangerRed.copy(alpha = 0.45f) else NavyBorder
+    val textColor = if (isDanger) DangerRed else Color.White.copy(alpha = 0.85f)
+
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .border(BorderStroke(1.dp, borderColor), RoundedCornerShape(50))
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = textColor,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 
@@ -184,6 +264,7 @@ private fun ActiveDownloadCard(
     val shape = RoundedCornerShape(14.dp)
     val isPaused = item.status == DownloadStatus.PAUSED
     val isFailed = item.status == DownloadStatus.FAILED
+    val isQueued = item.status == DownloadStatus.QUEUED
 
     Column(
         modifier = Modifier
@@ -234,13 +315,13 @@ private fun ActiveDownloadCard(
                     text = when {
                         isFailed -> item.errorMessage ?: "Falha no download"
                         isPaused -> "Pausado • ${item.percentage}%"
-                        item.status == DownloadStatus.QUEUED -> "Na fila..."
+                        isQueued -> "Aguardando vaga na fila..."
                         else -> "Baixando • ${item.percentage}%"
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = when {
                         isFailed -> DangerRed
-                        isPaused -> Color.White.copy(alpha = 0.6f)
+                        isPaused || isQueued -> Color.White.copy(alpha = 0.6f)
                         else -> ProgressBlue
                     },
                     fontWeight = FontWeight.SemiBold,
@@ -288,25 +369,39 @@ private fun ActiveDownloadCard(
 
         Spacer(Modifier.height(10.dp))
 
-        if (item.progress > 0f || isPaused) {
-            LinearProgressIndicator(
-                progress = { item.progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(50)),
-                color = if (isPaused) Color.White.copy(alpha = 0.45f) else ProgressBlue,
-                trackColor = Color.White.copy(alpha = 0.12f),
-            )
-        } else {
-            LinearProgressIndicator(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(50)),
-                color = ProgressBlue,
-                trackColor = Color.White.copy(alpha = 0.12f),
-            )
+        when {
+            isQueued -> {
+                LinearProgressIndicator(
+                    progress = { 0f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(50)),
+                    color = ProgressBlue,
+                    trackColor = Color.White.copy(alpha = 0.12f),
+                )
+            }
+            item.progress > 0f || isPaused -> {
+                LinearProgressIndicator(
+                    progress = { item.progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(50)),
+                    color = if (isPaused) Color.White.copy(alpha = 0.45f) else ProgressBlue,
+                    trackColor = Color.White.copy(alpha = 0.12f),
+                )
+            }
+            else -> {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(50)),
+                    color = ProgressBlue,
+                    trackColor = Color.White.copy(alpha = 0.12f),
+                )
+            }
         }
     }
 }

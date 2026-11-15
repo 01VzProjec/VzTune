@@ -3,10 +3,10 @@ package com.vztechcore.vztune.ui.screens.downloads
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.data.download.DownloadStatus
 import com.vztechcore.vztune.data.download.TrackDownloadItem
 import com.vztechcore.vztune.data.download.TrackDownloader
 import com.vztechcore.vztune.data.player.PlayerController
-import com.vztechcore.vztune.data.prefs.models.DownloadedTrack
 import com.vztechcore.vztune.data.prefs.store.DownloadedTracksStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,9 +30,10 @@ class DownloadsViewModel @Inject constructor(
         trackDownloader.downloads,
         downloadedTracksStore.items,
     ) { tab, downloadsMap, storedList ->
-        // Sort highest progress first; tie-break by fixed creation timestamp so items never jump around
+        // Order: 1) Active downloading (highest % first), 2) Paused, 3) Queued (FIFO), 4) Failed
         val sortedActive = downloadsMap.values.sortedWith(
-            compareByDescending<TrackDownloadItem> { it.percentage }
+            compareBy<TrackDownloadItem> { statusPriority(it.status) }
+                .thenByDescending { if (it.status == DownloadStatus.DOWNLOADING) it.percentage else 0 }
                 .thenBy { it.createdAtMs }
                 .thenBy { "${it.track.source.name}_${it.track.id}" }
         )
@@ -52,8 +53,20 @@ class DownloadsViewModel @Inject constructor(
         trackDownloader.togglePauseResume(track)
     }
 
+    fun onPauseAll() {
+        trackDownloader.pauseAll()
+    }
+
+    fun onResumeAll() {
+        trackDownloader.resumeAll()
+    }
+
     fun onCancelDownload(track: Track) {
         trackDownloader.cancel(track)
+    }
+
+    fun onCancelAll() {
+        trackDownloader.cancelAll()
     }
 
     fun onDeleteDownload(track: Track) {
@@ -68,5 +81,13 @@ class DownloadsViewModel @Inject constructor(
         } else {
             playerController.play(track)
         }
+    }
+
+    private fun statusPriority(status: DownloadStatus): Int = when (status) {
+        DownloadStatus.DOWNLOADING -> 0
+        DownloadStatus.PAUSED -> 1
+        DownloadStatus.QUEUED -> 2
+        DownloadStatus.FAILED -> 3
+        DownloadStatus.COMPLETED -> 4
     }
 }

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
@@ -29,9 +30,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Central download manager for VzTune.
- * Resolves audio streams via [MusicRepository] and downloads them via [OkHttpClient]
- * with support for pausing, resuming (via HTTP Range when available), and atomic saving.
+ * Central download manager for VzTune with a FIFO queue and up to [MAX_CONCURRENT_DOWNLOADS]
+ * simultaneous transfers. Supports pause/resume (via HTTP Range when available) and atomic saving.
  */
 @Singleton
 class TrackDownloader @Inject constructor(
@@ -48,6 +48,8 @@ class TrackDownloader @Inject constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val activeJobs = ConcurrentHashMap<String, Job>()
+    private val resumeKeys = ConcurrentHashMap.newKeySet<String>()
+    private val schedulerLock = Any()
 
     private val _downloads = MutableStateFlow<Map<String, TrackDownloadItem>>(emptyMap())
     val downloads: StateFlow<Map<String, TrackDownloadItem>> = _downloads.asStateFlow()
@@ -68,6 +70,7 @@ class TrackDownloader @Inject constructor(
         }
 
         val now = System.currentTimeMillis()
+        resumeKeys.remove(key)
         _downloads.update { map ->
             map + (
                 key to TrackDownloadItem(
@@ -80,8 +83,51 @@ class TrackDownloader @Inject constructor(
             )
         }
         _startedEvent.tryEmit(track)
+        scheduleNext()
+    }
 
-        startJob(key, track, isResume = false)
+    /** Enqueues multiple tracks at once (e.g., an album or playlist), running up to 5 simultaneously. */
+    fun downloadAll(tracks: List<Track>) {
+        if (tracks.isEmpty()) return
+        scope.launch {
+            val alreadyDownloaded = downloadedTracksStore.downloadedKeys.first()
+            val baseTime = System.currentTimeMillis()
+            var firstEnqueued: Track? = null
+
+            _downloads.update { currentMap ->
+                val mutable = currentMap.toMutableMap()
+                tracks.forEachIndexed { index, track ->
+                    val key = StoredTrack.from(track).key
+                    if (key in alreadyDownloaded) return@forEachIndexed
+                    val existing = mutable[key]
+                    if (existing?.status == DownloadStatus.DOWNLOADING || existing?.status == DownloadStatus.QUEUED) {
+                        return@forEachIndexed
+                    }
+                    if (existing?.status == DownloadStatus.PAUSED) {
+                        resumeKeys.add(key)
+                        mutable[key] = existing.copy(
+                            status = DownloadStatus.QUEUED,
+                            errorMessage = null,
+                            updatedAtMs = baseTime + index,
+                        )
+                    } else {
+                        resumeKeys.remove(key)
+                        mutable[key] = TrackDownloadItem(
+                            track = track,
+                            status = DownloadStatus.QUEUED,
+                            progress = 0f,
+                            createdAtMs = baseTime + index,
+                            updatedAtMs = baseTime + index,
+                        )
+                    }
+                    if (firstEnqueued == null) firstEnqueued = track
+                }
+                mutable
+            }
+
+            firstEnqueued?.let { _startedEvent.tryEmit(it) }
+            scheduleNext()
+        }
     }
 
     fun pause(track: Track) {
@@ -89,11 +135,12 @@ class TrackDownloader @Inject constructor(
         val current = _downloads.value[key] ?: return
         if (current.status != DownloadStatus.DOWNLOADING && current.status != DownloadStatus.QUEUED) return
 
-        // Mark as paused before cancelling job so the CancellationException handler preserves .tmp files
         updateItem(key) {
             it.copy(status = DownloadStatus.PAUSED, updatedAtMs = System.currentTimeMillis())
         }
         activeJobs.remove(key)?.cancel()
+        // Frees a concurrency slot for the next queued track
+        scheduleNext()
     }
 
     fun resume(track: Track) {
@@ -101,31 +148,94 @@ class TrackDownloader @Inject constructor(
         val current = _downloads.value[key] ?: return
         if (current.status == DownloadStatus.DOWNLOADING || current.status == DownloadStatus.QUEUED) return
 
+        resumeKeys.add(key)
         updateItem(key) {
-            it.copy(status = DownloadStatus.QUEUED, errorMessage = null, updatedAtMs = System.currentTimeMillis())
+            it.copy(
+                status = DownloadStatus.QUEUED,
+                errorMessage = null,
+                updatedAtMs = System.currentTimeMillis(),
+            )
         }
-        startJob(key, track, isResume = true)
+        scheduleNext()
     }
 
     fun togglePauseResume(track: Track) {
         val key = StoredTrack.from(track).key
         val current = _downloads.value[key] ?: return
-        if (current.status == DownloadStatus.PAUSED) {
-            resume(track)
-        } else if (current.status == DownloadStatus.DOWNLOADING || current.status == DownloadStatus.QUEUED) {
-            pause(track)
+        when (current.status) {
+            DownloadStatus.PAUSED, DownloadStatus.FAILED -> resume(track)
+            DownloadStatus.DOWNLOADING, DownloadStatus.QUEUED -> pause(track)
+            DownloadStatus.COMPLETED -> Unit
         }
+    }
+
+    fun pauseAll() {
+        val keysToPause = _downloads.value.values
+            .filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.QUEUED }
+            .map { StoredTrack.from(it.track).key }
+
+        if (keysToPause.isEmpty()) return
+        val now = System.currentTimeMillis()
+        _downloads.update { map ->
+            val mutable = map.toMutableMap()
+            keysToPause.forEach { key ->
+                mutable[key]?.let {
+                    mutable[key] = it.copy(status = DownloadStatus.PAUSED, updatedAtMs = now)
+                }
+            }
+            mutable
+        }
+        keysToPause.forEach { key ->
+            activeJobs.remove(key)?.cancel()
+        }
+    }
+
+    fun resumeAll() {
+        val keysToResume = _downloads.value.values
+            .filter { it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.FAILED }
+            .map { StoredTrack.from(it.track).key }
+
+        if (keysToResume.isEmpty()) return
+        val now = System.currentTimeMillis()
+        keysToResume.forEach { resumeKeys.add(it) }
+        _downloads.update { map ->
+            val mutable = map.toMutableMap()
+            keysToResume.forEach { key ->
+                mutable[key]?.let {
+                    mutable[key] = it.copy(
+                        status = DownloadStatus.QUEUED,
+                        errorMessage = null,
+                        updatedAtMs = now,
+                    )
+                }
+            }
+            mutable
+        }
+        scheduleNext()
     }
 
     fun cancel(track: Track) {
         val key = StoredTrack.from(track).key
+        resumeKeys.remove(key)
         _downloads.update { it - key }
         activeJobs.remove(key)?.cancel()
         cleanupTempFiles(sanitizeFileName(key))
+        scheduleNext()
+    }
+
+    fun cancelAll() {
+        val allKeys = _downloads.value.keys.toList()
+        allKeys.forEach { key ->
+            resumeKeys.remove(key)
+            activeJobs.remove(key)?.cancel()
+            cleanupTempFiles(sanitizeFileName(key))
+        }
+        _downloads.value = emptyMap()
     }
 
     fun dismissFailed(track: Track) {
         val key = StoredTrack.from(track).key
+        resumeKeys.remove(key)
         _downloads.update { it - key }
     }
 
@@ -136,25 +246,54 @@ class TrackDownloader @Inject constructor(
         }
     }
 
-    private fun startJob(key: String, track: Track, isResume: Boolean) {
-        activeJobs.remove(key)?.cancel()
-        val job = scope.launch {
-            runDownload(key, track, isResume)
+    /**
+     * Promotes queued items to [DownloadStatus.DOWNLOADING] until [MAX_CONCURRENT_DOWNLOADS]
+     * workers are active simultaneously.
+     */
+    private fun scheduleNext() {
+        synchronized(schedulerLock) {
+            val currentMap = _downloads.value
+            val runningCount = currentMap.values.count { it.status == DownloadStatus.DOWNLOADING }
+            val availableSlots = (MAX_CONCURRENT_DOWNLOADS - runningCount).coerceAtLeast(0)
+            if (availableSlots == 0) return
+
+            val nextCandidates = currentMap.entries
+                .filter { it.value.status == DownloadStatus.QUEUED && !activeJobs.containsKey(it.key) }
+                .sortedBy { it.value.createdAtMs }
+                .take(availableSlots)
+
+            if (nextCandidates.isEmpty()) return
+
+            val now = System.currentTimeMillis()
+            _downloads.update { map ->
+                val mutable = map.toMutableMap()
+                nextCandidates.forEach { (key, item) ->
+                    mutable[key] = item.copy(
+                        status = DownloadStatus.DOWNLOADING,
+                        errorMessage = null,
+                        updatedAtMs = now,
+                    )
+                }
+                mutable
+            }
+
+            nextCandidates.forEach { (key, item) ->
+                val isResume = resumeKeys.remove(key)
+                val job = scope.launch {
+                    runDownload(key, item.track, isResume)
+                }
+                activeJobs[key] = job
+            }
         }
-        activeJobs[key] = job
     }
 
     private suspend fun runDownload(key: String, track: Track, isResume: Boolean) {
         val safeBaseName = sanitizeFileName(key)
         var tempFile: File? = null
         try {
-            updateItem(key) {
-                it.copy(status = DownloadStatus.DOWNLOADING, errorMessage = null)
-            }
-
             val streamUrl = track.streamUrl?.takeIf { it.isNotBlank() }
                 ?: musicRepository.getStreamUrl(track)
-                ?: throw IllegalStateException("Unable to resolve audio stream URL.")
+                ?: throw IllegalStateException("Não foi possível obter o link de áudio.")
 
             val techInfo = runCatching { musicRepository.getTechnicalInfo(track) }.getOrNull()
             val mimeType = techInfo?.mimeType ?: "audio/mp4"
@@ -181,10 +320,10 @@ class TrackDownloader @Inject constructor(
 
             okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
                 if (!response.isSuccessful && response.code != 206) {
-                    throw IllegalStateException("HTTP ${response.code} while downloading track.")
+                    throw IllegalStateException("Erro HTTP ${response.code} ao baixar faixa.")
                 }
 
-                val body = response.body ?: throw IllegalStateException("Empty audio response body.")
+                val body = response.body ?: throw IllegalStateException("Resposta de áudio vazia.")
                 val isPartial = response.code == 206 && existingBytes > 0L
                 val startOffset = if (isPartial) existingBytes else {
                     if (tempFile.exists()) tempFile.delete()
@@ -214,13 +353,16 @@ class TrackDownloader @Inject constructor(
                                     0f
                                 }
                                 updateItem(key) {
-                                    it.copy(
-                                        status = DownloadStatus.DOWNLOADING,
-                                        progress = fraction,
-                                        bytesDownloaded = bytesReadTotal,
-                                        totalBytes = totalBytes,
-                                        updatedAtMs = now,
-                                    )
+                                    if (it.status == DownloadStatus.DOWNLOADING) {
+                                        it.copy(
+                                            progress = fraction,
+                                            bytesDownloaded = bytesReadTotal,
+                                            totalBytes = totalBytes,
+                                            updatedAtMs = now,
+                                        )
+                                    } else {
+                                        it
+                                    }
                                 }
                             }
                         }
@@ -242,7 +384,6 @@ class TrackDownloader @Inject constructor(
                 )
                 downloadedTracksStore.saveDownload(savedRecord)
 
-                // Remove from active downloads map once persisted in DownloadedTracksStore
                 _downloads.update { it - key }
             }
         } catch (ce: CancellationException) {
@@ -257,12 +398,13 @@ class TrackDownloader @Inject constructor(
             updateItem(key) {
                 it.copy(
                     status = DownloadStatus.FAILED,
-                    errorMessage = e.message ?: "Error downloading track.",
+                    errorMessage = e.message ?: "Erro ao baixar faixa.",
                     updatedAtMs = System.currentTimeMillis(),
                 )
             }
         } finally {
             activeJobs.remove(key)
+            scheduleNext()
         }
     }
 
@@ -294,7 +436,8 @@ class TrackDownloader @Inject constructor(
         }
     }
 
-    private companion object {
-        const val TAG = "VzTuneDownloader"
+    companion object {
+        private const val TAG = "VzTuneDownloader"
+        const val MAX_CONCURRENT_DOWNLOADS = 5
     }
 }

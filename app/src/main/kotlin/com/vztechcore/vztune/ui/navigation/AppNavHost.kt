@@ -230,6 +230,9 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                         onCancelDownload = vm::onCancelDownload,
                         onDeleteDownload = vm::onDeleteDownload,
                         onPlayTrack = vm::onPlayTrack,
+                        onPauseAll = vm::onPauseAll,
+                        onResumeAll = vm::onResumeAll,
+                        onCancelAll = vm::onCancelAll,
                     )
                 }
 
@@ -302,10 +305,10 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 composable<Routes.MediaList> {
                     val vm: MediaListViewModel = hiltViewModel()
                     val state by vm.uiState.collectAsStateWithLifecycle()
-                    val routeId = backStackEntry?.arguments?.getString("id")
+                    val playlistId = state.listId
                     val menuCtx = when {
                         state.isAlbum -> TrackMenuContext.DEFAULT
-                        state.isLocal || (routeId != null && isLocalPlaylistId(routeId)) -> TrackMenuContext.LOCAL_PLAYLIST
+                        state.isLocal || isLocalPlaylistId(playlistId) -> TrackMenuContext.LOCAL_PLAYLIST
                         else -> TrackMenuContext.EXTERNAL_PLAYLIST
                     }
                     MediaListScreen(
@@ -325,7 +328,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             openTrackMenu(
                                 targetTrack = t,
                                 context = menuCtx,
-                                localPlaylistId = routeId.takeIf { menuCtx == TrackMenuContext.LOCAL_PLAYLIST },
+                                localPlaylistId = playlistId.takeIf { menuCtx == TrackMenuContext.LOCAL_PLAYLIST },
                             )
                         },
                         onFavoriteClick = vm::onFavoriteClick,

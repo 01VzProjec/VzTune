@@ -7,11 +7,11 @@ import androidx.navigation.toRoute
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
 import com.vztechcore.vztune.data.player.PlayerController
+import com.vztechcore.vztune.data.prefs.models.StoredPlaylist
+import com.vztechcore.vztune.data.prefs.models.isLocalPlaylistId
 import com.vztechcore.vztune.data.prefs.store.FavoritePlaylistsStore
 import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
 import com.vztechcore.vztune.data.prefs.store.MediaListPreferencesStore
-import com.vztechcore.vztune.data.prefs.models.StoredPlaylist
-import com.vztechcore.vztune.data.prefs.models.isLocalPlaylistId
 import com.vztechcore.vztune.data.ytmusic.YTMusicOwnerValidator
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
@@ -38,6 +38,7 @@ class MediaListViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(
         MediaListUiState(
+            listId = route.id,
             title = route.title,
             subtitle = route.subtitle,
             thumbnailUrl = route.thumbnailUrl,

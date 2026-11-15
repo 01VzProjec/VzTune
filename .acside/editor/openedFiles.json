@@ -275,13 +275,13 @@
       "selection": {
         "end": {
           "column": 1,
-          "index": 3114,
-          "line": 89
+          "index": 3239,
+          "line": 95
         },
         "start": {
           "column": 1,
-          "index": 3114,
-          "line": 89
+          "index": 3239,
+          "line": 95
         }
       }
     },
@@ -304,14 +304,14 @@
       "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistHeader.kt",
       "selection": {
         "end": {
-          "column": 0,
-          "index": 10765,
-          "line": 308
+          "column": 1,
+          "index": 8590,
+          "line": 239
         },
         "start": {
-          "column": 0,
-          "index": 10765,
-          "line": 308
+          "column": 1,
+          "index": 8590,
+          "line": 239
         }
       }
     },
@@ -361,5 +361,5 @@
       }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListTrackRow.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/prefs/store/LocalPlaylistsStore.kt"
 }

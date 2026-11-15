@@ -2,9 +2,9 @@ package com.vztechcore.vztune.ui.screens.library
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,23 +13,22 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,55 +42,54 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.vztechcore.vztune.ui.components.player.DefaultPlaylistCover
-import com.vztechcore.vztune.ui.components.player.PlaylistCoverPalette
-import com.vztechcore.vztune.ui.components.player.VzCoverColorPicker
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.AddPhotoAlternate
 
-private val SheetContainerColor = Color(0xFF121829)
-
-/**
- * Bottom sheet for creating a local playlist.
- *
- * Cover rules:
- * - If the user picks a photo, the photo becomes the cover and the chosen color is ignored.
- * - If the user does not pick a photo, the Vz logo with the chosen color becomes the cover.
- * - The chosen color token is saved as the playlist coverPath, so the Library card
- *   and the playlist detail screen show exactly the same cover.
- *
- * All UI text is in Portuguese. Code, comments and function names are in English.
- */
+private val SheetBackground = Color(0xFF141B30)
+private val AccentBlue = Color(0xFF60A5FA)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreatePlaylistSheet(
     onDismiss: () -> Unit,
-    onConfirm: (name: String, coverUri: Uri?, colorToken: String?) -> Unit,
+    onConfirm: (name: String, coverUri: Uri?) -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var name by remember { mutableStateOf("") }
-    var coverUri by remember { mutableStateOf<Uri?>(null) }
-    var selectedColor by remember { mutableStateOf(PlaylistCoverPalette.randomToken()) }
-    val trimmedName = name.trim()
-
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
-    ) { uri: Uri? ->
-        if (uri != null) coverUri = uri
+    CreatePlaylistSheet(
+        onDismiss = onDismiss,
+        onConfirm = { name,
+            cover,
+            _ ->
+            onConfirm(name, cover)
+        },
+    )
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CreatePlaylistSheet(
+    onDismiss: () -> Unit,
+    onConfirm: (
+        name: String,
+        coverUri: Uri?,
+        colorToken: String?
+    ) -> Unit,
+) {
+    var name by remember {
+        mutableStateOf("")
     }
-
-    ModalBottomSheet(
+    var cover by remember {
+        mutableStateOf<Uri?> (null)
+    }
+    var selectedColorToken by remember {
+        mutableStateOf<String?> (null)
+    }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null)
+    cover = uri } ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = SheetContainerColor,
+        containerColor = SheetBackground,
         contentColor = Color.White,
     ) {
         Column(
-            Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth().imePadding().navigationBarsPadding()
+                .padding(horizontal = 20.dp).padding(bottom = 24.dp),
         ) {
             Text(
                 text = "Nova playlist",
@@ -100,156 +98,102 @@ fun CreatePlaylistSheet(
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(16.dp))
-
-            // Preview + photo picker
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier
-                        .size(72.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                    Modifier.size(56.dp).clip(RoundedCornerShape(12.dp))
                         .background(Color.White.copy(alpha = 0.08f))
-                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
-                        .clickable { imagePickerLauncher.launch("image/*") },
+                        .clickable {
+                        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    },
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (coverUri != null) {
+                    if (cover != null) {
                         AsyncImage(
-                            model = coverUri,
-                            contentDescription = null,
+                            model = cover,
+                            contentDescription = "Capa da playlist",
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.size(56.dp),
                         )
                     } else {
-                        DefaultPlaylistCover(
-                            coverPath = selectedColor,
-                            seed = trimmedName.ifBlank { "nova" },
+                        Icon(
+                            VzIcons.AddPhotoAlternate,
+                            contentDescription = "Escolher capa",
+                            tint = Color.White.copy(alpha = 0.8f),
                         )
                     }
                 }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = "Capa da playlist",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = if (coverUri != null) "Foto escolhida. Toque para trocar." else "Toque para escolher uma foto, ou escolha uma cor abaixo.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.6f),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(Color.White.copy(alpha = 0.10f))
-                            .clickable { imagePickerLauncher.launch("image/*") }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        androidx.compose.material3.Icon(
-                            imageVector = VzIcons.AddPhotoAlternate,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp),
-                        )
+                Spacer(Modifier.width(12.dp))
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    placeholder = {
                         Text(
-                            text = if (coverUri != null) "Trocar foto" else "Escolher foto",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
+                            "Nome da playlist",
+                            color = Color.White.copy(alpha = 0.5f)
                         )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                singleLine = true,
-                placeholder = { Text("Nome da playlist", color = Color.White.copy(alpha = 0.45f)) },
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedBorderColor = Color(0xFF3B82F6),
-                    unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
-                    cursorColor = Color.White,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Spacer(Modifier.height(20.dp))
-
-            // Color editor
-            Text(
-                text = "Cor da capa Vz",
-                style = MaterialTheme.typography.titleSmall,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "Sem foto, usamos o Vz com essa cor como thumbnail. Se escolher foto, a foto vira a capa.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f),
-            )
-            Spacer(Modifier.height(10.dp))
-            VzCoverColorPicker(
-                selectedToken = selectedColor,
-                onSelect = { selectedColor = it },
-            )
-
-            if (coverUri != null) {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = "Usar cor em vez de foto",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color(0xFF93C5FD),
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { coverUri = null }
-                        .padding(vertical = 4.dp),
+                    },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedBorderColor = AccentBlue,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
+                        cursorColor = Color.White,
+                    ),
+                    modifier = Modifier.weight(1f),
                 )
             }
-
-            Spacer(Modifier.height(24.dp))
-
+            Spacer(Modifier.height(8.dp))
+            if (cover == null) {
+                Text(
+                    text = "Cor da capa Vz",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(10.dp))
+                com.vztechcore.vztune.ui.components.player.VzCoverColorPicker(
+                    selectedToken = selectedColorToken,
+                    onColorSelected = { selectedColorToken = it },
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+            Text(
+                text = "Sem foto e sem cor, usamos as thumbnails das faixas da playlist.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.5f),
+            )
+            Spacer(Modifier.height(20.dp))
             Row(
-                Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
             ) {
-                OutlinedButton(
-                    onClick = onDismiss,
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
-                    modifier = Modifier.weight(1f).height(46.dp),
-                ) {
-                    Text("Cancelar", color = Color.White, fontWeight = FontWeight.SemiBold)
+                TextButton(onClick = onDismiss) {
+                    Text(
+                        "Cancelar",
+                        color = Color.White.copy(alpha = 0.75f)
+                    )
                 }
+                Spacer(Modifier.width(8.dp))
                 Button(
                     onClick = {
-                        if (trimmedName.isNotBlank()) {
-                            // When a photo was chosen, color is ignored and null is sent.
-                            // When no photo, the selected color token is sent.
-                            onConfirm(trimmedName, coverUri, if (coverUri == null) selectedColor else null)
-                        }
+                        onConfirm(
+                            name,
+                            cover,
+                            if (cover != null) null else selectedColorToken
+                        )
                     },
-                    enabled = trimmedName.isNotBlank(),
-                    shape = RoundedCornerShape(12.dp),
+                    enabled = name.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF1E40AF),
-                        contentColor = Color.White,
+                        containerColor = AccentBlue,
+                        contentColor = Color(0xFF0A0F1E),
+                        disabledContainerColor = Color.White.copy(alpha = 0.12f),
+                        disabledContentColor = Color.White.copy(alpha = 0.4f),
                     ),
-                    modifier = Modifier.weight(1f).height(46.dp),
                 ) {
-                    Text("Criar", fontWeight = FontWeight.Bold)
+                    Text("Confirmar", fontWeight = FontWeight.Bold)
                 }
             }
         }

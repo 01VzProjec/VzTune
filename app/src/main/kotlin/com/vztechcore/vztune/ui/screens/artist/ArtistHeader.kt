@@ -1,6 +1,7 @@
 package com.vztechcore.vztune.ui.screens.artist
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,7 +27,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -46,42 +51,56 @@ import com.vztechcore.vztune.ui.icons.media.Artist
 import com.vztechcore.vztune.ui.icons.player.Shuffle
 import com.vztechcore.vztune.ui.screens.medialist.MediaListCircleButton
 
+/** Brightest tone the backdrop may reach, so white text stays readable on vivid photos. */
+private
+const val MAX_BACKDROP_LUMINANCE = 0.30f
 private val HeroMinHeight = 300.dp
-private val HeroMaxHeight = 520.dp
 private val ButtonHeight = 44.dp
-
 /**
- * Accent color extracted from the artist photo.
- * It is animated so the screen blends smoothly when the photo loads.
+ * Accent color extracted from the artist photo, animated so the screen
+ * blends from black into the artist's color instead of popping in.
  */
 @Composable
-fun rememberArtistAccent(thumbnailUrl: String?): Color {
+fun rememberArtistAccent(thumbnailUrl: String?) : Color {
     val extracted = rememberDominantColor(thumbnailUrl)
     val animated by animateColorAsState(
         targetValue = extracted,
         animationSpec = tween(durationMillis = 700),
         label = "artistAccent",
-    )
-    return animated
+    ) return animated
+}
+
+/** Darkens overly bright accents; dark accents are returned untouched. */
+private fun Color.toBackdropTone() : Color {
+    val lum = luminance() return
+    if (lum > MAX_BACKDROP_LUMINANCE)
+    lerp(
+        Color.Black,
+        this,
+        MAX_BACKDROP_LUMINANCE / lum
+    ) else this
 }
 
 /**
- * Chooses a readable text color for a solid accent background.
- * Dark text on very bright backgrounds, white text on everything else.
- * The background itself stays 100 percent solid, no gradient is applied.
+ * Full-screen "chameleon" backdrop: the artist color on top, fading into
+ near-black at the bottom.
+ * It is drawn once behind the whole screen, so the hero photo can fade straight
+ into it (no seams).
  */
-fun contentColorForAccent(accent: Color): Color {
-    return if (accent.luminance() > 0.60f) Color(0xFF0B0D12) else Color.White
+/**
+ * Solid backdrop: same tone everywhere, no gradient to black.
+ * Kept with the same name so ArtistScreen still compiles.
+ */
+@Composable
+fun rememberArtistChameleonBrush(accent: Color) : Brush = remember(accent) {
+    val tone = accent.toBackdropTone()
+    Brush.verticalGradient(listOf(tone, tone))
 }
 
 /**
- * Artist hero.
- *
- * Layout rules:
- * - The background is solid accent, never a gradient to black.
- * - The photo is shown whole with Fit, never cropped.
- * - The name and stats sit BELOW the photo, so nothing covers the photo.
- * - The back button has its own dark circle, so no top gradient scrim is needed.
+ * Artist hero: full-width photo that fades into the backdrop, the name and stats
+ over it,
+ * and the shuffle / follow buttons right below.
  */
 @Composable
 fun ArtistHeader(
@@ -93,38 +112,39 @@ fun ArtistHeader(
     modifier: Modifier = Modifier,
 ) {
     val hasPlayableItems = state.topSongs.isNotEmpty() || state.videos.isNotEmpty()
-    val contentColor = contentColorForAccent(accent)
-
-    Column(
-        modifier
-            .fillMaxWidth()
-            .background(accent)
-    ) {
-        Box(Modifier.fillMaxWidth()) {
+    Column(modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().heightIn(min = HeroMinHeight)
+            .animateContentSize()) {
             ArtistPhoto(
                 imageUrl = state.thumbnailUrl,
-                name = state.name,
-                background = accent,
+                name = state.name
             )
-            Box(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(12.dp)
-            ) {
-                MediaListCircleButton(VzIcons.ArrowBack, "Voltar", onBackClick)
+            Box(Modifier.align(Alignment.TopStart).statusBarsPadding()
+                .padding(12.dp)) {
+                MediaListCircleButton(
+                    VzIcons.ArrowBack,
+                    "Voltar",
+                    onBackClick
+                )
             }
         }
-
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 4.dp)
-        ) {
+        Column(Modifier.fillMaxWidth().padding(
+            start = 20.dp,
+            end = 20.dp,
+            top = 8.dp,
+            bottom = 4.dp
+        )) {
             Text(
                 text = state.name,
-                style = MaterialTheme.typography.displaySmall.copy(letterSpacing = (-0.5).sp),
-                color = contentColor,
+                style = MaterialTheme.typography.displaySmall.copy(
+                    letterSpacing = (-0.5).sp,
+                    shadow = Shadow(
+                        color = Color.Black.copy(alpha = 0.45f),
+                        offset = Offset(0f, 3f),
+                        blurRadius = 12f,
+                    ),
+                ),
+                color = Color.White,
                 fontWeight = FontWeight.ExtraBold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -134,17 +154,14 @@ fun ArtistHeader(
                 Text(
                     text = state.statsLabel,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = contentColor.copy(alpha = 0.8f),
+                    color = Color.White.copy(alpha = 0.8f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
-
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -167,71 +184,57 @@ fun ArtistHeader(
 }
 
 /**
- * Artist photo, always fully visible.
- * Uses Fit so the whole image is shown, without any bottom fade.
- * The empty space around the photo uses the same solid accent background.
+ * The photo is shown whole (never cropped) with Fit, no fade, no crop.
+ * Without a photo, a big faint icon fills the hero.
  */
 @Composable
-private fun ArtistPhoto(
-    imageUrl: String?,
-    name: String,
-    background: Color,
-) {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .background(background),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (imageUrl.isNullOrBlank()) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(HeroMinHeight),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = VzIcons.Artist,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.12f),
-                    modifier = Modifier.size(140.dp),
-                )
-            }
-            return
+private fun ArtistPhoto(imageUrl: String?, name: String) {
+    if (imageUrl.isNullOrBlank()) {
+        Box(
+            Modifier.fillMaxWidth().height(HeroMinHeight),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = VzIcons.Artist,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.12f),
+                modifier = Modifier.size(140.dp),
+            )
         }
-        val context = LocalContext.current
-        val request = remember(imageUrl) {
-            ImageRequest.Builder(context)
-                .data(imageUrl)
-                .crossfade(400)
-                .build()
-        }
-        AsyncImage(
-            model = request,
-            contentDescription = name,
-            contentScale = ContentScale.Fit,
-            alignment = Alignment.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = HeroMinHeight, max = HeroMaxHeight),
-        )
+        return
     }
+    val context = LocalContext.current
+    val request = remember(imageUrl) {
+        ImageRequest.Builder(context).data(imageUrl).crossfade(400)
+            .build()
+    }
+    AsyncImage(
+        model = request,
+        contentDescription = name,
+        contentScale = ContentScale.Fit,
+        alignment = Alignment.Center,
+        modifier = Modifier.fillMaxWidth().heightIn(min = HeroMinHeight, max = 520.dp),
+    )
 }
-
 @Composable
 private fun FollowButton(
     isFollowing: Boolean,
     accent: Color,
     onClick: () -> Unit,
 ) {
-    val contentColor = contentColorForAccent(accent)
     if (isFollowing) {
+        // Lightened accent keeps the label readable even when the photo color is dark
+        val tint = lerp(
+            accent,
+            Color.White,
+            0.55f
+        )
         PillButton(
             label = "Seguindo",
             icon = VzIcons.PersonCheck,
-            containerColor = Color.White.copy(alpha = 0.22f),
-            contentColor = contentColor,
-            borderColor = contentColor.copy(alpha = 0.70f),
+            containerColor = accent.copy(alpha = 0.30f),
+            contentColor = tint,
+            borderColor = tint.copy(alpha = 0.70f),
             onClick = onClick,
         )
     } else {
@@ -239,14 +242,14 @@ private fun FollowButton(
             label = "Seguir",
             icon = VzIcons.PersonAdd,
             containerColor = Color.Transparent,
-            contentColor = contentColor,
-            borderColor = contentColor.copy(alpha = 0.35f),
+            contentColor = Color.White,
+            borderColor = Color.White.copy(alpha = 0.35f),
             onClick = onClick,
         )
     }
 }
 
-/** Rounded pill with icon and label. Shared by shuffle and follow buttons. */
+/** Rounded pill with icon + label. Shared by the shuffle and follow buttons. */
 @Composable
 private fun PillButton(
     label: String,
@@ -258,13 +261,14 @@ private fun PillButton(
 ) {
     val shape = RoundedCornerShape(50)
     Row(
-        modifier = Modifier
-            .height(ButtonHeight)
-            .clip(shape)
-            .background(containerColor)
-            .then(if (borderColor != null) Modifier.border(1.dp, borderColor, shape) else Modifier)
-            .clickable { onClick() }
-            .padding(horizontal = 20.dp),
+        modifier = Modifier.height(ButtonHeight).clip(shape).background(containerColor)
+            .then(if (borderColor != null) Modifier.border(
+            1.dp,
+            borderColor,
+            shape
+        ) else Modifier).clickable {
+            onClick()
+        }.padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {

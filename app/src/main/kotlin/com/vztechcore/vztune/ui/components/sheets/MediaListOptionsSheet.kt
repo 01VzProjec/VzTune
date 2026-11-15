@@ -8,38 +8,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,7 +28,6 @@ import coil.compose.AsyncImage
 import com.vztechcore.vztune.ui.components.player.DefaultPlaylistCover
 import com.vztechcore.vztune.ui.components.player.PlaylistCoverPalette
 import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
-import com.vztechcore.vztune.ui.components.player.VzCoverColorPicker
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.AddPhotoAlternate
 import com.vztechcore.vztune.ui.icons.actions.Delete
@@ -74,16 +47,9 @@ import com.vztechcore.vztune.ui.screens.medialist.MediaListUiState
 private val SheetContainerColor = Color(0xFF121829)
 private val DownloadGreen = Color(0xFF4ADE80)
 private val DangerRed = Color(0xFFF87171)
-
 /**
- * Context menu opened from the three-dots button in the header of a playlist or album screen.
- *
- * For local playlists it includes the Vz color editor:
- * - "Alterar miniatura" picks a photo, the photo replaces the color.
- * - The color picker below it picks a Vz color, the color replaces the photo.
- * Both change the official cover shown in the Library and inside the playlist.
- *
- * All UI text is in Portuguese. Code and comments are in English.
+ * Context menu opened from the three-dots button in the header of a Playlist or
+ Album screen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -106,107 +72,84 @@ fun MediaListOptionsSheet(
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-    var showRenameSheet by remember { mutableStateOf(false) }
-    var showArtistPicker by remember { mutableStateOf(false) }
-
-    val albumArtists = remember(state.owner, state.isAlbum) {
-        if (state.isAlbum) parseMediaListArtists(state.owner.orEmpty()) else emptyList()
+    var showDeleteConfirm by remember {
+        mutableStateOf(false)
     }
-
+    var showRenameSheet by remember {
+        mutableStateOf(false)
+    }
+    var showArtistPicker by remember {
+        mutableStateOf(false)
+    }
+    val albumArtists = remember(state.owner, state.isAlbum) {
+        if (state.isAlbum)
+        parseMediaListArtists(state.owner.orEmpty()) else emptyList()
+    }
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
     ) { uri: Uri? ->
-        if (uri != null) {
-            onChangeLocalPlaylistCover(uri)
-            onDismiss()
-        }
+        if (uri != null) { onChangeLocalPlaylistCover(uri)
+        onDismiss() }
     }
-
     if (showDeleteConfirm) {
         DeleteLocalPlaylistSheet(
             title = state.title,
             onConfirmDelete = {
-                showDeleteConfirm = false
-                onDismiss()
-                onDeleteLocalPlaylist()
+                showDeleteConfirm = false onDismiss() onDeleteLocalPlaylist()
             },
             onDismiss = { showDeleteConfirm = false },
-        )
-        return
+        ) return
     }
-
     if (showRenameSheet) {
         RenameLocalPlaylistSheet(
             currentTitle = state.title,
             onConfirmRename = { newTitle ->
-                showRenameSheet = false
-                onRenameLocalPlaylist(newTitle)
-                onDismiss()
+                showRenameSheet = false onRenameLocalPlaylist(newTitle) onDismiss()
             },
             onDismiss = { showRenameSheet = false },
-        )
-        return
+        ) return
     }
-
     if (showArtistPicker) {
         MediaListArtistPickerSheet(
             artists = albumArtists,
             onPick = { selectedArtist ->
-                showArtistPicker = false
-                onDismiss()
-                onOpenArtistByName(selectedArtist)
+                showArtistPicker = false onDismiss() onOpenArtistByName(selectedArtist)
             },
             onDismiss = { showArtistPicker = false },
-        )
-        return
+        ) return
     }
-
-    val typeLabel = when {
-        state.isAlbum -> "Álbum"
-        state.isLocal -> "Sua playlist"
-        else -> "Playlist"
+    val typeLabel = when { state.isAlbum ->
+        "Álbum"
+        state.isLocal ->
+        "Sua playlist"
+        else ->
+        "Playlist"
     }
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = SheetContainerColor,
         contentColor = Color.White,
         dragHandle = {
-            Box(
-                Modifier
-                    .padding(vertical = 12.dp)
-                    .width(36.dp)
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.White.copy(alpha = 0.25f))
-            )
+            Box(Modifier.padding(vertical = 12.dp).width(36.dp)
+                .height(4.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.25f)))
         },
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .navigationBarsPadding()
-                .padding(bottom = 16.dp),
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                .navigationBarsPadding().padding(bottom = 16.dp),
         ) {
-            // Header with cover preview
+            // Header
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 6.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                    modifier = Modifier.size(52.dp).clip(RoundedCornerShape(10.dp))
                         .background(Color.White.copy(alpha = 0.08f)),
                 ) {
                     val hasDefaultColorToken = PlaylistCoverPalette.isDefaultColorToken(state.thumbnailUrl)
-                    when {
-                        state.isLocal && !hasDefaultColorToken && !state.thumbnailUrl.isNullOrBlank() -> {
+                    when { state.isLocal && !hasDefaultColorToken && !state.thumbnailUrl.isNullOrBlank() -> {
                             AsyncImage(
                                 model = state.thumbnailUrl,
                                 contentDescription = state.title,
@@ -214,10 +157,7 @@ fun MediaListOptionsSheet(
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
-                        state.mosaicThumbnails.size >= 4 -> {
-                            PlaylistMosaic(state.mosaicThumbnails)
-                        }
-                        state.isLocal -> {
+                        state.mosaicThumbnails.size >= 4 -> { PlaylistMosaic(state.mosaicThumbnails) } state.isLocal -> {
                             DefaultPlaylistCover(
                                 seed = state.listId,
                                 coverPath = state.thumbnailUrl,
@@ -246,8 +186,12 @@ fun MediaListOptionsSheet(
                     Spacer(Modifier.height(2.dp))
                     val sub = listOfNotNull(
                         typeLabel,
-                        state.owner?.takeIf { it.isNotBlank() },
-                        state.trackCountLabel.takeIf { state.allTracks.isNotEmpty() },
+                        state.owner?.takeIf {
+                            it.isNotBlank()
+                        },
+                        state.trackCountLabel.takeIf {
+                            state.allTracks.isNotEmpty()
+                        },
                     ).joinToString(" • ")
                     Text(
                         text = sub,
@@ -258,7 +202,6 @@ fun MediaListOptionsSheet(
                     )
                 }
             }
-
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 8.dp),
                 color = Color.White.copy(alpha = 0.08f),
@@ -281,104 +224,84 @@ fun MediaListOptionsSheet(
                 ListOptionRow(
                     icon = VzIcons.AddPhotoAlternate,
                     label = "Alterar miniatura",
-                    subtitle = "Escolher foto da galeria",
                     onClick = { imagePickerLauncher.launch("image/*") },
                 )
 
-                // Vz color editor
-                Text(
-                    text = "Cor da capa Vz",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 2.dp),
-                )
-                Text(
-                    text = "Sem foto, o Vz com essa cor vira a capa da playlist.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.55f),
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                )
-                VzCoverColorPicker(
-                    selectedToken = state.thumbnailUrl.takeIf { PlaylistCoverPalette.isDefaultColorToken(it) },
-                    onSelect = { token ->
-                        onChangeCoverColor(token)
-                        onDismiss()
-                    },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    color = Color.White.copy(alpha = 0.08f),
-                )
+                // Vz color cover picker for local playlists
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        text = "Cor da capa Vz",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    com.vztechcore.vztune.ui.components.player.VzCoverColorPicker(
+                        selectedToken = state.thumbnailUrl,
+                        onColorSelected = { token -> onChangeCoverColor(token) onDismiss() },
+                    )
+                }
             }
 
             // Favorite / Unfavorite external playlist
             if (state.showFavorite) {
                 ListOptionRow(
                     icon = if (state.isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
-                    label = if (state.isFavorite) "Desfavoritar" else "Favoritar",
-                    onClick = {
-                        onToggleFavorite()
-                        onDismiss()
-                    },
+                    iconTint = if (state.isFavorite) Color(0xFFEC4899) else Color.White,
+                    label = if (state.isFavorite) "Remover dos favoritos" else "Salvar na biblioteca",
+                    onClick = { onToggleFavorite() onDismiss() },
                 )
             }
 
-            // Play next / queue
-            ListOptionRow(
-                icon = VzIcons.PlayCircleFilled,
-                label = "Tocar em seguida",
-                onClick = {
-                    onPlayNextAll()
-                    onDismiss()
-                },
-            )
-            ListOptionRow(
-                icon = VzIcons.QueueMusic,
-                label = "Adicionar à fila",
-                onClick = {
-                    onAddToQueueAll()
-                    onDismiss()
-                },
-            )
-
-            // Download section
+            // Queue & Batch Download actions
             if (state.allTracks.isNotEmpty()) {
-                if (isDownloadingBatch) {
-                    BatchDownloadProgressRow(
-                        progress = batchDownloadProgress,
-                        label = "Baixando... toque para ver",
-                        onClick = {
-                            onDismiss()
-                            onOpenDownloadsScreen()
-                        },
-                    )
-                } else if (allTracksDownloaded) {
-                    ListOptionRow(
-                        icon = VzIcons.DownloadDone,
-                        iconTint = DownloadGreen,
-                        label = "Todas as faixas baixadas",
-                        subtitle = "Ver downloads",
-                        onClick = {
-                            onDismiss()
-                            onOpenDownloadsScreen()
-                        },
-                    )
-                } else {
-                    ListOptionRow(
-                        icon = VzIcons.Download,
-                        label = if (state.isAlbum) "Baixar álbum" else "Baixar todas as faixas",
-                        subtitle = "Até 30 downloads simultâneos",
-                        onClick = {
-                            onDownloadAll()
-                            onDismiss()
-                        },
-                    )
+                ListOptionRow(
+                    icon = VzIcons.PlayCircleFilled,
+                    label = "Reproduzir a seguir",
+                    subtitle = "${state.allTracks.size} faixas",
+                    onClick = { onPlayNextAll() onDismiss() },
+                )
+                ListOptionRow(
+                    icon = VzIcons.QueueMusic,
+                    label = "Adicionar à fila",
+                    onClick = { onAddToQueueAll() onDismiss() },
+                )
+                when { allTracksDownloaded -> {
+                        ListOptionRow(
+                            icon = VzIcons.DownloadDone,
+                            iconTint = DownloadGreen,
+                            label = "Todas as faixas já baixadas",
+                            labelColor = Color.White.copy(alpha = 0.75f),
+                            enabled = false,
+                            onClick = {},
+                        )
+                    }
+                    isDownloadingBatch -> {
+                        val pct = (batchDownloadProgress.coerceIn(0f, 1f) * 100)
+                            .toInt()
+                        val label = if (pct > 0) { "Baixando todas as faixas ($pct%)" } else {
+                            "Baixando todas as faixas"
+                        }
+                        BatchDownloadProgressRow(
+                            progress = batchDownloadProgress,
+                            label = label,
+                            onClick = { onDismiss() onOpenDownloadsScreen() },
+                        )
+                    }
+                    else -> {
+                        ListOptionRow(
+                            icon = VzIcons.Download,
+                            label = if (state.isAlbum) "Baixar álbum" else "Baixar todas as faixas",
+                            subtitle = "Até 30 downloads simultâneos",
+                            onClick = { onDownloadAll() onDismiss() },
+                        )
+                    }
                 }
             }
 
-            // Go to Artist(s) for albums
+            // Go to Artist(s) (for Albums — opens a picker submenu when there are multiple artists)
             if (albumArtists.isNotEmpty()) {
                 val hasMultiple = albumArtists.size > 1
                 ListOptionRow(
@@ -386,32 +309,24 @@ fun MediaListOptionsSheet(
                     label = if (hasMultiple) "Ir para os artistas" else "Ir para o artista",
                     subtitle = if (hasMultiple) albumArtists.joinToString(", ") else albumArtists.first(),
                     onClick = {
-                        if (hasMultiple) {
-                            showArtistPicker = true
-                        } else {
-                            onDismiss()
-                            onOpenArtistByName(albumArtists.first())
+                        if (hasMultiple) { showArtistPicker = true } else {
+                            onDismiss() onOpenArtistByName(albumArtists.first())
                         }
                     },
                 )
             }
 
-            // Share for external playlists and albums
+            // Share (for external playlists & albums)
             if (!state.isLocal) {
                 ListOptionRow(
                     icon = VzIcons.Share,
                     label = "Compartilhar",
-                    onClick = {
-                        shareMediaList(context, state)
-                        onDismiss()
-                    },
+                    onClick = { shareMediaList(context, state) onDismiss() },
                 )
             }
         }
     }
 }
-
-/** Sheet to pick one artist when an album has several artists. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MediaListArtistPickerSheet(
@@ -426,22 +341,13 @@ fun MediaListArtistPickerSheet(
         containerColor = SheetContainerColor,
         contentColor = Color.White,
         dragHandle = {
-            Box(
-                Modifier
-                    .padding(vertical = 12.dp)
-                    .width(36.dp)
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.White.copy(alpha = 0.25f))
-            )
+            Box(Modifier.padding(vertical = 12.dp).width(36.dp)
+                .height(4.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.25f)))
         },
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .navigationBarsPadding()
-                .padding(bottom = 24.dp),
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                .navigationBarsPadding().padding(bottom = 24.dp),
         ) {
             Text(
                 text = "Escolher artista",
@@ -460,23 +366,17 @@ fun MediaListArtistPickerSheet(
         }
     }
 }
-
-/** Parses a raw artist string like "A, B feat. C" into individual artist names. */
-internal fun parseMediaListArtists(raw: String): List<String> {
-    if (raw.isBlank() || raw.equals("Desconhecido", ignoreCase = true)) return emptyList()
-    return raw
-        .split(
-            Regex(
-                "\\s*(?:,|&|/|;|\\be\\b|\\band\\b|\\bfeat\\.?\\b|\\bft\\.?\\b|\\bx\\b|\\bcom\\b|\\bwith\\b)\\s*",
-                RegexOption.IGNORE_CASE,
-            )
-        )
-        .map { it.trim() }
-        .filter { it.isNotBlank() && !it.equals("Desconhecido", ignoreCase = true) }
-        .distinct()
+internal fun parseMediaListArtists(raw: String) : List<String> {
+    if (raw.isBlank() || raw.equals("Desconhecido", ignoreCase = true)) return emptyList() return
+        raw.split(Regex(
+        "\\s*(?:,|&|/|;|\\be\\b|\\band\\b|\\bfeat\\.?\\b|\\bft\\.?\\b|\\bx\\b|\\bcom\\b|\\bwith\\b)\\s*",
+        RegexOption.IGNORE_CASE,
+    )).map {
+        it.trim()
+    }.filter {
+        it.isNotBlank() && !it.equals("Desconhecido", ignoreCase = true)
+    }.distinct()
 }
-
-/** Row showing batch download progress. */
 @Composable
 private fun BatchDownloadProgressRow(
     progress: Float,
@@ -484,10 +384,9 @@ private fun BatchDownloadProgressRow(
     onClick: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 20.dp, vertical = 13.dp),
+        modifier = Modifier.fillMaxWidth().clickable {
+            onClick()
+        }.padding(horizontal = 20.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -528,8 +427,6 @@ private fun BatchDownloadProgressRow(
         )
     }
 }
-
-/** Sheet to rename a local playlist. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RenameLocalPlaylistSheet(
@@ -538,9 +435,7 @@ private fun RenameLocalPlaylistSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var text by remember(currentTitle) { mutableStateOf(currentTitle) }
-    val trimmed = text.trim()
-
+    var text by remember(currentTitle) { mutableStateOf(currentTitle) } val trimmed = text.trim()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -548,10 +443,8 @@ private fun RenameLocalPlaylistSheet(
         contentColor = Color.White,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().navigationBarsPadding()
+                .imePadding().padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
             Text(
                 text = "Alterar título da playlist",
@@ -564,7 +457,12 @@ private fun RenameLocalPlaylistSheet(
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
-                placeholder = { Text("Nome da playlist", color = Color.White.copy(alpha = 0.45f)) },
+                placeholder = {
+                    Text(
+                        "Nome da playlist",
+                        color = Color.White.copy(alpha = 0.45f)
+                    )
+                },
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
@@ -586,7 +484,11 @@ private fun RenameLocalPlaylistSheet(
                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
                     modifier = Modifier.weight(1f).height(46.dp),
                 ) {
-                    Text("Cancelar", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Cancelar",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
                 Button(
                     onClick = { if (trimmed.isNotBlank()) onConfirmRename(trimmed) },
@@ -604,8 +506,6 @@ private fun RenameLocalPlaylistSheet(
         }
     }
 }
-
-/** Confirmation sheet for deleting a local playlist. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DeleteLocalPlaylistSheet(
@@ -621,9 +521,7 @@ private fun DeleteLocalPlaylistSheet(
         contentColor = Color.White,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
+            modifier = Modifier.fillMaxWidth().navigationBarsPadding()
                 .padding(horizontal = 20.dp, vertical = 12.dp),
         ) {
             Text(
@@ -649,7 +547,11 @@ private fun DeleteLocalPlaylistSheet(
                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
                     modifier = Modifier.weight(1f).height(46.dp),
                 ) {
-                    Text("Cancelar", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Cancelar",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
                 Button(
                     onClick = onConfirmDelete,
@@ -661,7 +563,11 @@ private fun DeleteLocalPlaylistSheet(
                     border = BorderStroke(1.dp, DangerRed.copy(alpha = 0.45f)),
                     modifier = Modifier.weight(1f).height(46.dp),
                 ) {
-                    Icon(VzIcons.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(
+                        VzIcons.Delete,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
                     Spacer(Modifier.width(6.dp))
                     Text("Excluir", fontWeight = FontWeight.Bold)
                 }
@@ -669,8 +575,6 @@ private fun DeleteLocalPlaylistSheet(
         }
     }
 }
-
-/** Single option row inside the options sheet. */
 @Composable
 private fun ListOptionRow(
     icon: ImageVector,
@@ -682,7 +586,9 @@ private fun ListOptionRow(
     onClick: () -> Unit,
 ) {
     val rowModifier = if (enabled) {
-        Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 20.dp, vertical = 13.dp)
+        Modifier.fillMaxWidth().clickable {
+            onClick()
+        }.padding(horizontal = 20.dp, vertical = 13.dp)
     } else {
         Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 13.dp)
     }
@@ -718,19 +624,19 @@ private fun ListOptionRow(
         }
     }
 }
-
-/** Shares the current playlist / album using the system share sheet. */
 private fun shareMediaList(context: Context, state: MediaListUiState) {
     val cleanId = state.listId.removePrefix("VL")
-    val url = if (state.isAlbum) {
-        "https://music.youtube.com/browse/$cleanId"
-    } else {
+    val url = if (state.isAlbum) { "https://music.youtube.com/browse/$cleanId" } else {
         "https://music.youtube.com/playlist?list=$cleanId"
     }
-    val kindLabel = if (state.isAlbum) "álbum" else "playlist"
-    val ownerPart = state.owner?.takeIf { it.isNotBlank() }?.let { " — $it" }.orEmpty()
+    val kindLabel = if (state.isAlbum)
+    "álbum" else "playlist"
+    val ownerPart = state.owner?.takeIf {
+        it.isNotBlank()
+    }?.let {
+        " — $it"
+    }.orEmpty()
     val shareText = "Confere esse $kindLabel no VzTune 🎧\n${state.title}$ownerPart\n$url"
-
     val sendIntent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(Intent.EXTRA_SUBJECT, state.title)

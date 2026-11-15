@@ -2,297 +2,357 @@ package com.vztechcore.vztune.ui.screens.medialist
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.vztechcore.vztune.core.domain.search.SortOrder
 import com.vztechcore.vztune.ui.components.player.DefaultPlaylistCover
 import com.vztechcore.vztune.ui.components.player.PlaylistCoverPalette
 import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
 import com.vztechcore.vztune.ui.icons.VzIcons
-import com.vztechcore.vztune.ui.icons.actions.ArrowBack
+import com.vztechcore.vztune.ui.icons.actions.Close
 import com.vztechcore.vztune.ui.icons.actions.FavoriteFilled
 import com.vztechcore.vztune.ui.icons.actions.FavoriteOutline
 import com.vztechcore.vztune.ui.icons.actions.MoreVert
-import com.vztechcore.vztune.ui.icons.actions.Search
-import com.vztechcore.vztune.ui.icons.media.Artist
-import com.vztechcore.vztune.ui.icons.player.PlayCircleFilled
+import com.vztechcore.vztune.ui.icons.actions.Sort
+import com.vztechcore.vztune.ui.icons.actions.StopCircle
+import com.vztechcore.vztune.ui.icons.actions.Sync
+import com.vztechcore.vztune.ui.icons.media.DownloadForOffline
+import com.vztechcore.vztune.ui.icons.navigation.Search
+import com.vztechcore.vztune.ui.icons.player.Play
 import com.vztechcore.vztune.ui.icons.player.Shuffle
 
-/**
- * Header for playlist / album screens.
- *
- * Background rule: the header uses the same solid dominant color as the
- * list background. No gradient to black, no bottom fade. The only dark
- * elements are the small circular buttons, which already have their own
- * translucent dark background.
- */
 @Composable
 internal fun MediaListExpandedHeader(
     state: MediaListUiState,
-    dominantColor: Color,
+    dominantColor: Color = Color.Black,
+    allTracksDownloaded: Boolean = false,
     onBackClick: () -> Unit,
-    onSearchClick: () -> Unit,
-    onMoreClick: () -> Unit,
+    onTabSelected: (MediaListTab) -> Unit,
     onPlayAllClick: () -> Unit,
     onShuffleClick: () -> Unit,
+    onSearchClick: () -> Unit,
+    onMoreClick: () -> Unit,
+    onSortClick: () -> Unit,
+    onShuffleToggle: () -> Unit,
     onFavoriteClick: () -> Unit,
-    onHeaderArtistClick: () -> Unit,
-    onPlayNextAll: () -> Unit,
-    onAddToQueueAll: () -> Unit,
-    onDownloadAll: () -> Unit,
-    modifier: Modifier = Modifier,
+    onArtistClick: (() -> Unit)? = null,
 ) {
-    // Text color that stays readable on bright solid backgrounds.
-    val contentColor = remember(dominantColor) {
-        if (dominantColor.luminance() > 0.60f) Color(0xFF0B0D12) else Color.White
-    }
-    val secondaryColor = contentColor.copy(alpha = 0.75f)
-
-    Column(
-        modifier
-            .fillMaxWidth()
-            .background(dominantColor)
-            .statusBarsPadding()
+    val chameleonBase = remember(dominantColor) { lerp(
+        Color.Black,
+        dominantColor,
+        0.56f
+    ) } Column(
+        Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            MediaListCircleButton(VzIcons.ArrowBack, "Voltar", onBackClick)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MediaListCircleButton(VzIcons.Search, "Pesquisar", onSearchClick)
-                MediaListCircleButton(VzIcons.MoreVert, "Mais", onMoreClick)
-            }
-        }
-
-        // Cover - no overlay gradient on top of it
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                Modifier
-                    .size(220.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.Black.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                val isColorToken = PlaylistCoverPalette.isDefaultColorToken(state.thumbnailUrl)
-                when {
-                    state.isLocal && isColorToken -> {
-                        DefaultPlaylistCover(seed = state.listId, coverPath = state.thumbnailUrl)
-                    }
-                    state.isLocal && !state.thumbnailUrl.isNullOrBlank() -> {
-                        AsyncImage(
-                            model = state.thumbnailUrl,
-                            contentDescription = state.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                    state.mosaicThumbnails.size >= 4 -> {
-                        PlaylistMosaic(state.mosaicThumbnails)
-                    }
-                    state.isLocal -> {
-                        DefaultPlaylistCover(seed = state.listId, coverPath = state.thumbnailUrl)
-                    }
-                    !state.thumbnailUrl.isNullOrBlank() -> {
-                        AsyncImage(
-                            model = state.thumbnailUrl,
-                            contentDescription = state.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                    else -> {
-                        Icon(
-                            imageVector = VzIcons.Artist,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.2f),
-                            modifier = Modifier.size(80.dp),
-                        )
-                    }
+        Box(Modifier.fillMaxWidth().height(320.dp)) {
+            val hasDefaultColorToken = PlaylistCoverPalette.isDefaultColorToken(state.thumbnailUrl)
+            when { state.isLocal && !hasDefaultColorToken && !state.thumbnailUrl.isNullOrBlank() -> {
+                    AsyncImage(
+                        model = state.thumbnailUrl,
+                        contentDescription = state.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                state.mosaicThumbnails.size >= 4 -> { PlaylistMosaic(state.mosaicThumbnails) } state.isLocal -> {
+                    DefaultPlaylistCover(
+                        seed = state.listId,
+                        coverPath = state.thumbnailUrl,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                else -> {
+                    AsyncImage(
+                        model = state.thumbnailUrl,
+                        contentDescription = state.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
             }
-        }
-
-        // Title + subtitle, below the cover, not over it
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-            Text(
-                text = state.title,
-                style = MaterialTheme.typography.headlineSmall,
-                color = contentColor,
-                fontWeight = FontWeight.ExtraBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(4.dp))
-            if (!state.subtitle.isNullOrBlank()) {
-                Text(
-                    text = state.subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = secondaryColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onHeaderArtistClick() }
-                        .padding(vertical = 2.dp),
-                )
-            }
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = state.trackCountLabel,
-                style = MaterialTheme.typography.bodySmall,
-                color = secondaryColor,
-            )
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            // Play button
-            Box(
-                Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(Color.White)
-                    .clickable { onPlayAllClick() },
-                contentAlignment = Alignment.Center,
+            Row(
+                Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    imageVector = VzIcons.PlayCircleFilled,
-                    contentDescription = "Tocar",
-                    tint = Color.Black,
-                    modifier = Modifier.size(32.dp),
+                MediaListCircleButton(
+                    VzIcons.Close,
+                    "Fechar",
+                    onBackClick
                 )
-            }
-            Box(
-                Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.18f))
-                    .clickable { onShuffleClick() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = VzIcons.Shuffle,
-                    contentDescription = "Aleatório",
-                    tint = contentColor,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-            Spacer(Modifier.weight(1f))
-            if (state.showFavorite) {
-                Box(
-                    Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.12f))
-                        .clickable { onFavoriteClick() },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = if (state.isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
-                        contentDescription = if (state.isFavorite) "Desfavoritar" else "Favoritar",
-                        tint = if (state.isFavorite) Color(0xFFF43F5E) else contentColor,
-                        modifier = Modifier.size(22.dp),
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (state.showFavorite) {
+                        MediaListCircleButton(
+                            icon = if (state.isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
+                            contentDescription = if (state.isFavorite) "Remover dos favoritos" else "Favoritar playlist",
+                            onClick = onFavoriteClick,
+                        )
+                    }
+                    MediaListCircleButton(
+                        VzIcons.Search,
+                        "Pesquisar",
+                        onSearchClick
+                    )
+                    MediaListCircleButton(
+                        VzIcons.MoreVert,
+                        "Mais opções",
+                        onMoreClick
                     )
                 }
             }
         }
-
-        Spacer(Modifier.height(18.dp))
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 24.dp)
+                .offset(y = (-12).dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = state.title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(8.dp))
+            val ownerName = state.owner?.takeIf {
+                it.isNotBlank()
+            }
+            if (!ownerName.isNullOrBlank()) {
+                val isClickableOwner = !state.isLocal && onArtistClick != null
+                Row(
+                    modifier = Modifier.clip(RoundedCornerShape(50))
+                        .then(
+                        if (isClickableOwner) {
+                            Modifier.clickable {
+                                onArtistClick?.invoke()
+                            }.padding(horizontal = 10.dp, vertical = 4.dp)
+                        } else {
+                            Modifier
+                        }
+                    ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    if (!state.ownerAvatarUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = state.ownerAvatarUrl,
+                            contentDescription = ownerName,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(24.dp).clip(CircleShape),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(
+                        text = ownerName,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White.copy(alpha = 0.92f),
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+            }
+            val statsText = if (state.isAlbum) {
+                listOfNotNull(
+                    "Álbum",
+                    state.year?.takeIf {
+                        it.isNotBlank()
+                    },
+                    state.trackCountLabel.takeIf {
+                        state.allTracks.isNotEmpty()
+                    },
+                    state.totalDurationLabel.takeIf {
+                        it.isNotBlank()
+                    },
+                ).joinToString(" • ")
+            } else {
+                listOfNotNull(
+                    "Playlist",
+                    state.year?.takeIf {
+                        it.isNotBlank()
+                    },
+                    state.trackCountLabel.takeIf {
+                        (state.originalTrackCount ?: state.allTracks.size) > 0
+                    },
+                    state.totalDurationLabel.takeIf {
+                        it.isNotBlank()
+                    },
+                ).joinToString(" • ")
+            }
+            if (statsText.isNotBlank()) {
+                Text(
+                    text = statsText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.72f),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        if (state.showTabs) {
+            MediaListTabs(state.selectedTab, onTabSelected)
+            Spacer(Modifier.height(12.dp))
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                Modifier.clip(RoundedCornerShape(50)).background(Color(0xFF1E40AF))
+                    .clickable {
+                    onPlayAllClick()
+                }.padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    VzIcons.Play,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    "Play",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
+                    .clickable {
+                    onShuffleClick()
+                },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    VzIcons.Shuffle,
+                    contentDescription = "Aleatório",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            if (allTracksDownloaded) {
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = VzIcons.DownloadForOffline,
+                        contentDescription = if (state.isAlbum) "Álbum baixado" else "Playlist baixada",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            if (state.isSortEnabled && state.sortOrder == SortOrder.SHUFFLE) {
+                IconButton(onClick = onShuffleToggle) {
+                    Icon(
+                        imageVector = if (state.isShuffling) VzIcons.StopCircle else VzIcons.Sync,
+                        contentDescription = "Sortear animado",
+                        tint = if (state.isShuffling) Color(0xFF1E40AF) else Color.White,
+                    )
+                }
+            }
+            if (state.isSortEnabled) {
+                IconButton(onClick = onSortClick) {
+                    Icon(
+                        VzIcons.Sort,
+                        contentDescription = "Ordenar",
+                        tint = Color.White,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
     }
 }
-
-/**
- * Collapsed top bar shown after scrolling past the hero.
- * It uses the same solid dominant color, no gradient.
- */
 @Composable
 internal fun MediaListCollapsedHeader(
     title: String,
     thumbnailUrl: String?,
-    dominantColor: Color,
     onBackClick: () -> Unit,
-    onSearchClick: () -> Unit,
-    onMoreClick: () -> Unit,
-    modifier: Modifier = Modifier,
+    dominantColor: Color = Color.Black,
+    onSearchClick: (() -> Unit)? = null,
+    onMoreClick: (() -> Unit)? = null,
+    circularThumbnail: Boolean = false,
 ) {
-    val contentColor = remember(dominantColor) {
-        if (dominantColor.luminance() > 0.60f) Color(0xFF0B0D12) else Color.White
-    }
-    Row(
-        modifier
-            .fillMaxWidth()
-            .background(dominantColor)
-            .statusBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+    val barTint = remember(dominantColor) { lerp(
+        Color.Black,
+        dominantColor,
+        0.38f
+    ) } Row(
+        Modifier.fillMaxWidth().background(barTint).statusBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MediaListCircleButton(VzIcons.ArrowBack, "Voltar", onBackClick)
+        MediaListCircleButton(
+            VzIcons.Close,
+            "Fechar",
+            onBackClick
+        )
         Spacer(Modifier.width(12.dp))
-        Box(
-            Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = 0.15f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (PlaylistCoverPalette.isDefaultColorToken(thumbnailUrl)) {
-                DefaultPlaylistCover(seed = title, coverPath = thumbnailUrl)
-            } else if (!thumbnailUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = thumbnailUrl,
-                    contentDescription = title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
+        if (!thumbnailUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(40.dp).clip(if (circularThumbnail) CircleShape else RoundedCornerShape(6.dp)),
+            )
+            Spacer(Modifier.width(10.dp))
         }
-        Spacer(Modifier.width(12.dp))
         Text(
-            text = title,
+            title,
             style = MaterialTheme.typography.titleMedium,
-            color = contentColor,
+            color = Color.White,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        MediaListCircleButton(VzIcons.Search, "Pesquisar", onSearchClick)
-        Spacer(Modifier.width(8.dp))
-        MediaListCircleButton(VzIcons.MoreVert, "Mais", onMoreClick)
+        if (onSearchClick != null) {
+            IconButton(onClick = onSearchClick) {
+                Icon(
+                    VzIcons.Search,
+                    contentDescription = "Pesquisar",
+                    tint = Color.White
+                )
+            }
+        }
+        if (onMoreClick != null) {
+            IconButton(onClick = onMoreClick) {
+                Icon(
+                    VzIcons.MoreVert,
+                    contentDescription = "Mais opções",
+                    tint = Color.White
+                )
+            }
+        }
     }
 }

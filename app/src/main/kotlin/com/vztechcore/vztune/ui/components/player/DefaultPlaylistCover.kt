@@ -1,20 +1,19 @@
 package com.vztechcore.vztune.ui.components.player
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -22,20 +21,14 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
 import kotlin.math.abs
 
 /**
- * Palette of background colors used when a local playlist is created
+ * Palette of randomized background colors used when a local playlist is created
  * without a custom cover image.
- *
- * Each color is stored as a token like "vz_color:BLUE" in the playlist coverPath.
- * The same token is used in the Library card and inside the playlist screen,
- * so both places always show the exact same cover.
  */
 object PlaylistCoverPalette {
-
     private val colorMap: LinkedHashMap<String, Color> = linkedMapOf(
         "BLUE" to Color(0xFF1D4ED8),
         "BLACK" to Color(0xFF0B0D12),
@@ -49,54 +42,48 @@ object PlaylistCoverPalette {
         "INDIGO" to Color(0xFF4338CA),
         "AMBER" to Color(0xFFD97706),
         "TEAL" to Color(0xFF0D9488),
-        "YELLOW" to Color(0xFFFACC15),
+        "YELLOW" to Color(0xFFEAB308),
         "LIME" to Color(0xFF84CC16),
         "ROSE" to Color(0xFFF43F5E),
         "BROWN" to Color(0xFF92400E),
         "GRAY" to Color(0xFF64748B),
         "VIOLET" to Color(0xFF8B5CF6),
     )
-
-    /** All colors in display order for the color picker. */
-    val allColors: List<Pair<String, Color>> = colorMap.entries.map { it.key to it.value }
-
-    /** True when [value] is a Vz color token, for example "vz_color:RED". */
-    fun isDefaultColorToken(value: String?): Boolean {
+    private val colorEntries: List<Map.Entry <String, Color> > = colorMap.entries.toList()
+    fun isDefaultColorToken(value: String?) : Boolean {
         return !value.isNullOrBlank() && value.startsWith(LocalPlaylistsStore.DEFAULT_COLOR_PREFIX)
     }
-
-    /** Builds a token for a color id, for example "RED" -> "vz_color:RED". */
-    fun tokenFor(id: String): String {
+    fun randomToken() : String {
+        val id = colorEntries.random().key
         return "${LocalPlaylistsStore.DEFAULT_COLOR_PREFIX}$id"
     }
-
-    /** Picks a random color token. Used when no color was chosen. */
-    fun randomToken(): String {
-        return tokenFor(colorMap.keys.random())
+    fun tokenFor(id: String) : String {
+        return "${LocalPlaylistsStore.DEFAULT_COLOR_PREFIX}${id.uppercase()}"
     }
+    fun allColors() : List<Pair <String, Color> > {
+        return colorEntries.map {
+            it.key to
+            it.value
+        }
+    }
+    fun colorForId(id: String) : Color? { return colorMap[id.uppercase()] }
 
-    /**
-     * Resolves the background color for a cover path.
-     * If the path is a color token, its color is returned.
-     * Otherwise a deterministic color is derived from [seed].
-     */
-    fun resolveBackgroundColor(coverPath: String?, seed: String): Color {
+    fun resolveBackgroundColor(coverPath: String?, seed: String) : Color {
         if (!coverPath.isNullOrBlank() && coverPath.startsWith(LocalPlaylistsStore.DEFAULT_COLOR_PREFIX)) {
             val tokenId = coverPath.removePrefix(LocalPlaylistsStore.DEFAULT_COLOR_PREFIX).uppercase()
-            colorMap[tokenId]?.let { return it }
+            colorMap[tokenId]?.let {
+                return it
+            }
         }
-        if (seed.isBlank()) {
-            return colorMap.values.random()
-        }
-        val index = abs(seed.hashCode()) % colorMap.size
-        return colorMap.values.elementAt(index)
+        if (seed.isBlank()) { return colorEntries.random().value } val index = abs(seed.hashCode()) % colorEntries.size
+        return colorEntries[index].value
     }
 }
 
 /**
  * Temporary cover rendered for user playlists without a custom thumbnail.
- * It draws a solid background color plus the Vz monogram with automatic
- * light / dark contrast. The Vz logo is always visible.
+ * Picks a varied background color (blue, black, white, red, green, etc.) and draws
+ * the Vz monogram with automatic light/dark contrast.
  */
 @Composable
 fun DefaultPlaylistCover(
@@ -108,13 +95,11 @@ fun DefaultPlaylistCover(
         PlaylistCoverPalette.resolveBackgroundColor(coverPath, seed)
     }
     val logoColor = remember(bgColor) {
-        if (bgColor.luminance() > 0.55f) Color(0xFF0B0D12) else Color.White
+        if (bgColor.luminance() > 0.55f)
+        Color(0xFF0B0D12) else Color.White
     }
-
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(bgColor),
+        modifier = modifier.fillMaxSize().background(bgColor),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(modifier = Modifier.fillMaxSize(0.46f)) {
@@ -133,7 +118,11 @@ fun DefaultPlaylistCover(
                 lineTo(w * 0.30f, h * 0.76f)
                 lineTo(w * 0.52f, h * 0.24f)
             }
-            drawPath(path = vPath, color = logoColor, style = stroke)
+            drawPath(
+                path = vPath,
+                color = logoColor,
+                style = stroke
+            )
 
             // "z" monogram stroke on the right
             val zPath = Path().apply {
@@ -142,7 +131,11 @@ fun DefaultPlaylistCover(
                 lineTo(w * 0.58f, h * 0.76f)
                 lineTo(w * 0.92f, h * 0.76f)
             }
-            drawPath(path = zPath, color = logoColor, style = stroke)
+            drawPath(
+                path = zPath,
+                color = logoColor,
+                style = stroke
+            )
 
             // Subtle accent dot above "z"
             drawCircle(
@@ -155,31 +148,33 @@ fun DefaultPlaylistCover(
 }
 
 /**
- * Color picker used by the playlist editor.
- * It is reused in the create sheet and in the playlist options sheet,
- * so the same palette is available in both places.
+ * Color picker for Vz covers. Shows all palette colors as circles.
+ * The selected color gets a white ring.
  */
 @Composable
 fun VzCoverColorPicker(
     selectedToken: String?,
-    onSelect: (String) -> Unit,
+    onColorSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    FlowRow(modifier = modifier, maxItemsInEachRow = 9) {
-        PlaylistCoverPalette.allColors.forEach { (id, color) ->
+    val colors = PlaylistCoverPalette.allColors()
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = modifier,
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+    ) {
+        colors.forEach {(id, color) ->
             val token = PlaylistCoverPalette.tokenFor(id)
-            val selected = token == selectedToken
-            Box(
-                Modifier
-                    .padding(4.dp)
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(color)
-                    .then(
-                        if (selected) Modifier.border(2.dp, Color.White, CircleShape)
-                        else Modifier.border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
-                    )
-                    .clickable { onSelect(token) }
+            val isSelected = selectedToken == token
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier.size(40.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(color).border(
+                    width = if (isSelected) 2.dp else 1.dp,
+                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.25f),
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                ).clickable {
+                    onColorSelected(token)
+                },
             )
         }
     }

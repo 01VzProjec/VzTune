@@ -1,19 +1,29 @@
 package com.vztechcore.vztune.ui.screens.medialist
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
-import com.vztechcore.vztune.core.domain.music.Album
 import com.vztechcore.vztune.core.domain.music.Artist
+import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.core.domain.search.SortOrder
+import com.vztechcore.vztune.data.download.TrackDownloader
+import com.vztechcore.vztune.data.player.PlayerController
+import com.vztechcore.vztune.data.prefs.models.StoredPlaylist
+import com.vztechcore.vztune.data.prefs.models.isLocalPlaylistId
+import com.vztechcore.vztune.data.prefs.store.FavoritePlaylistsStore
 import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
-import com.vztechcore.vztune.data.prefs.store.PlaylistCoverStorage
-import com.vztechcore.vztune.data.repository.MediaListRepository
-import com.vztechcore.vztune.domain.playback.NowPlayingController
+import com.vztechcore.vztune.data.prefs.store.MediaListPreferencesStore
+import com.vztechcore.vztune.data.ytmusic.YTMusicOwnerValidator
+import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -22,231 +32,389 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
 import javax.inject.Inject
 
-/**
- * ViewModel for the playlist / album detail screen.
- *
- * It loads the tracks, handles sorting, reordering, favorites and local
- * playlist management, including cover changes.
- *
- * Cover rules for local playlists:
- * - A photo cover is stored as a file path.
- * - A Vz color cover is stored as a "vz_color:" token.
- * - Changing the color replaces any photo, and picking a photo replaces any color.
- */
 @HiltViewModel
-class MediaListViewModel @Inject constructor(
+class MediaListViewModel
+@Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val repository: MediaListRepository,
+    @ApplicationContext private val context: Context,
+    private val ytMusicRepository: YTMusicRepository,
+    private val playerController: PlayerController,
+    private val trackDownloader: TrackDownloader,
+    private val store: MediaListPreferencesStore,
+    private val favoritesStore: FavoritePlaylistsStore,
     private val localStore: LocalPlaylistsStore,
-    private val coverStorage: PlaylistCoverStorage,
-    private val nowPlaying: NowPlayingController,
 ) : ViewModel() {
-
-    private val route: Routes.MediaList = savedStateHandle.toRoute()
-
-    private val _uiState = MutableStateFlow(MediaListUiState.fromRoute(route))
-    val uiState: StateFlow<MediaListUiState> = _uiState.asStateFlow()
-
-    private val _navigationEvent = MutableSharedFlow<NavigationEvent>()
-    val navigationEvent: SharedFlow<NavigationEvent> = _navigationEvent.asSharedFlow()
-
-    init {
-        load()
-        observeLocalPlaylist()
+    sealed interface NavigationEvent {
+        data class OpenArtist(val artist: Artist) : NavigationEvent
+        data object CloseScreen: NavigationEvent
     }
-
-    /** Loads the playlist / album tracks from the repository. */
-    private fun load() {
+    private val _navigationEvent = MutableSharedFlow<NavigationEvent> ()
+    val navigationEvent: SharedFlow<NavigationEvent> = _navigationEvent.asSharedFlow()
+    private val route = savedStateHandle.toRoute<Routes.MediaList> ()
+    private val _uiState = MutableStateFlow(MediaListUiState(
+        listId = route.id,
+        title = route.title,
+        subtitle = route.subtitle,
+        thumbnailUrl = route.thumbnailUrl,
+        isAlbum = route.isAlbum,
+        isLocal = isLocalPlaylistId(route.id),
+    ))
+    val uiState: StateFlow<MediaListUiState> = _uiState.asStateFlow()
+    init {
+        val savedSort = store.getSortOrder(route.id)
+        val savedManual = store.getManualOrder(route.id)
+        _uiState.update {
+            it.copy(sortOrder = savedSort, manualOrder = savedManual)
+        }
+        loadContent()
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            val result = if (route.isAlbum) {
-                repository.getAlbum(route.id)
-            } else {
-                repository.getPlaylist(route.id)
+            favoritesStore.contains(route.id).collect { favorite ->
+                _uiState.update {
+                    it.copy(isFavorite = favorite)
+                }
             }
-            result.onSuccess { data ->
+        }
+    }
+    private fun observeLocalPlaylist() {
+        viewModelScope.launch {
+            localStore.ensureRandomDefaultCover(route.id)
+            localStore.playlist(route.id).collect { playlist ->
+                _uiState.update {
+                    if (playlist == null) {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = "Playlist não encontrada."
+                        )
+                    } else {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = null,
+                            title = playlist.name,
+                            owner = "Você",
+                            subtitle = "Você",
+                            thumbnailUrl = playlist.coverPath,
+                            mosaicThumbnails = playlist.mosaic,
+                            allTracks = playlist.tracks.mapNotNull { stored ->
+                                stored.toTrack()
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+    private fun loadContent() {
+        if (_uiState.value.isLocal) { observeLocalPlaylist() return
+        } viewModelScope.launch {
+            _uiState.update {
+                it.copy(isLoading = true, errorMessage = null)
+            }
+            runCatching {
+                if (route.isAlbum) {
+                    val album = ytMusicRepository.browseAlbum(route.id)
+                    val resolvedArtist = listOfNotNull(
+                        album.artist,
+                        route.subtitle,
+                        _uiState.value.subtitle,
+                    ).firstOrNull {
+                        YTMusicOwnerValidator.isValidOwnerName(it)
+                    }
+                    val resolvedTitle = album.title ?: _uiState.value.title
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            title = resolvedTitle,
+                            subtitle = resolvedArtist ?: it.subtitle,
+                            owner = resolvedArtist,
+                            ownerAvatarUrl = null,
+                            artistId = album.artistId,
+                            year = album.year,
+                            thumbnailUrl = album.coverUrl ?: it.thumbnailUrl,
+                            description = album.description,
+                            views = album.views,
+                            allTracks = album.tracks,
+                        )
+                    }
+                    loadMoreAlbumsByArtist(
+                        artistName = resolvedArtist,
+                        artistId = album.artistId,
+                        excludeAlbumTitle = resolvedTitle,
+                    )
+                } else {
+                    var playlist = ytMusicRepository.browsePlaylist(route.id)
+                    if (playlist.tracks.isEmpty()) {
+                        delay(1000)
+                        playlist = ytMusicRepository.browsePlaylist(route.id)
+                    }
+                    val resolvedOwner = listOfNotNull(
+                        playlist.owner,
+                        route.subtitle,
+                        _uiState.value.subtitle,
+                    ).firstOrNull {
+                        YTMusicOwnerValidator.isValidOwnerName(it)
+                    }
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            title = playlist.title ?: it.title,
+                            subtitle = resolvedOwner ?: it.subtitle,
+                            owner = resolvedOwner,
+                            ownerAvatarUrl = playlist.ownerAvatarUrl,
+                            year = playlist.year,
+                            views = playlist.views,
+                            originalTrackCount = playlist.trackCount,
+                            thumbnailUrl = playlist.coverUrl ?: it.thumbnailUrl,
+                            description = playlist.description,
+                            mosaicThumbnails = playlist.tracks.asSequence()
+                                .mapNotNull { t ->
+                                t.thumbnailUrl
+                            }.distinct().take(4).toList(),
+                            allTracks = playlist.tracks,
+                        )
+                    }
+                    if (playlist.ownerAvatarUrl.isNullOrBlank() && !resolvedOwner.isNullOrBlank()) { loadPlaylistOwnerAvatar(resolvedOwner) }
+                }
+            }.onFailure { e ->
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        allTracks = data.tracks,
-                        displayedTracks = data.tracks,
-                        title = data.title,
-                        subtitle = data.subtitle,
-                        thumbnailUrl = data.thumbnailUrl ?: it.thumbnailUrl,
-                        owner = data.owner,
-                        description = data.description,
-                        moreAlbumsByArtist = data.moreAlbumsByArtist,
-                        isAlbum = route.isAlbum,
+                        errorMessage = "Erro: ${e.message}"
                     )
                 }
-            }.onFailure {
-                _uiState.update { it.copy(isLoading = false) }
             }
         }
     }
-
-    /**
-     * Observes the local playlist so cover, title and track order stay in sync.
-     * If a local playlist has no cover at all, a random Vz color token is
-     * assigned once, so the Library card and the detail screen match.
-     */
-    private fun observeLocalPlaylist() {
+    private fun loadPlaylistOwnerAvatar(ownerName: String) {
         viewModelScope.launch {
-            localStore.playlists.collect { playlists ->
-                val local = playlists.firstOrNull { it.id == route.id } ?: return@collect
-                if (local.coverPath.isNullOrBlank()) {
-                    localStore.ensureRandomDefaultCover(local.id)
-                }
-                _uiState.update {
-                    it.copy(
-                        title = local.name,
-                        thumbnailUrl = local.coverPath,
-                        isLocal = true,
+            val primary = ownerName.substringBefore(",").substringBefore("&").trim()
+            if (primary.isBlank() || primary.equals("YouTube Music", ignoreCase = true)) return
+        @launch val resolved = runCatching {
+                ytMusicRepository.findChannelOrArtist(primary)
+            }.getOrNull()
+            if (resolved != null) {
+                _uiState.update { current ->
+                    current.copy(
+                        artistId = current.artistId ?: resolved.id,
+                        ownerAvatarUrl = current.ownerAvatarUrl ?: resolved.thumbnailUrl,
                     )
                 }
             }
         }
     }
-
-    /** Switches the selected tab. */
+    private fun loadMoreAlbumsByArtist(
+        artistName: String?,
+        artistId: String?,
+        excludeAlbumTitle: String?,
+    ) {
+        viewModelScope.launch {
+            val(artist, moreAlbums) = ytMusicRepository.getMoreAlbumsByArtist(
+                artistName = artistName,
+                artistId = artistId,
+                excludeAlbumId = route.id,
+                excludeAlbumTitle = excludeAlbumTitle,
+            )
+            _uiState.update { current ->
+                current.copy(
+                    artistId = artist?.id ?: current.artistId,
+                    ownerAvatarUrl = artist?.thumbnailUrl ?: current.ownerAvatarUrl,
+                    moreAlbumsByArtist = moreAlbums,
+                )
+            }
+        }
+    }
     fun onTabSelected(tab: MediaListTab) {
-        _uiState.update { it.copy(selectedTab = tab) }
-    }
-
-    /** Plays a track. */
-    fun onTrackClick(track: Track) {
-        nowPlaying.play(track)
-    }
-
-    /** Plays all tracks from the start. */
-    fun onPlayAll() {
-        val tracks = _uiState.value.displayedTracks
-        if (tracks.isNotEmpty()) nowPlaying.playAll(tracks, 0)
-    }
-
-    /** Plays all tracks in shuffled order. */
-    fun onShuffle() {
-        val tracks = _uiState.value.displayedTracks
-        if (tracks.isNotEmpty()) nowPlaying.playShuffled(tracks)
-    }
-
-    /** Applies a sort order to the displayed tracks. */
-    fun onSortOrderSelected(order: MediaListSortOrder) {
-        _uiState.update { it.copy(sortOrder = order) }
-    }
-
-    /** Moves a track inside a local playlist. */
-    fun onReorder(from: Int, to: Int) {
-        viewModelScope.launch {
-            localStore.reorderTrack(route.id, from, to)
+        if (tab == _uiState.value.selectedTab) return
+        _uiState.update {
+            it.copy(selectedTab = tab)
         }
     }
-
-    /** Starts shuffle mode. */
+    fun onSortOrderSelected(order: SortOrder) {
+        if (order == _uiState.value.sortOrder) return
+        _uiState.update {
+            it.copy(sortOrder = order, isShuffling = false)
+        }
+        store.setSortOrder(route.id, order)
+    }
+    fun onReorder(fromIndex: Int, toIndex: Int) {
+        val currentTracks = _uiState.value.getDisplayTracks()
+        if (fromIndex !in currentTracks.indices) return
+        if (toIndex !in currentTracks.indices) return
+        val newList = currentTracks.toMutableList()
+        val item = newList.removeAt(fromIndex)
+        newList.add(toIndex, item)
+        val newOrderIds = newList.map {
+            it.id
+        }
+        _uiState.update {
+            it.copy(
+                manualOrder = newOrderIds,
+                sortOrder = SortOrder.MANUAL
+            )
+        }
+        store.setManualOrder(route.id, newOrderIds)
+        store.setSortOrder(route.id, SortOrder.MANUAL)
+    }
     fun startShuffle() {
-        onShuffle()
+        _uiState.update {
+            it.copy(isShuffling = true)
+        }
     }
-
-    /** Shuffles once. */
     fun shuffleOnce() {
-        onShuffle()
+        val currentTracks = _uiState.value.allTracks
+        if (currentTracks.isEmpty()) return
+        val newOrderIds = currentTracks.map {
+            it.id
+        }.shuffled()
+        _uiState.update {
+            it.copy(
+                manualOrder = newOrderIds,
+                sortOrder = SortOrder.SHUFFLE
+            )
+        }
     }
-
-    /** Stops shuffle mode. */
     fun stopShuffle() {
-        // Shuffle is a one-shot action in this screen, nothing to stop.
+        _uiState.update {
+            it.copy(isShuffling = false)
+        }
+        store.setManualOrder(route.id, _uiState.value.manualOrder)
+        store.setSortOrder(route.id, SortOrder.SHUFFLE)
     }
-
-    /** Queues a track to play next. */
-    fun onPlayNextClick(track: Track) {
-        nowPlaying.playNext(track)
+    fun onTrackClick(track: Track) {
+        val sorted = _uiState.value.getDisplayTracks()
+        val idx = sorted.indexOfFirst {
+            it.id == track.id && it.source == track.source
+        }
+        if (idx >= 0)
+        playerController.playQueue(sorted, idx) else playerController.playQueue(listOf(track), 0)
     }
-
-    /** Toggles the favorite state of the playlist / album. */
     fun onFavoriteClick() {
-        _uiState.update { it.copy(isFavorite = !it.isFavorite) }
+        val state = _uiState.value
+        viewModelScope.launch {
+            favoritesStore.toggle(StoredPlaylist(
+                id = route.id,
+                title = state.title,
+                owner = state.owner,
+                thumbnailUrl = state.thumbnailUrl,
+                mosaic = state.mosaicThumbnails,
+            ))
+        }
     }
-
-    /** Queues all tracks to play next. */
+    fun onPlayNextClick(track: Track) {
+        playerController.addToQueueNext(track)
+    }
     fun onPlayNextAll() {
-        nowPlaying.playNextAll(_uiState.value.displayedTracks)
+        val tracks = _uiState.value.getDisplayTracks()
+        tracks.asReversed().forEach {
+            playerController.addToQueueNext(it)
+        }
     }
-
-    /** Adds all tracks to the queue. */
     fun onAddToQueueAll() {
-        nowPlaying.addToQueue(_uiState.value.displayedTracks)
+        val tracks = _uiState.value.getDisplayTracks()
+        tracks.forEach {
+            playerController.addToQueueEnd(it)
+        }
     }
-
-    /** Downloads all tracks. */
     fun onDownloadAll() {
-        viewModelScope.launch {
-            repository.downloadAll(_uiState.value.displayedTracks)
-        }
+        val tracks = _uiState.value.allTracks
+        if (tracks.isNotEmpty()) { trackDownloader.downloadAll(tracks) }
     }
-
-    /** Navigates to the artist of the current album. */
     fun onOpenArtist() {
+        val state = _uiState.value
+        val directId = state.artistId?.takeIf {
+            it.startsWith("UC")
+        }
+        val artistName = state.owner?.takeIf {
+            it.isNotBlank()
+        }
+        if (directId != null && artistName != null) {
+            viewModelScope.launch {
+                _navigationEvent.emit(NavigationEvent.OpenArtist(Artist(
+                    id = directId,
+                    name = artistName,
+                    thumbnailUrl = state.ownerAvatarUrl,
+                    source = Source.YOUTUBE_MUSIC,
+                )))
+            }
+            return
+        }
+        if (artistName != null) { onOpenArtistByName(artistName) }
+    }
+    fun onOpenArtistByName(artistName: String) {
         viewModelScope.launch {
-            val artist = repository.resolveArtistForAlbum(route.id, _uiState.value.owner)
-            if (artist != null) {
-                _navigationEvent.emit(NavigationEvent.OpenArtist(artist))
+            val found = runCatching {
+                ytMusicRepository.findChannelOrArtist(artistName)
+            }.getOrNull()
+            if (found != null) {
+                _navigationEvent.emit(NavigationEvent.OpenArtist(found))
             }
         }
     }
-
-    /** Navigates to an artist by name. */
-    fun onOpenArtistByName(name: String) {
-        viewModelScope.launch {
-            val artist = repository.resolveArtistByName(name)
-            if (artist != null) {
-                _navigationEvent.emit(NavigationEvent.OpenArtist(artist))
-            }
-        }
-    }
-
-    /** Deletes the local playlist and closes the screen. */
     fun onDeleteLocalPlaylist() {
+        if (!_uiState.value.isLocal) return
         viewModelScope.launch {
-            localStore.delete(route.id)
+            localStore.remove(route.id)
             _navigationEvent.emit(NavigationEvent.CloseScreen)
         }
     }
-
-    /** Renames the local playlist. */
     fun onRenameLocalPlaylist(newTitle: String) {
+        if (!_uiState.value.isLocal) return
+        val clean = newTitle.trim()
+        if (clean.isBlank()) return
         viewModelScope.launch {
-            localStore.rename(route.id, newTitle)
+            localStore.rename(route.id, clean)
         }
     }
-
-    /**
-     * Changes the local playlist cover to a photo.
-     * The photo path replaces any previous Vz color token.
-     */
-    fun onChangeLocalPlaylistCover(uri: Uri) {
-        viewModelScope.launch {
-            val saved = coverStorage.save(route.id, uri) ?: return@launch
-            localStore.updateCover(route.id, saved)
+    fun onChangeLocalPlaylistCover(coverUri: Uri) {
+        if (!_uiState.value.isLocal) return
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val coversDir = File(context.filesDir, "playlist_covers")
+                    .apply {
+                    if (!exists())
+                    mkdirs()
+                }
+                val safeId = route.id.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                val destFile = File(
+                    coversDir,
+                    "${safeId}_${System.currentTimeMillis()}.jpg"
+                )
+                context.contentResolver.openInputStream(coverUri)?.use { input ->
+                    FileOutputStream(destFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                if (destFile.exists() && destFile.length() > 0L) {
+                    _uiState.value.thumbnailUrl?.let { oldPath ->
+                        val oldFile = File(oldPath)
+                        if (oldFile.exists() && oldFile.parentFile == coversDir) {
+                            runCatching {
+                                oldFile.delete()
+                            }
+                        }
+                    }
+                    localStore.updateCover(route.id, destFile.absolutePath)
+                }
+            }
         }
     }
-
-    /**
-     * Changes the local playlist cover to a Vz color.
-     * The color token replaces any previous photo, so the Vz logo with the
-     * chosen color becomes the official cover in the Library and here.
-     */
     fun onChangeCoverColor(colorToken: String) {
+        if (!_uiState.value.isLocal) return
         viewModelScope.launch {
-            if (!_uiState.value.isLocal) return@launch
             localStore.updateCover(route.id, colorToken)
         }
     }
-
-    /** Navigation events emitted to the navigation host. */
-    sealed interface NavigationEvent {
-        data class OpenArtist(val artist: Artist) : NavigationEvent
-        data object CloseScreen : NavigationEvent
+    fun onPlayAll() {
+        val sorted = _uiState.value.getDisplayTracks()
+        if (sorted.isNotEmpty())
+        playerController.playQueue(sorted, 0)
+    }
+    fun onShuffle() {
+        val shuffled = _uiState.value.filteredTracks.shuffled()
+        if (shuffled.isNotEmpty())
+        playerController.playQueue(shuffled, 0)
     }
 }

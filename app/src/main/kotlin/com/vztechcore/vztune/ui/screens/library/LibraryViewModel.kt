@@ -4,107 +4,106 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.data.player.PlayerController
+import com.vztechcore.vztune.data.prefs.store.FavoritePlaylistsStore
+import com.vztechcore.vztune.data.prefs.models.LocalPlaylist
 import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
+import com.vztechcore.vztune.data.prefs.store.PlayHistoryStore
 import com.vztechcore.vztune.data.prefs.store.PlaylistCoverStorage
-import com.vztechcore.vztune.data.repository.LibraryRepository
-import com.vztechcore.vztune.domain.playback.NowPlayingController
+import com.vztechcore.vztune.data.prefs.models.StoredPlaylist
+import com.vztechcore.vztune.data.prefs.models.newLocalPlaylistId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * ViewModel for the Library screen.
- *
- * Cover rule for local playlists:
- * - If the user picked a photo, the saved photo path is stored.
- * - If the user did not pick a photo, the chosen Vz color token is stored.
- * - The same coverPath is exposed as imageUrl, so the Library card and the
- *   playlist detail screen always show the same cover.
- */
 @HiltViewModel
-class LibraryViewModel @Inject constructor(
-    private val repository: LibraryRepository,
+class LibraryViewModel
+@Inject constructor(
+    historyStore: PlayHistoryStore,
     private val localStore: LocalPlaylistsStore,
+    favoritesStore: FavoritePlaylistsStore,
     private val coverStorage: PlaylistCoverStorage,
-    private val nowPlaying: NowPlayingController,
+    private val playerController: PlayerController,
 ) : ViewModel() {
-
-    private val _uiState = MutableStateFlow(LibraryUiState())
-    val uiState: StateFlow<LibraryUiState> = _uiState.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            combine(
-                repository.favoriteTracks,
-                repository.recentTracks,
-                localStore.playlists,
-            ) { favorites, recents, locals ->
-                Triple(favorites, recents, locals)
-            }.collect { (favorites, recents, locals) ->
-                val localItems = locals.map { it.toItem() }
-                _uiState.update { current ->
-                    current.copy(
-                        localPlaylists = localItems,
-                        favoriteCount = favorites.size,
-                        recentTracks = recents.take(10),
-                    )
-                }
-            }
-        }
-    }
-
-    /** Switches the selected tab in the Library. */
+    private val selectedTab = MutableStateFlow(LibraryTab.OVERVIEW)
+    private var recentTracks: List<Track> = emptyList()
+    val uiState: StateFlow<LibraryUiState> = combine(
+        selectedTab,
+        historyStore.tracks,
+        localStore.items,
+        favoritesStore.items,
+    ) { tab, recent, mine, favorites ->
+        recentTracks = recent
+        LibraryUiState(
+            selectedTab = tab,
+            recentTracks = recent,
+            myPlaylists = mine.map {
+                it.toItem()
+            },
+            favoritePlaylists = favorites.map {
+                it.toItem()
+            },
+        )
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        LibraryUiState()
+    )
     fun onTabSelected(tab: LibraryTab) {
-        _uiState.update { it.copy(selectedTab = tab) }
+        selectedTab.value = tab
     }
-
-    /** Plays a track from the recent list. */
     fun onTrackClick(track: Track) {
-        nowPlaying.play(track)
+        val index = recentTracks.indexOfFirst {
+            it.id == track.id && it.source == track.source
+        }
+        if (index >= 0)
+        playerController.playQueue(recentTracks, index) else playerController.playQueue(listOf(track), 0)
     }
 
     /**
      * Creates a local playlist.
-     *
-     * @param name playlist name.
-     * @param coverUri optional photo picked by the user. When present it wins.
-     * @param colorToken optional Vz color token like "vz_color:RED".
-     *   Used only when [coverUri] is null. When both are null a random token is used.
+     * Priority: photo cover wins, then Vz color token, then no cover (mosaic
+     fallback).
+     * The [colorToken] param has a default so old 2-arg calls still compile.
      */
-    fun createPlaylist(name: String, coverUri: Uri?, colorToken: String?) {
+    fun createPlaylist(
+        name: String,
+        coverUri: Uri?,
+        colorToken: String? = null
+    ) {
         viewModelScope.launch {
             val id = newLocalPlaylistId()
-            val coverPath = if (coverUri != null) {
+            val coverPath = when { coverUri != null ->
                 coverStorage.save(id, coverUri)
-            } else {
-                colorToken ?: LocalPlaylistsStore.randomDefaultCoverToken()
+                !colorToken.isNullOrBlank() ->
+                colorToken
+                else ->
+                null
             }
-            localStore.addFirst(
-                LocalPlaylist(
-                    id = id,
-                    name = name.trim(),
-                    coverPath = coverPath,
-                )
-            )
+            localStore.addFirst(LocalPlaylist(
+                id = id,
+                name = name.trim(),
+                coverPath = coverPath
+            ))
         }
     }
-
-    /** Maps a stored local playlist to the Library card item. */
-    private fun LocalPlaylist.toItem(): LibraryPlaylistItem {
-        val mosaic = repository.mosaicForPlaylist(id)
-        return LibraryPlaylistItem(
-            id = id,
-            title = name,
-            subtitle = "Sua playlist",
-            // When there is an explicit cover (photo or Vz color token) it is the cover.
-            // The mosaic is only used when there is no cover at all.
-            imageUrl = coverPath ?: mosaic.firstOrNull(),
-            mosaic = if (coverPath == null) mosaic else emptyList(),
-        )
-    }
+    private fun LocalPlaylist.toItem() = LibraryPlaylistItem(
+        id = id,
+        title = name,
+        subtitle = "Sua playlist",
+        imageUrl = coverPath ?: mosaic.firstOrNull(),
+        mosaic = if (coverPath == null) mosaic else emptyList(),
+    )
+    private fun StoredPlaylist.toItem() = LibraryPlaylistItem(
+        id = id,
+        title = title,
+        subtitle = owner,
+        imageUrl = thumbnailUrl,
+        mosaic = mosaic,
+    )
 }

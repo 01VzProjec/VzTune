@@ -5,103 +5,90 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
 import com.vztechcore.vztune.ui.components.feedback.VzLogoStatic
 import com.vztechcore.vztune.ui.components.player.DefaultPlaylistCover
 import com.vztechcore.vztune.ui.components.player.PlaylistCoverPalette
-import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
 
 /**
- * Card used in the Library for playlists and other collections.
+ * Square cover with title and subtitle below. Used for albums, singles, playlists
+ * (artist screen, "see all" grids and the Library). A mosaic of 4+ thumbnails wins
+ over [imageUrl].
  *
- * Cover priority:
- * 1. Mosaic when there are 4 or more track thumbnails and no explicit cover.
- * 2. Vz color cover when imageUrl is a "vz_color:" token.
- * 3. Real image when imageUrl is a file path or http url.
- * 4. Static Vz logo fallback when there is nothing else.
- *
- * The color token is the same token used inside the playlist screen,
- * so the card and the detail screen always show the same cover.
+ * When there is neither a mosaic nor a cover (a brand-new local playlist with no
+ * tracks and no chosen cover), the card is drawn with a black background and the
+ * static VzTechCore logo — same identity shown on the loading screens.
  */
 @Composable
 fun CoverCard(
     title: String,
-    subtitle: String? = null,
+    subtitle: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     imageUrl: String? = null,
     mosaic: List<String> = emptyList(),
-    isEmpty: Boolean = false,
-    onClick: () -> Unit = {},
-    modifier: Modifier = Modifier,
 ) {
+    val isEmpty = mosaic.isEmpty() && imageUrl == null
     Column(
-        modifier
-            .width(140.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .clickable { onClick() },
+        modifier.clip(RoundedCornerShape(12.dp)).clickable {
+            onClick()
+        },
     ) {
         Box(
-            Modifier
-                .size(140.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color.White.copy(alpha = 0.08f)),
+            Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp))
+                .background(if (isEmpty) Color.Black else Color.White.copy(alpha = 0.08f)),
+            contentAlignment = Alignment.Center,
         ) {
-            when {
-                mosaic.size >= 4 -> {
-                    PlaylistMosaic(mosaic)
-                }
-                PlaylistCoverPalette.isDefaultColorToken(imageUrl) -> {
-                    DefaultPlaylistCover(
-                        seed = title,
-                        coverPath = imageUrl,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-                !imageUrl.isNullOrBlank() -> {
-                    AsyncImage(
-                        model = imageUrl,
-                        contentDescription = title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-                isEmpty -> {
-                    VzLogoStatic(modifier = Modifier.fillMaxSize(0.5f))
-                }
-                else -> {
-                    VzLogoStatic(modifier = Modifier.fillMaxSize(0.5f))
-                }
+            when { mosaic.size >= 4 ->
+                PlaylistMosaic(mosaic)
+                PlaylistCoverPalette.isDefaultColorToken(imageUrl) ->
+                DefaultPlaylistCover(
+                    seed = title,
+                    coverPath = imageUrl,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                imageUrl != null ->
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                else ->
+                VzLogoStatic(Modifier.fillMaxSize(0.9f))
             }
         }
-
-        Spacer(Modifier.height(6.dp))
-
+        Spacer(Modifier.height(8.dp))
         Text(
             text = title,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.titleSmall,
             color = Color.White,
-            maxLines = 1,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-
         if (!subtitle.isNullOrBlank()) {
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f),
+                color = Color.White.copy(alpha = 0.55f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

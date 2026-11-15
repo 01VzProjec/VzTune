@@ -344,7 +344,52 @@
           "line": 30
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/icons/media/Artist.kt",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        },
+        "start": {
+          "column": 0,
+          "index": 0,
+          "line": 0
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/icons/media/DownloadForOffline.kt",
+      "selection": {
+        "end": {
+          "column": 5,
+          "index": 839,
+          "line": 9
+        },
+        "start": {
+          "column": 5,
+          "index": 839,
+          "line": 9
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/download/LocalDownloadedKeys.kt",
+      "selection": {
+        "end": {
+          "column": 1,
+          "index": 641,
+          "line": 17
+        },
+        "start": {
+          "column": 1,
+          "index": 641,
+          "line": 17
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/screens/main/MainViewModel.kt"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/kotlin/com/vztechcore/vztune/ui/components/download/LocalDownloadedKeys.kt"
 }

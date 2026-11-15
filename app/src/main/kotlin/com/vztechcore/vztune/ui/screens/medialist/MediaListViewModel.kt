@@ -262,7 +262,7 @@ class MediaListViewModel @Inject constructor(
     fun onDeleteLocalPlaylist() {
         if (!_uiState.value.isLocal) return
         viewModelScope.launch {
-            localStore.delete(route.id)
+            localStore.remove(route.id)
             _navigationEvent.emit(NavigationEvent.CloseScreen)
         }
     }

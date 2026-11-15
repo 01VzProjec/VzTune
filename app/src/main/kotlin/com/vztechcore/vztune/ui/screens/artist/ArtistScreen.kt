@@ -1,6 +1,7 @@
 package com.vztechcore.vztune.ui.screens.artist
 
 import androidx.compose.animation.animateContentSize
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -92,6 +94,19 @@ fun ArtistScreen(
     fun seeAll(kind: ArtistListKind, ref: BrowseRef?): (() -> Unit)? =
         ref?.let { { onSeeAllClick(kind, it) } }
 
+    val context = LocalContext.current
+    // Compartilhar artista: abre a barra de compartilhar do Android com link do YouTube Music
+    val onShareClick: () -> Unit = {
+        val url = "https://music.youtube.com/browse/${state.artistId}"
+        val shareText = "Confere esse artista no VzTune \uD83C\uDFB�\n${state.name}\n$url"
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, state.name)
+            putExtra(Intent.EXTRA_TEXT, shareText)
+        }
+        context.startActivity(Intent.createChooser(sendIntent, "Compartilhar artista"))
+    }
+
     Box(
         modifier
             .fillMaxSize()
@@ -109,6 +124,7 @@ fun ArtistScreen(
                     onBackClick = onBackClick,
                     onRandomClick = onRandomClick,
                     onFollowClick = onFollowClick,
+                    onShareClick = onShareClick,
                 )
             }
 

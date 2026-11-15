@@ -122,14 +122,15 @@ internal fun MediaListExpandedHeader(
             ) {
                 MediaListCircleButton(VzIcons.Close, "Fechar", onBackClick)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Ordem igual as playlists: Lupa, Favoritar, 3 pontinhos
+                    MediaListCircleButton(VzIcons.Search, "Pesquisar", onSearchClick)
                     if (state.showFavorite) {
                         MediaListCircleButton(
                             icon = if (state.isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
-                            contentDescription = if (state.isFavorite) "Remover dos favoritos" else "Favoritar playlist",
+                            contentDescription = if (state.isFavorite) "Remover dos favoritos" else "Favoritar",
                             onClick = onFavoriteClick,
                         )
                     }
-                    MediaListCircleButton(VzIcons.Search, "Pesquisar", onSearchClick)
                     MediaListCircleButton(VzIcons.MoreVert, "Mais opções", onMoreClick)
                 }
             }
@@ -330,6 +331,9 @@ internal fun MediaListCollapsedHeader(
     onSearchClick: (() -> Unit)? = null,
     onMoreClick: (() -> Unit)? = null,
     circularThumbnail: Boolean = false,
+    showFavorite: Boolean = false,
+    isFavorite: Boolean = false,
+    onFavoriteClick: (() -> Unit)? = null,
 ) {
     val barTint = remember(dominantColor) {
         lerp(Color.Black, dominantColor, 0.38f)
@@ -374,6 +378,16 @@ internal fun MediaListCollapsedHeader(
         if (onSearchClick != null) {
             IconButton(onClick = onSearchClick) {
                 Icon(VzIcons.Search, contentDescription = "Pesquisar", tint = Color.White)
+            }
+        }
+        // Colapsado também fica Lupa, Favoritar, 3 pontinhos (quando tem favoritar)
+        if (showFavorite && onFavoriteClick != null) {
+            IconButton(onClick = onFavoriteClick) {
+                Icon(
+                    imageVector = if (isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
+                    contentDescription = if (isFavorite) "Remover dos favoritos" else "Favoritar",
+                    tint = if (isFavorite) Color(0xFFEF4444) else Color.White,
+                )
             }
         }
         if (onMoreClick != null) {

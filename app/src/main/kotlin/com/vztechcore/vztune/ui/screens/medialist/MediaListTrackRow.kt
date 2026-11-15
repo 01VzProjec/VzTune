@@ -88,15 +88,9 @@ internal fun MediaListTrackRow(
                     .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // Álbum: o InnerTube não dá a thumbnail exata da faixa, então mostra
+                // só a numeração onde ficaria a thumbnail. Playlist: mostra a thumbnail normal.
                 if (index != null) {
-                    Text(
-                        text = "$index",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.5f),
-                        modifier = Modifier.width(24.dp),
-                    )
-                }
-                if (track.thumbnailUrl == null && index != null) {
                     Box(
                         Modifier
                             .size(52.dp)
@@ -104,7 +98,12 @@ internal fun MediaListTrackRow(
                             .background(Color.White.copy(alpha = 0.08f)),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("$index", color = Color.White.copy(alpha = 0.4f), style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            text = "$index",
+                            color = if (isPlaying) Color(0xFF60A5FA) else Color.White.copy(alpha = 0.75f),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal,
+                        )
                     }
                 } else {
                     MediaThumbnail(
@@ -271,4 +270,3 @@ internal fun PlayableVideoCard(
         modifier = modifier,
     )
 }
-

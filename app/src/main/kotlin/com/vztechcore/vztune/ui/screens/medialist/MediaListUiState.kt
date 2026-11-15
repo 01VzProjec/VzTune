@@ -39,8 +39,9 @@ data class MediaListUiState(
 ) {
     val showTabs: Boolean get() = !isAlbum
 
-    // Only YouTube playlists can be favorited (albums and local playlists cannot).
-    val showFavorite: Boolean get() = !isAlbum && !isLocal
+    // Só playlist local não pode favoritar. Álbum e playlist do YouTube podem.
+    // Barra de cima fica: Lupa, Favoritar, 3 pontinhos.
+    val showFavorite: Boolean get() = !isLocal
 
     // Albums keep their official tracklist order without sorting controls.
     val isSortEnabled: Boolean get() = !isAlbum && selectedTab == MediaListTab.ALL

@@ -45,7 +45,7 @@ import coil.compose.AsyncImage
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.AddPhotoAlternate
 
-private val SheetBackground = Color.Black // AMOLED
+private val SheetBackground = Color(0xFF121829) // Azul marinho igual os outros sheets
 private val AccentBlue = Color(0xFF60A5FA)
 
 @OptIn(ExperimentalMaterial3Api::class)

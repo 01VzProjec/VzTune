@@ -353,6 +353,9 @@ fun MediaListScreen(
                 onBackClick = onBackClick,
                 onSearchClick = { showSearchOverlay = true },
                 onMoreClick = { showListOptionsSheet = true },
+                showFavorite = state.showFavorite,
+                isFavorite = state.isFavorite,
+                onFavoriteClick = onFavoriteClick,
             )
         }
 

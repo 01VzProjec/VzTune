@@ -1,5 +1,6 @@
 package com.vztechcore.vztune.ui.screens.artist
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,28 +9,32 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.vztechcore.vztune.ui.components.feedback.fadeOutBottom
@@ -37,27 +42,28 @@ import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.ArrowBack
 import com.vztechcore.vztune.ui.icons.actions.PersonAdd
 import com.vztechcore.vztune.ui.icons.actions.PersonCheck
+import com.vztechcore.vztune.ui.icons.actions.Share
 import com.vztechcore.vztune.ui.icons.media.Artist
-import com.vztechcore.vztune.ui.icons.player.Play
 import com.vztechcore.vztune.ui.icons.player.Shuffle
 import com.vztechcore.vztune.ui.screens.medialist.MediaListCircleButton
 
-// Mantido pra compatibilidade com ArtistScreen antigo - agora sempre retorna preto.
-// Camaleao desativado por enquanto, fundo e sempre AMOLED.
+private val HeroMinHeight = 300.dp
+private val ButtonHeight = 44.dp
+
+// Camaleão desativado - sempre preto AMOLED. Mantido pra compatibilidade.
 @Composable
 fun rememberArtistAccent(thumbnailUrl: String?): Color = Color.Black
 
-// Mantido pra compatibilidade - agora e sempre preto solido, sem gradiente de cor.
+// Camaleão desativado - sempre preto sólido. Mantido pra compatibilidade.
 @Composable
 fun rememberArtistChameleonBrush(accent: Color): Brush =
     Brush.verticalGradient(listOf(Color.Black, Color.Black))
 
 /**
- * Hero do artista igual a foto: foto cheia em cima (Crop, corta pra preencher),
- * com fade pra preto embaixo, nome centralizado embaixo da foto,
- * stats centralizados, e 3 botoes circulares centralizados.
- * Fundo sempre preto AMOLED - sem camaleao.
- * Icones mantidos: Play, Shuffle, PersonAdd/PersonCheck.
+ * Hero do artista como era antes: foto cheia em cima, nome e stats embaixo à esquerda,
+ * botões pill embaixo: Seguir na esquerda, Aleatório na direita.
+ * Fundo sempre preto AMOLED, sem camaleão.
+ * Barra superior: Voltar na esquerda, Compartilhar na direita.
  */
 @Composable
 fun ArtistHeader(
@@ -66,6 +72,7 @@ fun ArtistHeader(
     onBackClick: () -> Unit,
     onRandomClick: () -> Unit,
     onFollowClick: () -> Unit,
+    onShareClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val hasPlayableItems = state.topSongs.isNotEmpty() || state.videos.isNotEmpty()
@@ -75,15 +82,15 @@ fun ArtistHeader(
             .fillMaxWidth()
             .background(Color.Black)
     ) {
-        // Foto de perfil em cima - igual a foto: cheia, Crop, fade pra preto
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(380.dp)
+                .heightIn(min = HeroMinHeight)
+                .animateContentSize()
         ) {
             ArtistPhoto(imageUrl = state.thumbnailUrl, name = state.name)
 
-            // Sombra em cima pra botao voltar ficar legivel
+            // Sombra em cima pra barra ficar legível
             Box(
                 Modifier
                     .align(Alignment.TopStart)
@@ -96,102 +103,89 @@ fun ArtistHeader(
                     )
             )
 
-            Box(
+            // Barra superior: Voltar esquerda, Compartilhar direita
+            Row(
                 Modifier
                     .align(Alignment.TopStart)
+                    .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(12.dp)
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 MediaListCircleButton(VzIcons.ArrowBack, "Voltar", onBackClick)
+                MediaListCircleButton(VzIcons.Share, "Compartilhar artista", onShareClick)
             }
-        }
 
-        // Nome + stats centralizados embaixo da foto - igual a foto
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, top = 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = state.name,
-                style = MaterialTheme.typography.displaySmall,
-                color = Color.White,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (state.statsLabel.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
+            Column(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 20.dp, end = 20.dp, bottom = 12.dp)
+            ) {
                 Text(
-                    text = state.statsLabel,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.7f),
-                    textAlign = TextAlign.Center,
+                    text = state.name,
+                    style = MaterialTheme.typography.displaySmall.copy(
+                        letterSpacing = (-0.5).sp,
+                        shadow = Shadow(
+                            color = Color.Black.copy(alpha = 0.45f),
+                            offset = Offset(0f, 3f),
+                            blurRadius = 12f,
+                        ),
+                    ),
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (state.statsLabel.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = state.statsLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.8f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
 
-        // 3 botoes circulares centralizados - igual a foto
+        // Botões como era antes, mas com Seguir na esquerda e Aleatório na direita
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 20.dp),
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            if (hasPlayableItems) {
-                // Esquerda: Play (toca embaralhado, igual o Aleatorio)
-                CircleButton(
-                    icon = VzIcons.Play,
-                    contentDescription = "Tocar",
-                    size = 56.dp,
-                    containerColor = Color.Transparent,
-                    contentColor = Color.White,
-                    borderColor = Color.White.copy(alpha = 0.4f),
-                    onClick = onRandomClick,
-                )
-                Spacer(Modifier.size(16.dp))
-                // Meio: Shuffle branco grandao - igual a foto
-                CircleButton(
-                    icon = VzIcons.Shuffle,
-                    contentDescription = "Aleatório",
-                    size = 72.dp,
-                    containerColor = Color.White,
-                    contentColor = Color.Black,
-                    borderColor = null,
-                    onClick = onRandomClick,
-                )
-                Spacer(Modifier.size(16.dp))
-            }
-            // Direita: Seguir / Seguindo
-            CircleButton(
-                icon = if (state.isFollowing) VzIcons.PersonCheck else VzIcons.PersonAdd,
-                contentDescription = if (state.isFollowing) "Seguindo" else "Seguir",
-                size = 56.dp,
-                containerColor = if (state.isFollowing) Color.White.copy(alpha = 0.12f) else Color.Transparent,
-                contentColor = Color.White,
-                borderColor = Color.White.copy(alpha = 0.4f),
+            FollowButton(
+                isFollowing = state.isFollowing,
                 onClick = onFollowClick,
             )
+            if (hasPlayableItems) {
+                PillButton(
+                    label = "Aleatório",
+                    icon = VzIcons.Shuffle,
+                    containerColor = Color.White,
+                    contentColor = Color.Black,
+                    onClick = onRandomClick,
+                )
+            }
         }
     }
 }
 
 /**
- * Foto cheia, Crop (corta pra preencher, nao mostra inteira), alinhada em cima,
- * com fade pra preto embaixo pra derreter no fundo AMOLED.
+ * Foto cheia, FillWidth, sem crop forçado, com fade pra preto embaixo.
+ * Sem foto, ícone grande no fundo preto.
  */
 @Composable
 private fun ArtistPhoto(imageUrl: String?, name: String) {
     if (imageUrl.isNullOrBlank()) {
         Box(
             Modifier
-                .fillMaxSize()
-                .background(Color.Black),
+                .fillMaxWidth()
+                .height(HeroMinHeight),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -204,7 +198,7 @@ private fun ArtistPhoto(imageUrl: String?, name: String) {
         return
     }
     val context = LocalContext.current
-    val request = androidx.compose.runtime.remember(imageUrl) {
+    val request = remember(imageUrl) {
         ImageRequest.Builder(context)
             .data(imageUrl)
             .crossfade(400)
@@ -213,41 +207,73 @@ private fun ArtistPhoto(imageUrl: String?, name: String) {
     AsyncImage(
         model = request,
         contentDescription = name,
-        contentScale = ContentScale.Crop,
+        contentScale = ContentScale.FillWidth,
         alignment = Alignment.TopCenter,
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .fadeOutBottom(fadeFraction = 0.55f),
     )
 }
 
 @Composable
-private fun CircleButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    size: androidx.compose.ui.unit.Dp,
-    containerColor: Color,
-    contentColor: Color,
-    borderColor: Color?,
+private fun FollowButton(
+    isFollowing: Boolean,
     onClick: () -> Unit,
 ) {
-    Box(
+    if (isFollowing) {
+        PillButton(
+            label = "Seguindo",
+            icon = VzIcons.PersonCheck,
+            containerColor = Color.White.copy(alpha = 0.12f),
+            contentColor = Color.White,
+            borderColor = Color.White.copy(alpha = 0.35f),
+            onClick = onClick,
+        )
+    } else {
+        PillButton(
+            label = "Seguir",
+            icon = VzIcons.PersonAdd,
+            containerColor = Color.Transparent,
+            contentColor = Color.White,
+            borderColor = Color.White.copy(alpha = 0.35f),
+            onClick = onClick,
+        )
+    }
+}
+
+/** Pill com ícone + texto. Igual era antes. */
+@Composable
+private fun PillButton(
+    label: String,
+    icon: ImageVector,
+    containerColor: Color,
+    contentColor: Color,
+    onClick: () -> Unit,
+    borderColor: Color? = null,
+) {
+    val shape = RoundedCornerShape(50)
+    Row(
         modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
+            .height(ButtonHeight)
+            .clip(shape)
             .background(containerColor)
-            .then(
-                if (borderColor != null) Modifier.border(1.dp, borderColor, CircleShape)
-                else Modifier
-            )
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center,
+            .then(if (borderColor != null) Modifier.border(1.dp, borderColor, shape) else Modifier)
+            .clickable { onClick() }
+            .padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = contentDescription,
+            contentDescription = null,
             tint = contentColor,
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = contentColor,
+            fontWeight = FontWeight.Bold,
         )
     }
 }

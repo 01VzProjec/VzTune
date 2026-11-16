@@ -573,27 +573,48 @@ class YouTubeRepository @Inject constructor(
     }
 
     /**
-     * FIX 6: vídeos do CANAL REAL, pelo UC... dele.
-     * Usado pela tela de artista quando o YT Music NÃO tem página de artista
-     * pra esse UC... (canal puro de vídeo). O ChannelExtractor do NewPipe abre
-     * o canal pelo ID, não por nome — então nunca cai num canal/artista parecido.
-     * Retorna null quando o canal não existe / não tem vídeos (o chamador mostra
-     * erro, nunca chuta outro artista).
+     * FIX 6 HOTFIX: vídeos do CANAL REAL, pelo UC... dele.
+     *
+     * Por que NÃO ChannelExtractor.initialPage: na NewPipeExtractor v0.26.5 o
+     * ChannelExtractor NÃO estende ListExtractor — não tem initialPage/getPage.
+     * Foi exatamente isso que quebrou o build (linha 596). Ele só expõe
+     * cabeçalho (nome, avatar, inscritos), que continua sendo usado aqui.
+     *
+     * Os vídeos vêm da playlist "Uploads" do canal: todo canal do YouTube tem
+     * uma playlist de sistema com id UU + resto do UC... (ex.: UCabc -> UUabc).
+     * PlaylistExtractor SIM estende ListExtractor — mesma API do SearchExtractor
+     * que este arquivo já usa (initialPage/getPage) — então lista os vídeos do
+     * canal pelo ID, nunca por nome. O comportamento é o mesmo do FIX 6,
+     * só muda a fonte da lista.
      */
     suspend fun browseChannel(channelId: String): ChannelPage? = withContext(Dispatchers.IO) {
         if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
-        if (channelId.isBlank()) return@withContext null
-        runCatching {
+        if (channelId.isBlank() || !channelId.startsWith("UC")) return@withContext null
+        // 1) Cabeçalho (nome, avatar, inscritos) via ChannelExtractor.
+        //    Esses métodos existem na v0.26.5 (compilaram); best effort.
+        val header = runCatching {
             val extractor = ServiceList.YouTube.getChannelExtractor(
                 "https://www.youtube.com/channel/$channelId"
             )
             extractor.fetchPage()
-            val channelName = runCatching { extractor.name }.getOrNull()?.trim().orEmpty()
-            val avatarUrl = runCatching { extractor.avatars?.lastOrNull()?.url }.getOrNull()
-            val subscriberCount = runCatching {
-                extractor.subscriberCount.takeIf { it > 0 }?.let { formatSubscribers(it) }
-            }.getOrNull()
-            val videos = extractor.initialPage.items
+            Triple(
+                runCatching { extractor.name }.getOrNull()?.trim().orEmpty(),
+                runCatching { extractor.avatars?.lastOrNull()?.url }.getOrNull(),
+                runCatching {
+                    extractor.subscriberCount.takeIf { it > 0 }?.let { formatSubscribers(it) }
+                }.getOrNull(),
+            )
+        }.getOrNull()
+        val channelName = header?.first.orEmpty()
+        // 2) Vídeos via playlist "Uploads" (UU...). Sem vídeos, não há o que
+        //    mostrar: retorna null e a tela mostra erro, nunca outro canal.
+        val videos = runCatching {
+            val uploadsPlaylistId = "UU" + channelId.drop(2)
+            val playlist = ServiceList.YouTube.getPlaylistExtractor(
+                "https://www.youtube.com/playlist?list=$uploadsPlaylistId"
+            )
+            playlist.fetchPage()
+            playlist.initialPage.items
                 .filterIsInstance<StreamInfoItem>()
                 .mapNotNull { stream ->
                     val videoId = extractVideoId(stream.url) ?: return@mapNotNull null
@@ -606,13 +627,14 @@ class YouTubeRepository @Inject constructor(
                         source = Source.YOUTUBE,
                     )
                 }
-            ChannelPage(
-                videos = videos,
-                channelName = channelName.takeIf { it.isNotBlank() },
-                avatarUrl = avatarUrl,
-                subscriberCount = subscriberCount,
-            )
-        }.getOrNull()
+        }.getOrDefault(emptyList())
+        if (videos.isEmpty()) return@withContext null
+        ChannelPage(
+            videos = videos,
+            channelName = channelName.takeIf { it.isNotBlank() },
+            avatarUrl = header?.second,
+            subscriberCount = header?.third,
+        )
     }
 
     private fun formatSubscribers(count: Long): String {

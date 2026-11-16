@@ -30,6 +30,14 @@ data class VideoMetadata(
     val thumbnailUrl: String?,
 )
 
+/** Canal real do YouTube que postou um vídeo (via NewPipe, não via busca por nome). */
+data class YouTubeChannelInfo(
+    val channelId: String,
+    val channelName: String,
+    val avatarUrl: String?,
+    val channelUrl: String?,
+)
+
 /** Info técnica do stream de áudio resolvido pelo NewPipe (usada na tela TrackInfo). */
 data class AudioStreamInfo(
     val itag: String?,
@@ -488,6 +496,51 @@ class YouTubeRepository @Inject constructor(
         Uri.parse(url).getQueryParameter("list")
     } catch (e: Exception) {
         null
+    }
+
+    /**
+     * Resolve o CANAL que postou o vídeo pelo videoId, via StreamExtractor do NewPipe.
+     * Nunca busca por nome: uploaderUrl é a fonte da verdade (UC... ou @handle).
+     * Retorna null quando o NewPipe não expõe o canal -> o chamador deve ESCONDER
+     * "Ir para o canal", nunca cair pra busca por nome no YT Music.
+     */
+    suspend fun getChannelForVideo(videoId: String): YouTubeChannelInfo? = withContext(Dispatchers.IO) {
+        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
+        if (videoId.isBlank()) return@withContext null
+        runCatching {
+            val extractor = ServiceList.YouTube.getStreamExtractor(
+                "https://www.youtube.com/watch?v=$videoId"
+            )
+            extractor.fetchPage()
+            val uploaderName = extractor.uploaderName?.trim().orEmpty()
+            val uploaderUrl = extractor.uploaderUrl?.trim().orEmpty()
+            val avatarUrl = extractor.uploaderAvatarUrl?.takeIf { it.isNotBlank() }
+                ?: extractor.thumbnails?.lastOrNull()?.url
+            if (uploaderName.isBlank() || uploaderUrl.isBlank()) return@runCatching null
+            val channelId = extractChannelId(uploaderUrl) ?: return@runCatching null
+            YouTubeChannelInfo(
+                channelId = channelId,
+                channelName = cleanChannelName(uploaderName),
+                avatarUrl = avatarUrl,
+                channelUrl = uploaderUrl,
+            )
+        }.getOrNull()
+    }
+
+    /**
+     * Extrai o UC... de uma uploaderUrl do NewPipe.
+     * Formas: .../channel/UC..., .../UC..., .../@handle, .../c/nome, .../user/nome.
+     * @handle / /c / /user não têm UC na URL -> resolve via ChannelExtractor do NewPipe.
+     */
+    private fun extractChannelId(uploaderUrl: String): String? {
+        val ucRegex = Regex("UC[\\w-]{22}")
+        ucRegex.find(uploaderUrl)?.let { return it.value }
+        // @handle, /c/, /user/: ChannelExtractor resolve o id real.
+        return runCatching {
+            val extractor = ServiceList.YouTube.getChannelExtractor(uploaderUrl)
+            extractor.fetchPage()
+            extractor.id?.takeIf { it.startsWith("UC") }
+        }.getOrNull()
     }
 
     suspend fun buildVideoQueue(seed: Track): List<Track> = withContext(Dispatchers.IO) {

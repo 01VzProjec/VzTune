@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.data.player.PlayerController
+import com.vztechcore.vztune.data.prefs.models.DownloadedPlaylist
+import com.vztechcore.vztune.data.prefs.store.DownloadedPlaylistsStore
+import com.vztechcore.vztune.data.prefs.store.DownloadedTracksStore
 import com.vztechcore.vztune.data.prefs.store.FavoritePlaylistsStore
 import com.vztechcore.vztune.data.prefs.models.LocalPlaylist
 import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
@@ -26,6 +29,8 @@ class LibraryViewModel @Inject constructor(
     historyStore: PlayHistoryStore,
     private val localStore: LocalPlaylistsStore,
     favoritesStore: FavoritePlaylistsStore,
+    downloadedPlaylistsStore: DownloadedPlaylistsStore,
+    downloadedTracksStore: DownloadedTracksStore,
     private val coverStorage: PlaylistCoverStorage,
     private val playerController: PlayerController,
 ) : ViewModel() {
@@ -39,13 +44,21 @@ class LibraryViewModel @Inject constructor(
         historyStore.tracks,
         localStore.items,
         favoritesStore.items,
-    ) { tab, recent, mine, favorites ->
+        downloadedPlaylistsStore.items,
+        downloadedTracksStore.downloadedKeys,
+    ) { tab, recent, mine, favorites, downloaded, downloadedKeys ->
         recentTracks = recent
+        // Só mostra a playlist baixada enquanto pelo menos 1 faixa dela ainda está baixada.
+        // trackKeys vazio = registro antigo sem keys -> mostra mesmo assim.
+        val visibleDownloaded = downloaded.filter { item ->
+            item.trackKeys.isEmpty() || item.trackKeys.any { it in downloadedKeys }
+        }
         LibraryUiState(
             selectedTab = tab,
             recentTracks = recent,
             myPlaylists = mine.map { it.toItem() },
             favoritePlaylists = favorites.map { it.toItem() },
+            downloadedPlaylists = visibleDownloaded.map { it.toItem() },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
@@ -81,6 +94,15 @@ class LibraryViewModel @Inject constructor(
         title = title,
         subtitle = owner,
         imageUrl = thumbnailUrl,
+        mosaic = mosaic,
+        isAlbum = isAlbum,
+    )
+
+    private fun DownloadedPlaylist.toItem() = LibraryPlaylistItem(
+        id = id,
+        title = title,
+        subtitle = owner ?: if (isAlbum) "Álbum baixado" else "Playlist baixada",
+        imageUrl = thumbnailUrl ?: mosaic.firstOrNull(),
         mosaic = mosaic,
         isAlbum = isAlbum,
     )

@@ -14,6 +14,9 @@ import com.vztechcore.vztune.data.prefs.store.DownloadedTracksStore
 import com.vztechcore.vztune.data.prefs.store.FavoriteTracksStore
 import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
 import com.vztechcore.vztune.data.prefs.store.PlayHistoryStore
+import com.vztechcore.vztune.core.domain.music.Source
+import com.vztechcore.vztune.data.music.MusicRepository
+import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -41,6 +44,8 @@ class TrackMenuViewModel @Inject constructor(
     private val trackDownloader: TrackDownloader,
     private val playerController: PlayerController,
     private val ytMusicRepository: YTMusicRepository,
+    private val youTubeRepository: YouTubeRepository,
+    private val musicRepository: MusicRepository,
 ) : ViewModel() {
 
     sealed interface MenuNavigationEvent {
@@ -156,6 +161,11 @@ class TrackMenuViewModel @Inject constructor(
 
     /** Clique em artista DENTRO de uma faixa: verifica quem tem ESSA faixa / ESSE álbum no catálogo. */
     fun onOpenArtistForTrack(track: Track, artistName: String) {
+        // Vídeo do YouTube: o "artista" é o CANAL. Nunca resolve por nome no YT Music.
+        if (track.source == Source.YOUTUBE) {
+            onOpenChannelForTrack(track)
+            return
+        }
         viewModelScope.launch {
             val found = runCatching {
                 ytMusicRepository.resolveArtist(
@@ -167,6 +177,44 @@ class TrackMenuViewModel @Inject constructor(
             if (found != null) {
                 _navigationEvent.emit(MenuNavigationEvent.OpenArtist(found))
             }
+        }
+    }
+
+    /**
+     * FIX 2: abre o CANAL REAL que postou o vídeo (NewPipe StreamExtractor -> UC...).
+     * Se o NewPipe não expõe o canal, não navega. Nunca cai pra busca por nome
+     * no YT Music (era isso que abria artista qualquer com nome parecido).
+     */
+    fun onOpenChannelForTrack(track: Track) {
+        viewModelScope.launch {
+            val channel = runCatching { youTubeRepository.getChannelForVideo(track.id) }.getOrNull()
+            if (channel != null) {
+                _navigationEvent.emit(
+                    MenuNavigationEvent.OpenArtist(
+                        Artist(
+                            id = channel.channelId,
+                            name = channel.channelName,
+                            thumbnailUrl = channel.avatarUrl,
+                            source = Source.YOUTUBE,
+                        )
+                    )
+                )
+            }
+            // channel == null -> não navega. A UI já mostra "Ir para o canal" só pra
+            // vídeos do YouTube; sem canal real não há pra onde ir.
+        }
+    }
+
+    /**
+     * FIX 3: "Iniciar rádio" - rádio infinito a partir da faixa.
+     * Delega pro PlayerController.startRadio(), que toca o 1º lote e vai
+     * buscando mais lotes quando a fila está acabando (nunca termina).
+     */
+    fun onStartRadio(track: Track) {
+        viewModelScope.launch {
+            val first = runCatching { musicRepository.buildRadioQueue(track) }
+                .getOrDefault(listOf(track))
+            playerController.startRadio(track, first)
         }
     }
 }

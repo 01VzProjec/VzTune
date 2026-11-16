@@ -81,6 +81,67 @@ class MusicRepository @Inject constructor(
         listOf(seed)
     }
 
+    /**
+     * FIX 3: próximo lote do rádio infinito.
+     * Estratégia pra não repetir os mesmos 50 e manter o "clima" da seed
+     * (mesmo artista / artistas parecidos / mesma língua-gênero implícita na busca):
+     *  1. Busca pela última faixa tocada (artista + título) -> varia o centro.
+     *  2. Busca só pelo artista da seed -> volta pro núcleo.
+     *  3. YT Music: topSongs dos artistas relacionados ao artista da seed.
+     *  4. YouTube: buildVideoQueue da última faixa.
+     * Sempre filtra os ids já tocados e embaralha.
+     */
+    suspend fun buildRadioContinuation(
+        seed: Track,
+        excludeIds: Set<String>,
+        lastTrack: Track?,
+    ): List<Track> = runCatching {
+        val candidates = mutableListOf<Track>()
+        when (seed.source) {
+            Source.YOUTUBE -> {
+                val anchor = lastTrack ?: seed
+                candidates += youTubeRepository.buildVideoQueue(anchor)
+                if (candidates.size < 15 && lastTrack != null && lastTrack.id != seed.id) {
+                    candidates += youTubeRepository.buildVideoQueue(seed)
+                }
+            }
+            else -> {
+                // 1. Última faixa como âncora
+                lastTrack?.let { candidates += ytMusicRepository.buildSongQueue(it) }
+                // 2. Artista da seed sozinho (mais amplo que artista+título)
+                if (candidates.size < 20 && seed.artist.isNotBlank()) {
+                    val artistOnly = Track(
+                        id = seed.id, title = "", artist = seed.artist,
+                        source = Source.YOUTUBE_MUSIC,
+                    )
+                    candidates += ytMusicRepository.buildSongQueue(artistOnly)
+                }
+                // 3. Artistas relacionados: abre a página do artista e pega topSongs dos relacionados
+                if (candidates.size < 20) {
+                    runCatching {
+                        val artistId = ytMusicRepository.resolveArtist(seed.artist)?.id
+                        if (!artistId.isNullOrBlank()) {
+                            val page = ytMusicRepository.browseArtist(artistId)
+                            page.relatedArtists.shuffled().take(3).forEach { related ->
+                                runCatching {
+                                    candidates += ytMusicRepository.browseArtist(related.id).topSongs
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        candidates
+            .distinctBy { "${it.source}_${it.id}" }
+            .filter { it.id != seed.id && "${it.source}_${it.id}" !in excludeIds && it.id !in excludeIds }
+            .shuffled()
+            .take(30)
+    }.getOrElse { e ->
+        Log.w(TAG, "buildRadioContinuation failed for ${seed.id}: ${e.message}")
+        emptyList()
+    }
+
     // =====================================================================
     //  SEARCH
     // =====================================================================

@@ -112,6 +112,11 @@ class PlayerController @Inject constructor(
 
     private var queue: List<Track> = emptyList()
     private var currentIndex: Int = -1
+    // FIX 3 - Rádio infinito: seed original + ids já tocados. Quando a fila está
+    // acabando, busca o próximo lote e anexa (nunca termina).
+    private var radioSeed: Track? = null
+    private var radioPlayedIds: MutableSet<String> = mutableSetOf()
+    private var isExtendingRadio = false
     private var preloadedUrl: String? = null
     private var preloadedIndex: Int = -1
 
@@ -134,8 +139,24 @@ class PlayerController @Inject constructor(
         }
     }
 
+    /**
+     * FIX 3: inicia o rádio a partir de [seed] com o 1º lote já buscado.
+     * A fila cresce sozinha via maybeExtendRadio() / playNext(auto=true).
+     */
+    fun startRadio(seed: Track, firstBatch: List<Track>) {
+        val batch = if (firstBatch.isEmpty()) listOf(seed) else firstBatch
+        playQueue(batch, batch.indexOfFirst { it.id == seed.id && it.source == seed.source }.takeIf { it >= 0 } ?: 0)
+        radioSeed = seed
+        radioPlayedIds = batch.map { "${it.source}_${it.id}" }.toMutableSet()
+        isExtendingRadio = false
+    }
+
     fun playQueue(tracks: List<Track>, startIndex: Int) {
         if (tracks.isEmpty()) return
+        // Fila normal (playlist/álbum/busca) cancela o rádio.
+        radioSeed = null
+        radioPlayedIds.clear()
+        isExtendingRadio = false
         consecutiveFailures = 0
         val safeIndex = startIndex.coerceIn(0, tracks.lastIndex)
         queue = tracks
@@ -190,13 +211,62 @@ class PlayerController @Inject constructor(
     fun playNext(auto: Boolean = false) {
         val nextIdx = currentIndex + 1
         if (nextIdx >= queue.size) {
+            // Rádio infinito: fila acabou -> busca mais um lote e continua, nunca pausa.
+            if (auto && radioSeed != null) {
+                maybeExtendRadio { extended ->
+                    if (extended) playAtIndex(currentIndex + 1)
+                    else {
+                        player.pause()
+                        _state.update { it.copy(isPlaying = false) }
+                    }
+                }
+                return
+            }
             if (auto) {
                 player.pause()
                 _state.update { it.copy(isPlaying = false) }
             }
             return
         }
+        // Rádio: quando faltam 5 pra acabar, já busca o próximo lote em background.
+        if (radioSeed != null && queue.size - nextIdx <= 5) {
+            maybeExtendRadio {}
+        }
         playAtIndex(nextIdx)
+    }
+
+    /** Busca o próximo lote do rádio e anexa na fila. Chama [onDone] com true se anexou algo. */
+    private fun maybeExtendRadio(onDone: (Boolean) -> Unit) {
+        val seed = radioSeed ?: run { onDone(false); return }
+        if (isExtendingRadio) { onDone(false); return }
+        isExtendingRadio = true
+        scope.launch {
+            val last = queue.lastOrNull()
+            val exclude = radioPlayedIds.toSet()
+            val next = runCatching {
+                musicRepository.buildRadioContinuation(seed, exclude, last)
+            }.getOrDefault(emptyList())
+            if (next.isNotEmpty()) {
+                val fresh = next.filter { "${it.source}_${it.id}" !in radioPlayedIds }
+                if (fresh.isNotEmpty()) {
+                    queue = queue + fresh
+                    radioPlayedIds += fresh.map { "${it.source}_${it.id}" }
+                    isExtendingRadio = false
+                    onDone(true)
+                    return@launch
+                }
+            }
+            val retry = runCatching {
+                musicRepository.buildRadioContinuation(seed, exclude, seed)
+            }.getOrDefault(emptyList())
+            val freshRetry = retry.filter { "${it.source}_${it.id}" !in radioPlayedIds }
+            if (freshRetry.isNotEmpty()) {
+                queue = queue + freshRetry
+                radioPlayedIds += freshRetry.map { "${it.source}_${it.id}" }
+            }
+            isExtendingRadio = false
+            onDone(freshRetry.isNotEmpty())
+        }
     }
 
     fun playPrevious() {

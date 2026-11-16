@@ -161,6 +161,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             onOpenAlbumForTrack = menuVm::onOpenAlbumForTrack,
             onOpenArtistByName = menuVm::onOpenArtistByName,
             onOpenArtistForTrack = menuVm::onOpenArtistForTrack,
+            onStartRadio = menuVm::onStartRadio,
             onTrackInfo = { t -> navController.navigateToTrackInfo(t) },
         )
     }

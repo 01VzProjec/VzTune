@@ -12,9 +12,12 @@ import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
 import com.vztechcore.vztune.data.download.TrackDownloader
 import com.vztechcore.vztune.data.player.PlayerController
+import com.vztechcore.vztune.data.prefs.models.DownloadedPlaylist
 import com.vztechcore.vztune.data.prefs.models.StoredPlaylist
+import com.vztechcore.vztune.data.prefs.models.StoredTrack
 import com.vztechcore.vztune.data.prefs.models.isLocalPlaylistId
 import com.vztechcore.vztune.data.prefs.store.FavoritePlaylistsStore
+import com.vztechcore.vztune.data.prefs.store.DownloadedPlaylistsStore
 import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
 import com.vztechcore.vztune.data.prefs.store.MediaListPreferencesStore
 import com.vztechcore.vztune.data.ytmusic.YTMusicOwnerValidator
@@ -46,6 +49,7 @@ class MediaListViewModel @Inject constructor(
     private val store: MediaListPreferencesStore,
     private val favoritesStore: FavoritePlaylistsStore,
     private val localStore: LocalPlaylistsStore,
+    private val downloadedPlaylistsStore: DownloadedPlaylistsStore,
 ) : ViewModel() {
 
     sealed interface NavigationEvent {
@@ -166,6 +170,9 @@ class MediaListViewModel @Inject constructor(
                             title = playlist.title ?: it.title,
                             subtitle = resolvedOwner ?: it.subtitle,
                             owner = resolvedOwner,
+                            // Canal real da playlist (UC... do header). Antes era null e
+                            // loadPlaylistOwnerAvatar() buscava por NOME no YT Music -> artista errado.
+                            artistId = playlist.ownerChannelId ?: it.artistId,
                             ownerAvatarUrl = playlist.ownerAvatarUrl,
                             year = playlist.year,
                             views = playlist.views,
@@ -182,7 +189,14 @@ class MediaListViewModel @Inject constructor(
                         )
                     }
 
-                    if (playlist.ownerAvatarUrl.isNullOrBlank() && !resolvedOwner.isNullOrBlank()) {
+                    // Só busca por nome quando NÃO temos o canal real E a playlist é YT Music.
+                    // Playlist do YouTube sem channelId: não chuta artista do YT Music.
+                    val isYouTubePlaylist = playlist.tracks.isNotEmpty() &&
+                        playlist.tracks.all { it.source == Source.YOUTUBE }
+                    if (playlist.ownerChannelId.isNullOrBlank() &&
+                        playlist.ownerAvatarUrl.isNullOrBlank() &&
+                        !resolvedOwner.isNullOrBlank() && !isYouTubePlaylist
+                    ) {
                         loadPlaylistOwnerAvatar(resolvedOwner)
                     }
                 }
@@ -313,6 +327,22 @@ class MediaListViewModel @Inject constructor(
         val tracks = _uiState.value.allTracks
         if (tracks.isNotEmpty()) {
             trackDownloader.downloadAll(tracks)
+            // FIX 1: registra a playlist/álbum como baixado, senão a aba
+            // "Playlists baixadas" nunca tinha de onde listar.
+            val state = _uiState.value
+            viewModelScope.launch {
+                downloadedPlaylistsStore.addFirst(
+                    DownloadedPlaylist(
+                        id = route.id,
+                        title = state.title,
+                        owner = state.owner,
+                        thumbnailUrl = state.thumbnailUrl,
+                        mosaic = state.mosaicThumbnails,
+                        isAlbum = state.isAlbum,
+                        trackKeys = tracks.map { StoredTrack.from(it).key },
+                    )
+                )
+            }
         }
     }
 
@@ -335,12 +365,22 @@ class MediaListViewModel @Inject constructor(
             }
             return
         }
+        // Playlist do YouTube sem UC...: NÃO cai pra busca por nome no YT Music
+        // (era isso que abria artista qualquer com nome parecido). Sem canal, não abre nada.
+        if (isYouTubePlaylist(state)) return
         if (artistName != null) {
             onOpenArtistByName(artistName)
         }
     }
 
+    private fun isYouTubePlaylist(state: MediaListUiState): Boolean {
+        if (state.isAlbum || state.isLocal) return false
+        return state.allTracks.isNotEmpty() && state.allTracks.all { it.source == Source.YOUTUBE }
+    }
+
     fun onOpenArtistByName(artistName: String) {
+        // Playlist do YouTube: o "artista" é o canal. Sem UC, não chuta YT Music.
+        if (isYouTubePlaylist(_uiState.value)) return
         viewModelScope.launch {
             // Álbum: passa o título do álbum como contexto, pra resolver só aceitar
             // o artista que tem ESSE álbum no catálogo. Playlist: sem contexto, cai pro mais parecido.

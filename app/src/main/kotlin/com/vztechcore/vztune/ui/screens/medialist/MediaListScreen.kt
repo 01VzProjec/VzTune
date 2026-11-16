@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.core.domain.music.Album
+import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SortOrder
 import com.vztechcore.vztune.data.download.DownloadStatus
@@ -104,10 +105,18 @@ fun MediaListScreen(
         if (!state.isLocal) parseMediaListArtists(state.owner.orEmpty()) else emptyList()
     }
 
-    val handleHeaderArtistClick: (() -> Unit)? = remember(state.isLocal, state.owner, ownerArtists) {
+    // FIX 2: playlist do YouTube sem UC... (canal real) -> sem clique no artista.
+    // Antes clicava e caía na busca por nome no YT Music, abrindo artista errado.
+    // Com UC..., o clique abre o canal. Álbum / playlist YT Music mantém o comportamento.
+    val isYouTubePlaylist = !state.isAlbum && !state.isLocal &&
+        state.allTracks.isNotEmpty() && state.allTracks.all { it.source == Source.YOUTUBE }
+    val hasRealChannel = state.artistId?.startsWith("UC") == true
+    val handleHeaderArtistClick: (() -> Unit)? = remember(state.isLocal, state.owner, ownerArtists, isYouTubePlaylist, hasRealChannel) {
         if (state.isLocal || state.owner.isNullOrBlank()) {
             null
-        } else if (ownerArtists.size > 1) {
+        } else if (isYouTubePlaylist && !hasRealChannel) {
+            null
+        } else if (ownerArtists.size > 1 && !isYouTubePlaylist) {
             { showHeaderArtistPicker = true }
         } else {
             onOpenArtist

@@ -48,6 +48,9 @@ class YTMusicRepository @Inject constructor(
         val year: String?,
         val views: String?,
         val tracks: List<Track>,
+        // UC... do canal dono da playlist (vem do header do InnerTube).
+        // Sem isso a playlist caía no findChannelOrArtist() por nome e abria artista errado.
+        val ownerChannelId: String? = null,
     )
 
     data class ArtistResult(
@@ -335,7 +338,7 @@ class YTMusicRepository @Inject constructor(
     suspend fun browsePlaylist(playlistId: String): PlaylistResult = withContext(Dispatchers.IO) {
         val cleanId = YTMusicTextUtils.normalizePlaylistBrowseId(playlistId)
         val json = runCatching { InnerTube.browse(cleanId) }.getOrNull()
-            ?: return@withContext PlaylistResult(null, null, null, null, null, 0, null, null, emptyList())
+            ?: return@withContext PlaylistResult(null, null, null, null, null, 0, null, null, emptyList(), null)
 
         val parsed = YTMusicPlaylistParser.parsePlaylist(json)
         val headerExtras = extractPlaylistHeaderExtras(json)
@@ -358,7 +361,8 @@ class YTMusicRepository @Inject constructor(
             trackCount = parsed.trackCount.takeIf { it > 0 } ?: finalTracks.size,
             year = resolvedYear,
             views = parsed.views,
-            tracks = finalTracks
+            tracks = finalTracks,
+            ownerChannelId = headerExtras.channelId,
         )
     }
 

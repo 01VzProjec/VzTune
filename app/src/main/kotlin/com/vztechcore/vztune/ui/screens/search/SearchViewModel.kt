@@ -274,8 +274,8 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             val queue = runCatching { musicRepository.buildRadioQueue(seed) }.getOrDefault(listOf(seed))
             _uiState.update { it.copy(isBuildingQueue = false) }
-            val idx = queue.indexOfFirst { it.id == seed.id && it.source == seed.source }
-            playerController.playQueue(queue, if (idx >= 0) idx else 0)
+            // Rádio infinito: startRadio() faz a fila crescer sozinha quando está acabando.
+            playerController.startRadio(seed, queue)
         }
     }
 

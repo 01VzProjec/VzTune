@@ -82,6 +82,7 @@ fun TrackOptionsSheet(
     onOpenAlbumForTrack: (Track) -> Unit = {},
     onOpenArtistByName: (String) -> Unit,
     onOpenArtistForTrack: (Track, String) -> Unit = { _, name -> onOpenArtistByName(name) },
+    onStartRadio: (Track) -> Unit = {},
     onTrackInfo: (Track) -> Unit,
 ) {
     val context = LocalContext.current
@@ -236,6 +237,19 @@ fun TrackOptionsSheet(
                 },
             )
 
+            // 4b. FIX 3: Iniciar rádio (Mix infinito) - a partir de qualquer faixa,
+            // em qualquer lugar (busca, playlist, álbum, artista). Nome "Iniciar rádio":
+            // é o termo do YT Music / Spotify, mais profissional que "Mix".
+            SheetOptionRow(
+                icon = VzIcons.PlayCircleFilled,
+                label = "Iniciar rádio",
+                subtitle = "Mix infinito a partir desta faixa",
+                onClick = {
+                    onStartRadio(track)
+                    onDismiss()
+                },
+            )
+
             // 5. Download / Downloading / Downloaded
             when {
                 isDownloading -> {
@@ -309,12 +323,20 @@ fun TrackOptionsSheet(
                 )
             }
 
-            // 8. Go to artist(s)
+            // 8. Go to artist(s) / canal
+            // FIX 2: vídeo do YouTube -> "Ir para o canal" (resolve o canal real via NewPipe).
+            // YT Music -> "Ir para o(s) artista(s)" como antes.
+            // Sem canal real, o ViewModel não navega (nunca chuta artista por nome).
             if (artists.isNotEmpty()) {
-                val hasMultiple = artists.size > 1
+                val isYouTubeVideo = track.source == Source.YOUTUBE
+                val hasMultiple = artists.size > 1 && !isYouTubeVideo
                 SheetOptionRow(
                     icon = if (hasMultiple) VzIcons.Groups else VzIcons.Artist,
-                    label = if (hasMultiple) "Ir para os artistas" else "Ir para o artista",
+                    label = when {
+                        isYouTubeVideo -> "Ir para o canal"
+                        hasMultiple -> "Ir para os artistas"
+                        else -> "Ir para o artista"
+                    },
                     subtitle = if (hasMultiple) artists.joinToString(", ") else artists.first(),
                     onClick = {
                         if (hasMultiple) {

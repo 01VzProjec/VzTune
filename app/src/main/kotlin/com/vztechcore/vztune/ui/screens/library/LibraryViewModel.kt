@@ -39,28 +39,55 @@ class LibraryViewModel @Inject constructor(
 
     private var recentTracks: List<Track> = emptyList()
 
-    val uiState: StateFlow<LibraryUiState> = combine(
+    // combine() de 6 flows caía na sobrecarga vararg (Array<T>) e não compilava
+    // no coroutines 1.9.0 / Kotlin 2.0.21 deste projeto. Aninhado em 4 + 2 (que já
+    // compilam aqui) resolve sem mudar o comportamento.
+    private val baseState = combine(
         selectedTab,
         historyStore.tracks,
         localStore.items,
         favoritesStore.items,
+    ) { tab, recent, mine, favorites ->
+        BaseLibraryState(tab, recent, mine, favorites)
+    }
+
+    private val downloadedState = combine(
         downloadedPlaylistsStore.items,
         downloadedTracksStore.downloadedKeys,
-    ) { tab, recent, mine, favorites, downloaded, downloadedKeys ->
-        recentTracks = recent
+    ) { downloaded, downloadedKeys ->
+        DownloadedLibraryState(downloaded, downloadedKeys)
+    }
+
+    val uiState: StateFlow<LibraryUiState> = combine(
+        baseState,
+        downloadedState,
+    ) { base, dl ->
+        recentTracks = base.recent
         // Só mostra a playlist baixada enquanto pelo menos 1 faixa dela ainda está baixada.
         // trackKeys vazio = registro antigo sem keys -> mostra mesmo assim.
-        val visibleDownloaded = downloaded.filter { item ->
-            item.trackKeys.isEmpty() || item.trackKeys.any { it in downloadedKeys }
+        val visibleDownloaded = dl.downloaded.filter { item ->
+            item.trackKeys.isEmpty() || item.trackKeys.any { it in dl.downloadedKeys }
         }
         LibraryUiState(
-            selectedTab = tab,
-            recentTracks = recent,
-            myPlaylists = mine.map { it.toItem() },
-            favoritePlaylists = favorites.map { it.toItem() },
+            selectedTab = base.tab,
+            recentTracks = base.recent,
+            myPlaylists = base.mine.map { it.toItem() },
+            favoritePlaylists = base.favorites.map { it.toItem() },
             downloadedPlaylists = visibleDownloaded.map { it.toItem() },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
+
+    private data class BaseLibraryState(
+        val tab: LibraryTab,
+        val recent: List<Track>,
+        val mine: List<LocalPlaylist>,
+        val favorites: List<StoredPlaylist>,
+    )
+
+    private data class DownloadedLibraryState(
+        val downloaded: List<DownloadedPlaylist>,
+        val downloadedKeys: Set<String>,
+    )
 
     fun onTabSelected(tab: LibraryTab) {
         selectedTab.value = tab

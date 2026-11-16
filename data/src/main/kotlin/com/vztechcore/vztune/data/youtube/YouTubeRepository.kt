@@ -514,7 +514,9 @@ class YouTubeRepository @Inject constructor(
             extractor.fetchPage()
             val uploaderName = extractor.uploaderName?.trim().orEmpty()
             val uploaderUrl = extractor.uploaderUrl?.trim().orEmpty()
-            val avatarUrl = extractor.uploaderAvatarUrl?.takeIf { it.isNotBlank() }
+            // NewPipe 0.27: não existe getUploaderAvatarUrl(). O avatar vem como
+            // lista em getUploaderAvatars() -> List<Image>. Fallback: thumb do vídeo.
+            val avatarUrl = extractor.uploaderAvatars.lastOrNull()?.url
                 ?: extractor.thumbnails?.lastOrNull()?.url
             if (uploaderName.isBlank() || uploaderUrl.isBlank()) return@runCatching null
             val channelId = extractChannelId(uploaderUrl) ?: return@runCatching null

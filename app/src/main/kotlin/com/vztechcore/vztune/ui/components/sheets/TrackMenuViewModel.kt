@@ -181,12 +181,25 @@ class TrackMenuViewModel @Inject constructor(
     }
 
     /**
-     * FIX 2: abre o CANAL REAL que postou o vídeo (NewPipe StreamExtractor -> UC...).
-     * Se o NewPipe não expõe o canal, não navega. Nunca cai pra busca por nome
-     * no YT Music (era isso que abria artista qualquer com nome parecido).
+     * FIX 6 (método do SimpMusic): abre o CANAL REAL que postou o vídeo.
+     * Ordem igual à do SimpMusic:
+     *  1. InnerTube player(videoId).videoDetails.channelId -> UC... canônico.
+     *     É o mesmo ID que o browse() entende como artista/canal, sem fetch de página.
+     *  2. Fallback: NewPipe StreamExtractor.uploaderUrl -> UC... (ou @handle resolvido).
+     * Nunca busca por nome. Se nenhum dos dois expõe o canal, não navega.
+     *
+     * getArtistFromVideo() já marca source=YOUTUBE quando o canal NÃO tem página
+     * de artista no YT Music (canal puro de vídeo), então a tela de artista sabe
+     * que é canal e carrega os vídeos DELE via NewPipe, em vez de chutar um
+     * artista qualquer com nome parecido.
      */
     fun onOpenChannelForTrack(track: Track) {
         viewModelScope.launch {
+            val fromInnerTube = runCatching { ytMusicRepository.getArtistFromVideo(track.id) }.getOrNull()
+            if (fromInnerTube != null) {
+                _navigationEvent.emit(MenuNavigationEvent.OpenArtist(fromInnerTube))
+                return@launch
+            }
             val channel = runCatching { youTubeRepository.getChannelForVideo(track.id) }.getOrNull()
             if (channel != null) {
                 _navigationEvent.emit(

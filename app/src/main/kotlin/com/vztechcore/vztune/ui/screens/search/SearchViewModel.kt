@@ -86,6 +86,7 @@ class SearchViewModel @Inject constructor(
     private val filterCache = mutableMapOf<SearchFilter, CachedTab>()
     private var suggestJob: Job? = null
     private var searchJob: Job? = null
+    private var prefetchJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -103,6 +104,7 @@ class SearchViewModel @Inject constructor(
     fun onQueryChange(value: String) {
         suggestJob?.cancel()
         searchJob?.cancel()
+        prefetchJob?.cancel()
         filterCache.clear()
         _uiState.update {
             it.copy(
@@ -116,13 +118,30 @@ class SearchViewModel @Inject constructor(
                 isRefreshing = false,
             )
         }
-        if (value.isBlank() || value.trim().length < 2) {
+        if (value.isBlank() || value.trim().length < 1) {
             _uiState.update { it.copy(suggestions = SearchSuggestions()) }
             return
         }
+        // FIX 6: sugestões a partir de 1 letra (antes: 2) e sem o delay de 400 ms.
+        // 1) Instantâneo (0 ms): histórico local que casa com o que foi digitado.
+        //    É local, não bate na rede — aparece na hora, igual ao SimpMusic.
+        // 2) Rede (debounce curto de 120 ms, não 400 ms): sugestões do YT Music +
+        //    faixas. O debounce só evita disparar uma request por tecla quando o
+        //    usuário está digitando rápido; 120 ms é imperceptível.
+        //    A rede em si continua levando o tempo dela — o que some é a espera
+        //    artificial antes de disparar + a espera por algo local.
+        val trimmed = value.trim()
+        val localQueries = _uiState.value.history
+            .filter { it.contains(trimmed, ignoreCase = true) && !it.equals(trimmed, ignoreCase = true) }
+            .take(5)
+        if (localQueries.isNotEmpty()) {
+            _uiState.update { it.copy(suggestions = SearchSuggestions(queries = localQueries)) }
+        }
         suggestJob = viewModelScope.launch {
-            delay(400)
+            delay(120)
             val s = musicRepository.suggestions(value)
+            // Usuário já digitou outra coisa? Não sobrescreve sugestões de outra query.
+            if (_uiState.value.query != value) return@launch
             _uiState.update { it.copy(suggestions = s) }
         }
     }
@@ -141,7 +160,11 @@ class SearchViewModel @Inject constructor(
         }
         _uiState.update { it.copy(selectedFilter = filter) }
         if (currentQuery.isNotBlank()) {
+            // A aba ainda não foi pré-carregada: busca ela agora e, depois, pré-carrega
+            // o resto (o prefetch anterior é cancelado pra não duplicar a busca).
+            prefetchJob?.cancel()
             runSearch(currentQuery, filter, isRefresh = false, loadMore = false)
+            prefetchOtherTabs(currentQuery, filter)
         }
     }
 
@@ -151,13 +174,54 @@ class SearchViewModel @Inject constructor(
         _uiState.update { it.copy(isFocused = false) }
         viewModelScope.launch { historyStore.add(query) }
         filterCache.clear()
-        runSearch(query, _uiState.value.selectedFilter, isRefresh = false, loadMore = false)
+        prefetchJob?.cancel()
+        val selected = _uiState.value.selectedFilter
+        runSearch(query, selected, isRefresh = false, loadMore = false)
+        prefetchOtherTabs(query, selected)
     }
 
     fun onRefresh() {
         if (_uiState.value.query.isBlank()) return
         filterCache.clear()
-        runSearch(_uiState.value.query, _uiState.value.selectedFilter, isRefresh = true, loadMore = false)
+        prefetchJob?.cancel()
+        val selected = _uiState.value.selectedFilter
+        runSearch(_uiState.value.query, selected, isRefresh = true, loadMore = false)
+        prefetchOtherTabs(_uiState.value.query, selected)
+    }
+
+    /**
+     * FIX 6: pré-carrega TODAS as outras abas em segundo plano, assim que a busca
+     * da aba aberta dispara. Quando o usuário troca de aba, o resultado já está
+     * no filterCache e aparece na hora (onFilterSelect só mostra o cache).
+     *
+     * Por que SEQUENCIAL e não paralelo: o MusicRepository guarda um SearchState
+     * por aba (ok em paralelo), mas as buscas do YouTube (NewPipe) compartilham
+     * o OkHttp/downloader — rodar 6 buscas ao mesmo tempo estoura timeout e
+     * mistura paginação. Sequencial é mais lento no total, mas a aba aberta já
+     * mostra o resultado dela primeiro; o resto chega em segundo plano.
+     *
+     * Cada aba tem sua própria sessão NewPipe por searchId (FIX 6 no
+     * YouTubeRepository), então o prefetch NÃO quebra o "carregar mais" da aba aberta.
+     */
+    private fun prefetchOtherTabs(query: String, selected: SearchFilter) {
+        prefetchJob?.cancel()
+        prefetchJob = viewModelScope.launch {
+            for (filter in SearchFilter.entries) {
+                if (filter == selected) continue
+                // Query mudou no meio do prefetch? Para, a busca nova vai pré-carregar de novo.
+                if (_uiState.value.query.trim() != query) break
+                val already = filterCache[filter]
+                if (already != null && already.query == query) continue
+                val result = runCatching { musicRepository.search(query, filter, loadMore = false) }.getOrNull()
+                if (result is SearchResult.Success) {
+                    filterCache[filter] = CachedTab(query, result.hits, result.hasMore)
+                    // Usuário trocou pra essa aba enquanto ela carregava: mostra na hora.
+                    if (_uiState.value.selectedFilter == filter && _uiState.value.query.trim() == query) {
+                        _uiState.update { it.copy(hits = result.hits, hasMore = result.hasMore, isLoading = false) }
+                    }
+                }
+            }
+        }
     }
 
     fun onRemoveHistory(query: String) { viewModelScope.launch { historyStore.remove(query) } }
@@ -293,12 +357,19 @@ class SearchViewModel @Inject constructor(
             when (val result = musicRepository.search(query, filter, loadMore)) {
                 is SearchResult.Success -> {
                     filterCache[filter] = CachedTab(query, result.hits, result.hasMore)
-                    _uiState.update { it.copy(isLoading = false, isRefreshing = false, hits = result.hits, hasMore = result.hasMore) }
+                    // Só mostra se a query/aba ainda for essa (prefetch ou troca de aba
+                    // no meio da busca não pode sobrescrever a aba atual).
+                    if (_uiState.value.query.trim() == query.trim() && _uiState.value.selectedFilter == filter) {
+                        _uiState.update { it.copy(isLoading = false, isRefreshing = false, hits = result.hits, hasMore = result.hasMore) }
+                    }
                 }
                 is SearchResult.Failure -> {
-                    _uiState.update { it.copy(isLoading = false, isRefreshing = false, errorMessage = result.message) }
+                    if (_uiState.value.query.trim() == query.trim() && _uiState.value.selectedFilter == filter) {
+                        _uiState.update { it.copy(isLoading = false, isRefreshing = false, errorMessage = result.message) }
+                    }
                 }
             }
         }
     }
+
 }

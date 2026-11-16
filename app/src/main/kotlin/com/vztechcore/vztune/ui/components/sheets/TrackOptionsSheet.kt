@@ -42,6 +42,7 @@ import com.vztechcore.vztune.ui.icons.media.DownloadDone
 import com.vztechcore.vztune.ui.icons.media.Groups
 import com.vztechcore.vztune.ui.icons.media.PlaylistAdd
 import com.vztechcore.vztune.ui.icons.media.QueueMusic
+import com.vztechcore.vztune.ui.icons.media.Radio
 import com.vztechcore.vztune.ui.icons.player.PlayCircleFilled
 
 private val SheetContainerColor = Color(0xFF121829)
@@ -240,8 +241,9 @@ fun TrackOptionsSheet(
             // 4b. FIX 3: Iniciar rádio (Mix infinito) - a partir de qualquer faixa,
             // em qualquer lugar (busca, playlist, álbum, artista). Nome "Iniciar rádio":
             // é o termo do YT Music / Spotify, mais profissional que "Mix".
+            // Ícone de rádio (ondas) do YT Music, não o play genérico.
             SheetOptionRow(
-                icon = VzIcons.PlayCircleFilled,
+                icon = VzIcons.Radio,
                 label = "Iniciar rádio",
                 subtitle = "Mix infinito a partir desta faixa",
                 onClick = {

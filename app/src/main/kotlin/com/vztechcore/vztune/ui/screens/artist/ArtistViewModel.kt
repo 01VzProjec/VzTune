@@ -8,6 +8,7 @@ import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.data.player.PlayerController
 import com.vztechcore.vztune.data.prefs.models.FollowedArtist
 import com.vztechcore.vztune.data.prefs.store.FollowedArtistsStore
+import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,6 +23,7 @@ import javax.inject.Inject
 class ArtistViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val ytMusicRepository: YTMusicRepository,
+    private val youTubeRepository: YouTubeRepository,
     private val playerController: PlayerController,
     private val followedStore: FollowedArtistsStore,
 ) : ViewModel() {
@@ -49,37 +51,56 @@ class ArtistViewModel @Inject constructor(
     private fun loadContent() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            runCatching { ytMusicRepository.browseArtist(route.id) }
-                .onSuccess { r ->
-                    val isEmpty = r.topSongs.isEmpty() && r.albums.isEmpty() && r.singles.isEmpty() &&
-                        r.videos.isEmpty() && r.featured.isEmpty() && r.relatedArtists.isEmpty()
+            val result = runCatching { ytMusicRepository.browseArtist(route.id) }.getOrNull()
+            if (result != null) {
+                val isEmpty = result.topSongs.isEmpty() && result.albums.isEmpty() && result.singles.isEmpty() &&
+                    result.videos.isEmpty() && result.featured.isEmpty() && result.relatedArtists.isEmpty()
+                if (!isEmpty) {
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            errorMessage = if (isEmpty) "Não foi possível carregar este artista." else null,
+                            errorMessage = null,
                             // Keep the name/photo from the card when the page could not provide them
-                            name = r.name.takeUnless { n -> n == "Artista" || n == "Unknown Artist" } ?: it.name,
-                            thumbnailUrl = r.thumbnailUrl ?: it.thumbnailUrl,
-                            subscribers = r.subscribers,
-                            views = r.views,
-                            description = r.description,
-                            topSongs = r.topSongs,
-                            songsMore = r.songsMore,
-                            albums = r.albums,
-                            albumsMore = r.albumsMore,
-                            singles = r.singles,
-                            singlesMore = r.singlesMore,
-                            videos = r.videos,
-                            videosMore = r.videosMore,
-                            featured = r.featured,
-                            featuredMore = r.featuredMore,
-                            relatedArtists = r.relatedArtists,
+                            name = result.name.takeUnless { n -> n == "Artista" || n == "Unknown Artist" } ?: it.name,
+                            thumbnailUrl = result.thumbnailUrl ?: it.thumbnailUrl,
+                            subscribers = result.subscribers,
+                            views = result.views,
+                            description = result.description,
+                            topSongs = result.topSongs,
+                            songsMore = result.songsMore,
+                            albums = result.albums,
+                            albumsMore = result.albumsMore,
+                            singles = result.singles,
+                            singlesMore = result.singlesMore,
+                            videos = result.videos,
+                            videosMore = result.videosMore,
+                            featured = result.featured,
+                            featuredMore = result.featuredMore,
+                            relatedArtists = result.relatedArtists,
                         )
                     }
+                    return@launch
                 }
-                .onFailure {
-                    _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar este artista.") }
+            }
+            // FIX 6: o YT Music NÃO tem página de artista pra esse UC...
+            // É um canal puro de vídeo (podcast, gamer, vlogger...), não um artista.
+            // NUNCA busca por nome (era isso que abria artista parecido).
+            // Abre o CANAL REAL pelo UC... via NewPipe e mostra OS VÍDEOS DELE.
+            // O nome/foto vêm da rota (que já veio do canal real do vídeo), não de busca.
+            val channel = runCatching { youTubeRepository.browseChannel(route.id) }.getOrNull()
+            if (channel != null && channel.videos.isNotEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = null,
+                        thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl,
+                        subscribers = channel.subscriberCount ?: it.subscribers,
+                        videos = channel.videos,
+                    )
                 }
+            } else {
+                _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar este canal.") }
+            }
         }
     }
 

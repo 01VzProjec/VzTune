@@ -170,7 +170,10 @@ class MusicRepository @Inject constructor(
             state.ytmContinuation = null
             state.ytmHasMore = true
             state.topArtistsLoaded = false
-            youTubeRepository.resetSession()
+            // FIX 6: NÃO chama resetSession() aqui. Ele limpava TODAS as sessões do
+            // NewPipe, então o prefetch de abas apagava a paginação da aba atual.
+            // Cada aba já tem sua própria sessão por searchId (YouTubeRepository),
+            // e uma busca nova (loadMore=false) recria a sessão daquela aba.
         }
         return when (filter) {
             SearchFilter.ALL -> searchAll(query, loadMore, state)
@@ -190,7 +193,7 @@ class MusicRepository @Inject constructor(
         val topArtistsDeferred = if (!state.topArtistsLoaded && !loadMore) {
             async { runCatching { ytMusicRepository.searchArtists(query) }.getOrDefault(emptyList()).take(3) }
         } else null
-        val ytDeferred = async { youTubeRepository.searchVideos(query, loadMore, pageSize) }
+        val ytDeferred = async { youTubeRepository.searchVideos(query, loadMore, pageSize, searchId = "$query|ALL") }
         val ytmDeferred = async { ytMusicRepository.search(query, SearchFilter.ALL, state.ytmContinuation) }
         val ytPage = ytDeferred.await()
         val ytmPage = ytmDeferred.await()
@@ -223,7 +226,7 @@ class MusicRepository @Inject constructor(
     }
 
     private suspend fun searchVideos(query: String, loadMore: Boolean, state: SearchState): SearchResult {
-        val ytPage = youTubeRepository.searchVideos(query, loadMore, 30)
+        val ytPage = youTubeRepository.searchVideos(query, loadMore, 30, searchId = "$query|VIDEOS")
         state.ytHasMore = ytPage.hasMore
         val newHits = ytPage.items.filter { state.seenKeys.add(it.stableKey) }
         return SearchResult.Success(newHits, state.ytHasMore)
@@ -238,7 +241,7 @@ class MusicRepository @Inject constructor(
     }
 
     private suspend fun searchPlaylists(query: String, loadMore: Boolean, state: SearchState): SearchResult = coroutineScope {
-        val ytDeferred = async { if (!loadMore) youTubeRepository.searchPlaylists(query, loadMore = false) else emptyList() }
+        val ytDeferred = async { if (!loadMore) youTubeRepository.searchPlaylists(query, loadMore = false, searchId = "$query|PLAYLISTS") else emptyList() }
         val ytmDeferred = async { ytMusicRepository.search(query, SearchFilter.PLAYLISTS, state.ytmContinuation) }
         val ytHits = ytDeferred.await()
         val ytmPage = ytmDeferred.await()

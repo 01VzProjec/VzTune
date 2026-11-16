@@ -53,17 +53,40 @@ class YouTubeRepository @Inject constructor(
         NewPipeInitializer.ensureInitialized(downloader)
     }
 
-    private var activeVideoSearch: SearchExtractor? = null
-    private var lastVideoPage: Page? = null
-    private var activePlaylistSearch: SearchExtractor? = null
-    private var lastPlaylistPage: Page? = null
+    /**
+     * FIX 6: uma sessão de busca por (query + aba), não uma única sessão global.
+     * Antes, ALL e VIDEOS compartilhavam a mesma sessão: quando o prefetch de abas
+     * carregava VIDEOS depois de ALL, o "carregar mais" de ALL passava a paginar
+     * a busca de VIDEOS. Com uma sessão por searchId, cada aba pagina a sua própria
+     * busca, mesmo com o prefetch rodando em segundo plano.
+     * searchId vem do MusicRepository ("$query|ALL", "$query|VIDEOS", ...).
+     * buildVideoQueue() usa searchId = query (padrão), então não interfere nas abas.
+     */
+    private data class VideoSearchSession(
+        val extractor: SearchExtractor,
+        var nextPage: Page?,
+    )
+
+    private data class PlaylistSearchSession(
+        val extractor: SearchExtractor,
+        var nextPage: Page?,
+    )
+
+    private val videoSearches = mutableMapOf<String, VideoSearchSession>()
+    private val playlistSearches = mutableMapOf<String, PlaylistSearchSession>()
 
     fun resetSession() {
-        activeVideoSearch = null
-        lastVideoPage = null
-        activePlaylistSearch = null
-        lastPlaylistPage = null
+        videoSearches.clear()
+        playlistSearches.clear()
     }
+
+    /** Canal do YouTube (não-artista do YT Music): vídeos que ele postou. */
+    data class ChannelPage(
+        val videos: List<Track>,
+        val channelName: String?,
+        val avatarUrl: String?,
+        val subscriberCount: String?,
+    )
 
     data class VideoPage(
         val items: List<SearchHit.VideoHit>,
@@ -76,6 +99,7 @@ class YouTubeRepository @Inject constructor(
         query: String,
         loadMore: Boolean,
         pageSize: Int = 20,
+        searchId: String = query,
     ): VideoPage = withContext(Dispatchers.IO) {
         if (!NewPipeInitializer.ensureInitialized(downloader)) {
             Log.e(TAG, "searchVideos: NewPipe not initialized")
@@ -83,19 +107,20 @@ class YouTubeRepository @Inject constructor(
         }
         runCatching {
             if (!loadMore) {
-                activeVideoSearch = ServiceList.YouTube.getSearchExtractor(query)
-                activeVideoSearch!!.fetchPage()
-                lastVideoPage = activeVideoSearch!!.initialPage.nextPage
-                val items = parseVideoItems(activeVideoSearch!!.initialPage.items).take(pageSize)
-                VideoPage(items, lastVideoPage != null)
+                val extractor = ServiceList.YouTube.getSearchExtractor(query)
+                extractor.fetchPage()
+                val session = VideoSearchSession(extractor, extractor.initialPage.nextPage)
+                videoSearches[searchId] = session
+                val items = parseVideoItems(extractor.initialPage.items).take(pageSize)
+                VideoPage(items, session.nextPage != null)
             } else {
-                val extractor = activeVideoSearch
+                val session = videoSearches[searchId]
                     ?: return@runCatching VideoPage(emptyList(), false)
-                val page = lastVideoPage
+                val page = session.nextPage
                     ?: return@runCatching VideoPage(emptyList(), false)
-                val next = extractor.getPage(page)
-                lastVideoPage = next.nextPage
-                VideoPage(parseVideoItems(next.items).take(pageSize), lastVideoPage != null)
+                val next = session.extractor.getPage(page)
+                session.nextPage = next.nextPage
+                VideoPage(parseVideoItems(next.items).take(pageSize), session.nextPage != null)
             }
         }.getOrElse { e ->
             Log.e(TAG, "searchVideos failed for query=$query", e)
@@ -107,6 +132,7 @@ class YouTubeRepository @Inject constructor(
         query: String,
         loadMore: Boolean,
         pageSize: Int = 30,
+        searchId: String = query,
     ): List<SearchHit.PlaylistHit> = withContext(Dispatchers.IO) {
         if (!NewPipeInitializer.ensureInitialized(downloader)) {
             Log.e(TAG, "searchPlaylists: NewPipe not initialized")
@@ -114,19 +140,20 @@ class YouTubeRepository @Inject constructor(
         }
         runCatching {
             if (!loadMore) {
-                activePlaylistSearch = ServiceList.YouTube.getSearchExtractor(
+                val extractor = ServiceList.YouTube.getSearchExtractor(
                     query, listOf("playlists"), null,
                 )
-                activePlaylistSearch!!.fetchPage()
-                lastPlaylistPage = activePlaylistSearch!!.initialPage.nextPage
-                parsePlaylistItems(activePlaylistSearch!!.initialPage.items).take(pageSize)
+                extractor.fetchPage()
+                val session = PlaylistSearchSession(extractor, extractor.initialPage.nextPage)
+                playlistSearches[searchId] = session
+                parsePlaylistItems(extractor.initialPage.items).take(pageSize)
             } else {
-                val extractor = activePlaylistSearch
+                val session = playlistSearches[searchId]
                     ?: return@runCatching emptyList<SearchHit.PlaylistHit>()
-                val page = lastPlaylistPage
+                val page = session.nextPage
                     ?: return@runCatching emptyList<SearchHit.PlaylistHit>()
-                val next = extractor.getPage(page)
-                lastPlaylistPage = next.nextPage
+                val next = session.extractor.getPage(page)
+                session.nextPage = next.nextPage
                 parsePlaylistItems(next.items).take(pageSize)
             }
         }.getOrElse { e ->
@@ -543,6 +570,68 @@ class YouTubeRepository @Inject constructor(
             extractor.fetchPage()
             extractor.id?.takeIf { it.startsWith("UC") }
         }.getOrNull()
+    }
+
+    /**
+     * FIX 6: vídeos do CANAL REAL, pelo UC... dele.
+     * Usado pela tela de artista quando o YT Music NÃO tem página de artista
+     * pra esse UC... (canal puro de vídeo). O ChannelExtractor do NewPipe abre
+     * o canal pelo ID, não por nome — então nunca cai num canal/artista parecido.
+     * Retorna null quando o canal não existe / não tem vídeos (o chamador mostra
+     * erro, nunca chuta outro artista).
+     */
+    suspend fun browseChannel(channelId: String): ChannelPage? = withContext(Dispatchers.IO) {
+        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
+        if (channelId.isBlank()) return@withContext null
+        runCatching {
+            val extractor = ServiceList.YouTube.getChannelExtractor(
+                "https://www.youtube.com/channel/$channelId"
+            )
+            extractor.fetchPage()
+            val channelName = runCatching { extractor.name }.getOrNull()?.trim().orEmpty()
+            val avatarUrl = runCatching { extractor.avatars?.lastOrNull()?.url }.getOrNull()
+            val subscriberCount = runCatching {
+                extractor.subscriberCount.takeIf { it > 0 }?.let { formatSubscribers(it) }
+            }.getOrNull()
+            val videos = extractor.initialPage.items
+                .filterIsInstance<StreamInfoItem>()
+                .mapNotNull { stream ->
+                    val videoId = extractVideoId(stream.url) ?: return@mapNotNull null
+                    Track(
+                        id = videoId,
+                        title = stream.name ?: "Untitled",
+                        artist = channelName,
+                        durationSeconds = stream.duration,
+                        thumbnailUrl = stream.thumbnails.lastOrNull()?.url,
+                        source = Source.YOUTUBE,
+                    )
+                }
+            ChannelPage(
+                videos = videos,
+                channelName = channelName.takeIf { it.isNotBlank() },
+                avatarUrl = avatarUrl,
+                subscriberCount = subscriberCount,
+            )
+        }.getOrNull()
+    }
+
+    private fun formatSubscribers(count: Long): String {
+        return when {
+            count >= 1_000_000 -> {
+                val v = count / 1_000_000.0
+                "${trimDecimal(v)} mi de inscritos"
+            }
+            count >= 1_000 -> {
+                val v = count / 1_000.0
+                "${trimDecimal(v)} mil inscritos"
+            }
+            else -> "$count inscritos"
+        }
+    }
+
+    private fun trimDecimal(v: Double): String {
+        val s = "%.1f".format(v)
+        return if (s.endsWith(".0")) s.dropLast(2) else s
     }
 
     suspend fun buildVideoQueue(seed: Track): List<Track> = withContext(Dispatchers.IO) {

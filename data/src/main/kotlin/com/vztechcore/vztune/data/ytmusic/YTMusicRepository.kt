@@ -545,6 +545,20 @@ class YTMusicRepository @Inject constructor(
         ArtistListPage(page.tracks, page.albums, page.playlists, page.continuation)
     }
 
+    /**
+     * FIX 6 (método do SimpMusic): artista/canal DONO de um vídeo, pelo channelId
+     * que o próprio vídeo carrega (player.videoDetails.channelId).
+     *
+     * NUNCA busca por nome: o channelId do player é a fonte da verdade.
+     *
+     * Distinção que faltava (era isso que abria artista parecido):
+     *  - Se o YT Music tem página de artista pra esse UC... (topSongs/álbuns/
+     *    vídeos/relacionados), devolve como YOUTUBE_MUSIC, com nome/foto da página.
+     *  - Se NÃO tem página (canal puro de vídeo: podcast, gamer, vlogger...),
+     *    devolve como YOUTUBE, com o nome do author do vídeo. A tela de artista
+     *    entende source=YOUTUBE como "canal" e carrega os vídeos DELE via NewPipe,
+     *    em vez de chutar um artista do YT Music com nome parecido.
+     */
     suspend fun getArtistFromVideo(videoId: String): Artist? =
         withContext(Dispatchers.IO) {
             val playerJson = runCatching { InnerTube.player(videoId) }.getOrNull()
@@ -559,11 +573,26 @@ class YTMusicRepository @Inject constructor(
             val cleanName = YTMusicTextUtils.cleanArtistName(author)
             if (cleanName.isBlank()) return@withContext null
             val detail = runCatching { browseArtist(channelId) }.getOrNull()
-            Artist(
-                id = channelId, name = cleanName,
-                thumbnailUrl = detail?.thumbnailUrl,
-                source = Source.YOUTUBE_MUSIC,
-            )
+            val isMusicArtist = detail != null &&
+                detail.name != "Artista" && detail.name != "Unknown Artist" &&
+                (detail.topSongs.isNotEmpty() || detail.albums.isNotEmpty() ||
+                    detail.singles.isNotEmpty() || detail.videos.isNotEmpty() ||
+                    detail.featured.isNotEmpty() || detail.relatedArtists.isNotEmpty())
+            if (isMusicArtist) {
+                Artist(
+                    id = channelId,
+                    name = detail!!.name,
+                    thumbnailUrl = detail.thumbnailUrl,
+                    source = Source.YOUTUBE_MUSIC,
+                )
+            } else {
+                Artist(
+                    id = channelId,
+                    name = cleanName,
+                    thumbnailUrl = detail?.thumbnailUrl,
+                    source = Source.YOUTUBE,
+                )
+            }
         }
 
     // ================= QUEUE =================

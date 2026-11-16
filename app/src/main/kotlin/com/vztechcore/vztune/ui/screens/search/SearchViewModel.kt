@@ -257,8 +257,9 @@ class SearchViewModel @Inject constructor(
 
     fun onOpenArtistByName(artistName: String) {
         viewModelScope.launch {
+            // Mais parecido por Levenshtein, nunca mais o primeiro da busca
             val found = runCatching {
-                ytMusicRepository.searchArtists(artistName).firstOrNull()
+                ytMusicRepository.resolveArtist(artistName)
             }.getOrNull()
             if (found != null) {
                 _navigationEvent.emit(NavigationEvent.OpenArtist(found.id, found.name, found.thumbnailUrl))

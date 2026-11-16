@@ -144,8 +144,25 @@ class TrackMenuViewModel @Inject constructor(
 
     fun onOpenArtistByName(artistName: String) {
         viewModelScope.launch {
+            // Sem contexto: ainda usa Levenshtein (mais parecido), nunca mais firstOrNull
             val found = runCatching {
-                ytMusicRepository.searchArtists(artistName).firstOrNull()
+                ytMusicRepository.resolveArtist(artistName)
+            }.getOrNull()
+            if (found != null) {
+                _navigationEvent.emit(MenuNavigationEvent.OpenArtist(found))
+            }
+        }
+    }
+
+    /** Clique em artista DENTRO de uma faixa: verifica quem tem ESSA faixa / ESSE álbum no catálogo. */
+    fun onOpenArtistForTrack(track: Track, artistName: String) {
+        viewModelScope.launch {
+            val found = runCatching {
+                ytMusicRepository.resolveArtist(
+                    artistName,
+                    trackTitle = track.title,
+                    albumTitle = track.album?.takeIf { it.isNotBlank() },
+                )
             }.getOrNull()
             if (found != null) {
                 _navigationEvent.emit(MenuNavigationEvent.OpenArtist(found))

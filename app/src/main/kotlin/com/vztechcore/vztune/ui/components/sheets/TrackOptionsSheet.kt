@@ -81,6 +81,7 @@ fun TrackOptionsSheet(
     onOpenAlbum: (Album) -> Unit = {},
     onOpenAlbumForTrack: (Track) -> Unit = {},
     onOpenArtistByName: (String) -> Unit,
+    onOpenArtistForTrack: (Track, String) -> Unit = { _, name -> onOpenArtistByName(name) },
     onTrackInfo: (Track) -> Unit,
 ) {
     val context = LocalContext.current
@@ -132,7 +133,8 @@ fun TrackOptionsSheet(
             onPick = { artistName ->
                 showArtistPicker = false
                 onDismiss()
-                onOpenArtistByName(artistName)
+                // Passa a faixa: o resolver só aceita quem tem ESSA faixa no catálogo
+                onOpenArtistForTrack(track, artistName)
             },
             onDismiss = { showArtistPicker = false },
         )
@@ -319,7 +321,7 @@ fun TrackOptionsSheet(
                             showArtistPicker = true
                         } else {
                             onDismiss()
-                            onOpenArtistByName(artists.first())
+                            onOpenArtistForTrack(track, artists.first())
                         }
                     },
                 )

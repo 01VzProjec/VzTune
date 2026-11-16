@@ -301,7 +301,10 @@ class YTMusicRepository @Inject constructor(
             ?: artistName?.takeIf { it.isNotBlank() && !it.equals("Desconhecido", ignoreCase = true) }
                 ?.let { name ->
                     val primary = name.substringBefore(",").substringBefore("&").trim()
-                    runCatching { searchArtists(primary).firstOrNull()?.id }.getOrNull()
+                    // Verifica que o artista tem esse álbum no catálogo, senão pega o homônimo errado
+                    runCatching {
+                        resolveArtist(primary, albumTitle = excludeAlbumTitle)?.id
+                    }.getOrNull()
                 }
             ?: return@withContext (null to emptyList())
 
@@ -372,23 +375,102 @@ class YTMusicRepository @Inject constructor(
 
     /**
      * Resolves an artist or YouTube channel profile (including avatar thumbnail) by name.
+     * Sem contexto de faixa/álbum: usa só o nome mais parecido (Levenshtein, SimpMusic).
+     * Com contexto, usa resolveArtist() com verificação de catálogo.
      */
-    suspend fun findChannelOrArtist(name: String): Artist? = withContext(Dispatchers.IO) {
-        val cleanQuery = name.trim()
+    suspend fun findChannelOrArtist(name: String): Artist? =
+        resolveArtist(name, trackTitle = null, albumTitle = null)
+
+    /**
+     * Resolve o artista CERTO pra um nome clicado dentro de álbum/faixa.
+     *
+     * Antigo: searchArtists(nome).firstOrNull() -> pegava o primeiro, que com nome
+     * repetido era quase sempre o artista errado ou o "- Topic".
+     *
+     * Novo (SimpMusic + verificação que você pediu):
+     * 1. Busca candidatos (até 30), rankeia por Levenshtein no nome normalizado,
+     *    desempata Topic (oficial sem " - Topic" ganha).
+     * 2. Se tem nome exato não-Topic, devolve ele direto sem gastar browse.
+     * 3. Se tem faixa/álbum de contexto, abre a página dos 3 mais parecidos e só
+     *    aceita quem tem aquela faixa / aquele álbum no catálogo. Quem não tem, não é ele.
+     * 4. Sem verificação ou ninguém verificado, cai pro mais parecido.
+     */
+    suspend fun resolveArtist(
+        artistName: String,
+        trackTitle: String? = null,
+        albumTitle: String? = null,
+    ): Artist? = withContext(Dispatchers.IO) {
+        val cleanQuery = artistName.trim()
         if (cleanQuery.isBlank() || cleanQuery.equals("YouTube Music", ignoreCase = true)) {
             return@withContext null
         }
 
-        // 1. Try artists filter first
-        searchArtists(cleanQuery).firstOrNull()?.let { return@withContext it }
+        // 1. Candidatos: filtro ARTISTS primeiro, igual antes
+        var candidates = searchArtists(cleanQuery)
 
-        // 2. Fallback to general search to find channel/curator entries (UC...)
-        val fallbackOut = mutableListOf<Artist>()
-        runCatching {
-            val json = InnerTube.search(cleanQuery, null)
-            YTMusicArtistParser.extractArtistsFromSearch(json, fallbackOut)
+        // 2. Fallback pra busca geral (canal/curador UC...) quando ARTISTS não achou nada
+        if (candidates.isEmpty()) {
+            val fallbackOut = mutableListOf<Artist>()
+            runCatching {
+                val json = InnerTube.search(cleanQuery, null)
+                YTMusicArtistParser.extractArtistsFromSearch(json, fallbackOut)
+            }
+            candidates = fallbackOut.distinctBy { it.id }
+                .filter { !it.thumbnailUrl.isNullOrBlank() }
         }
-        fallbackOut.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }
+        if (candidates.isEmpty()) return@withContext null
+
+        // Rankeia: menor Levenshtein primeiro, não-Topic antes de Topic, ordem original desempata
+        val ranked = candidates.mapIndexed { idx, artist ->
+            Triple(artist, ArtistResolver.distance(cleanQuery, artist.name), idx)
+        }.sortedWith(
+            compareBy<Triple<Artist, Int, Int>> { it.second }
+                .thenBy { if (ArtistResolver.isTopicName(it.first.name)) 1 else 0 }
+                .thenBy { it.third }
+        )
+
+        // Exato não-Topic: é ele, sem gastar browse
+        val exactNonTopic = ranked.firstOrNull {
+            it.second == 0 && !ArtistResolver.isTopicName(it.first.name)
+        }
+        if (exactNonTopic != null && trackTitle.isNullOrBlank() && albumTitle.isNullOrBlank()) {
+            return@withContext exactNonTopic.first
+        }
+        // Exato (mesmo que seja Topic) sem contexto: também é ele, sem gastar browse
+        val exactAny = ranked.firstOrNull { it.second == 0 }
+        if (exactAny != null && trackTitle.isNullOrBlank() && albumTitle.isNullOrBlank()) {
+            return@withContext exactAny.first
+        }
+
+        // 3. Verificação de catálogo: só pros 3 mais parecidos, pra não estourar rede
+        val hasContext = !trackTitle.isNullOrBlank() || !albumTitle.isNullOrBlank()
+        if (hasContext) {
+            for ((candidate, _, _) in ranked.take(3)) {
+                val detail = runCatching { browseArtist(candidate.id) }.getOrNull() ?: continue
+                val contains = ArtistResolver.catalogContains(
+                    topSongTitles = detail.topSongs.map { it.title },
+                    videoTitles = detail.videos.map { it.title },
+                    albumTitles = detail.albums.map { it.title },
+                    singleTitles = detail.singles.map { it.title },
+                    trackTitle = trackTitle,
+                    albumTitle = albumTitle,
+                )
+                if (contains) {
+                    // Devolve com o nome/foto da página verificada (mais confiável que o da busca)
+                    return@withContext Artist(
+                        id = candidate.id,
+                        name = detail.name.takeUnless { it == "Artista" || it == "Unknown Artist" }
+                            ?: candidate.name,
+                        thumbnailUrl = detail.thumbnailUrl ?: candidate.thumbnailUrl,
+                        source = candidate.source,
+                    )
+                }
+            }
+            // Ninguém verificado: cai pro mais parecido abaixo (não retorna null, senão o clique morre)
+        }
+
+        // 4. Mais parecido (SimpMusic: bestMatchingIndex por Levenshtein)
+        return@withContext ranked.first().first
     }
 
     suspend fun featuredArtists(): List<Artist> = withContext(Dispatchers.IO) {

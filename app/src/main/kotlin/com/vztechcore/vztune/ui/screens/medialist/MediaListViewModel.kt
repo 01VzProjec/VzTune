@@ -342,8 +342,11 @@ class MediaListViewModel @Inject constructor(
 
     fun onOpenArtistByName(artistName: String) {
         viewModelScope.launch {
+            // Álbum: passa o título do álbum como contexto, pra resolver só aceitar
+            // o artista que tem ESSE álbum no catálogo. Playlist: sem contexto, cai pro mais parecido.
+            val albumTitle = _uiState.value.title.takeIf { _uiState.value.isAlbum }
             val found = runCatching {
-                ytMusicRepository.findChannelOrArtist(artistName)
+                ytMusicRepository.resolveArtist(artistName, albumTitle = albumTitle)
             }.getOrNull()
             if (found != null) {
                 _navigationEvent.emit(NavigationEvent.OpenArtist(found))

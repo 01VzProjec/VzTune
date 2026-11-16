@@ -98,10 +98,12 @@ internal fun MediaListTrackRow(
                         contentAlignment = Alignment.Center,
                     ) {
                         when {
+                            // EXATAMENTE igual ao dos cards normais (MediaThumbnail.PlayingOverlayLarge):
+                            // mesmos 3 barras, 20dp, 3dp, 3dp, mesma animação. Não é parecido, é o mesmo call.
                             isPlaying -> PlayingEqualizer(
                                 color = Color.White,
-                                barCount = 4,
-                                maxHeight = 24.dp,
+                                barCount = 3,
+                                maxHeight = 20.dp,
                                 barWidth = 3.dp,
                                 gap = 3.dp,
                             )

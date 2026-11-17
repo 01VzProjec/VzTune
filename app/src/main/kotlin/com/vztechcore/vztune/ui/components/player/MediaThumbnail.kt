@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,9 +31,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.vztechcore.vztune.R
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.player.Pause
 import com.vztechcore.vztune.ui.theme.VzSecondary
@@ -61,11 +64,23 @@ fun MediaThumbnail(
         else -> modifier.size(size)
     }
 
+    // Holder por baixo da thumb: 1:1 (holder.png) p/ faixas e playlists,
+    // 16:9 (holder_video.png) p/ videos. Aparece enquanto a thumb carrega,
+    // falha ou ainda nao existe - no lugar do cinza.
+    val holderRes = if (shape == ThumbnailShape.WIDE) R.drawable.holder_video else R.drawable.holder
+
     Box(
         modifier = baseModifier
             .clip(clipShape)
-            .background(Color.White.copy(alpha = 0.06f)),
+            .background(Color.Black),
     ) {
+        Image(
+            painter = painterResource(holderRes),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+
         if (imageUrl != null) {
             AsyncImage(
                 model = imageUrl,

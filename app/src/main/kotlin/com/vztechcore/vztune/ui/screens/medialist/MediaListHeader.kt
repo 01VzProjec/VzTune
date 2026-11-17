@@ -1,5 +1,6 @@
 package com.vztechcore.vztune.ui.screens.medialist
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,11 +18,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.vztechcore.vztune.R
 import com.vztechcore.vztune.core.domain.search.SortOrder
 import com.vztechcore.vztune.ui.components.player.DefaultPlaylistCover
 import com.vztechcore.vztune.ui.components.player.PlaylistCoverPalette
@@ -67,6 +70,14 @@ internal fun MediaListExpandedHeader(
                 .fillMaxWidth()
                 .height(320.dp)
         ) {
+            // Holder 1:1 por baixo da capa da playlist/album: aparece enquanto
+            // a capa carrega/falha, no lugar do vazio.
+            Image(
+                painter = painterResource(R.drawable.holder),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
             val hasDefaultColorToken = PlaylistCoverPalette.isDefaultColorToken(state.thumbnailUrl)
             when {
                 state.isLocal && !hasDefaultColorToken && !state.thumbnailUrl.isNullOrBlank() -> {

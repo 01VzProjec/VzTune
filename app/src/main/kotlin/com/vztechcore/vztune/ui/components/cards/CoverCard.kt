@@ -1,5 +1,6 @@
 package com.vztechcore.vztune.ui.components.cards
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -18,10 +19,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.vztechcore.vztune.R
 import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
 import com.vztechcore.vztune.ui.components.feedback.VzLogoStatic
 import com.vztechcore.vztune.ui.components.player.DefaultPlaylistCover
@@ -34,6 +37,8 @@ import com.vztechcore.vztune.ui.components.player.PlaylistCoverPalette
  * When there is neither a mosaic nor a cover (a brand-new local playlist with no
  * tracks and no chosen cover), the card is drawn with a black background and the
  * static VzTechCore logo — same identity shown on the loading screens.
+ *
+ * Enquanto a capa carrega/falha, o holder.png (1:1) fica por baixo no lugar do cinza.
  */
 @Composable
 fun CoverCard(
@@ -56,12 +61,19 @@ fun CoverCard(
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(RoundedCornerShape(12.dp))
-                .background(
-                    if (isEmpty) Color.Black
-                    else Color.White.copy(alpha = 0.08f)
-                ),
+                .background(Color.Black),
             contentAlignment = Alignment.Center,
         ) {
+            // Holder 1:1 por baixo da capa (mosaico ou imagem). Capa vazia
+            // mostra o logo, capa de cor padrao ja tem o fundo dela.
+            if (!isEmpty) {
+                Image(
+                    painter = painterResource(R.drawable.holder),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             when {
                 mosaic.size >= 4 -> PlaylistMosaic(mosaic)
                 PlaylistCoverPalette.isDefaultColorToken(imageUrl) -> DefaultPlaylistCover(

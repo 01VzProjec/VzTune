@@ -194,7 +194,10 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 startDestination = Routes.Home,
                 // Entrada: a própria tela anima (ScreenSlideIn) — NavHost não anima.
                 enterTransition = { EnterTransition.None },
-                exitTransition = { ExitTransition.None },
+                // Saída: SEGURA a tela atual parada enquanto a nova desliza por cima.
+                // Antes era None e a tela atual sumia na hora -> flash preto que
+                // parecia "delay pra começar". Agora a transição é contínua.
+                exitTransition = { vzHoldTransition() },
                 popEnterTransition = { vzPopEnterTransition() },
                 popExitTransition = { vzPopExitTransition() },
             ) {

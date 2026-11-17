@@ -56,6 +56,7 @@ import com.vztechcore.vztune.ui.components.cards.TrackListRow
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Close
 import com.vztechcore.vztune.ui.icons.navigation.Search
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun LibraryListSearchOverlay(
@@ -71,7 +72,13 @@ internal fun LibraryListSearchOverlay(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(Unit) {
+        // Espera o slide da tela terminar (300 ms) antes de abrir o teclado.
+        // Antes o teclado abria no meio do slide -> resize da janela + recomposição
+        // travavam o slide e parecia que a tela demorava pra abrir.
+        delay(320)
+        focusRequester.requestFocus()
+    }
 
     val filteredTracks = remember(tracks, query) {
         if (query.isBlank()) tracks.sortedBy { it.title.lowercase() }
@@ -220,3 +227,5 @@ private fun SearchInputBar(
         }
     }
 }
+
+===== Fim do arquivo [app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/list/LibraryListSearchOverlay.kt] =====

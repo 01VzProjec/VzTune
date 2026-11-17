@@ -63,6 +63,24 @@ fun AnimatedContentTransitionScope<NavBackStackEntry>.vzExitTransition(): ExitTr
     return ExitTransition.None
 }
 
+/**
+ * Saída ao navegar p/ frente — SEGURA a tela atual parada enquanto a nova
+ * desliza por cima dela (efeito "passando por cima").
+ *
+ * Antes era ExitTransition.None: a tela atual sumia no 1º frame e a nova
+ * deslizava por cima de um fundo preto — esse flash preto é o que parecia
+ * "delay pra começar". Com o hold, a transição é contínua e parece imediata:
+ * clicou, a nova já desliza por cima da atual.
+ *
+ * Dura o mesmo que o slide da ScreenSlideIn (300 ms). Depois disso o NavHost
+ * remove a tela antiga.
+ */
+fun AnimatedContentTransitionScope<NavBackStackEntry>.vzHoldTransition(): ExitTransition {
+    // slideOut de 0 = não sai do lugar; fadeOut lento só p/ suavizar a remoção.
+    return slideOutHorizontally(tween(SLIDE_OUT_MS + 20, easing = FastOutSlowInEasing)) { 0 } +
+        fadeOut(tween(SLIDE_OUT_MS + 20))
+}
+
 /** Entrada ao voltar (pop). */
 fun AnimatedContentTransitionScope<NavBackStackEntry>.vzPopEnterTransition(): EnterTransition {
     val fromTab = initialState.destination.tabIndex() // tela que está saindo

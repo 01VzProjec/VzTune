@@ -50,6 +50,7 @@ import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Close
 import com.vztechcore.vztune.ui.icons.navigation.Search
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun MediaListSearchOverlay(
@@ -66,6 +67,9 @@ internal fun MediaListSearchOverlay(
     val nowPlaying = LocalNowPlaying.current
 
     LaunchedEffect(Unit) {
+        // Espera o slide da tela terminar (300 ms) antes de abrir o teclado.
+        // Antes o teclado abria no meio do slide -> resize + recomposição travavam o slide.
+        delay(320)
         focusRequester.requestFocus()
     }
 
@@ -211,3 +215,5 @@ internal fun MediaListSearchOverlay(
         }
     }
 }
+
+===== Fim do arquivo [app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListSearchOverlay.kt] =====

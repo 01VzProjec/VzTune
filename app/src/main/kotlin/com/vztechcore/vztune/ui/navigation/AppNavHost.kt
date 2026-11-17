@@ -175,6 +175,10 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             NavHost(
                 navController = navController,
                 startDestination = Routes.Home,
+                enterTransition = { vzEnterTransition() },
+                exitTransition = { vzExitTransition() },
+                popEnterTransition = { vzPopEnterTransition() },
+                popExitTransition = { vzPopExitTransition() },
             ) {
                 composable<Routes.Home> { Placeholder("Home — coming soon") }
                 composable<Routes.Analytics> { Placeholder("Analytics — coming soon") }

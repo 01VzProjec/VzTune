@@ -14,24 +14,21 @@ import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 
 /**
- * Transicoes de navegacao do VzTune - suaves e rapidas.
+ * Transições de VOLTAR (pop) do VzTune — suaves e rápidas.
+ * A entrada p/ frente é feita pela própria tela (ScreenSlideIn).
  *
- * - Detalhe (playlist, album, artista, ver tudo, downloads, info da faixa):
- *   entra da direita, por cima da tela atual. Ao voltar, sai pra direita
- *   revelando a tela anterior.
- * - Abas (Home, Analytics, Library, Search): a direcao segue a ordem das abas.
- *   Indo p/ uma aba a direita, a nova entra da direita; indo p/ uma aba a
- *   esquerda, entra da esquerda. Voltar inverte.
- * - Detalhe -> aba (tocar na barra de baixo dentro de um detalhe): o detalhe
- *   sai pra direita revelando a aba, como se fosse um voltar.
+ * - Detalhe (playlist, álbum, artista, ver tudo, downloads, info da faixa):
+ *   ao voltar, sai pra direita revelando a tela anterior.
+ * - Abas (Home, Analytics, Library, Search): a direção segue a ordem das abas.
+ *   Voltando p/ uma aba à esquerda, a tela atual sai p/ direita; voltando
+ *   p/ uma aba à direita, sai p/ esquerda.
  */
 
-// Suave mas rapida: slide em ~300ms + fade em ~200ms.
 private const val SLIDE_IN_MS = 300
 private const val SLIDE_OUT_MS = 280
 private const val FADE_MS = 200
 
-/** Indice da aba na barra de baixo, da esquerda p/ direita. */
+/** Índice da aba na barra de baixo, da esquerda p/ direita. */
 private fun NavDestination.tabIndex(): Int? = when {
     hasRoute<Routes.Home>() -> 0
     hasRoute<Routes.Analytics>() -> 1
@@ -56,50 +53,30 @@ private fun slideOutToRight(): ExitTransition =
     slideOutHorizontally(tween(SLIDE_OUT_MS, easing = FastOutSlowInEasing)) { it } +
         fadeOut(tween(FADE_MS))
 
-/** Entrada ao navegar p/ frente. */
+/** Entrada ao navegar p/ frente — não usada (a tela anima via ScreenSlideIn). */
 fun AnimatedContentTransitionScope<NavBackStackEntry>.vzEnterTransition(): EnterTransition {
-    val fromTab = initialState.destination.tabIndex()
-    val toTab = targetState.destination.tabIndex()
-    return when {
-        // Troca de aba: direcao segue a ordem das abas.
-        fromTab != null && toTab != null ->
-            if (toTab > fromTab) slideInFromRight() else slideInFromLeft()
-        // Detalhe -> aba: a aba fica parada e e revelada (o detalhe sai na exit).
-        toTab != null -> EnterTransition.None
-        // Detalhe (ou aba -> detalhe): entra da direita por cima.
-        else -> slideInFromRight()
-    }
+    return EnterTransition.None
 }
 
-/** Saida ao navegar p/ frente. */
+/** Saída ao navegar p/ frente — não usada (a tela que entra cobre a atual). */
 fun AnimatedContentTransitionScope<NavBackStackEntry>.vzExitTransition(): ExitTransition {
-    val fromTab = initialState.destination.tabIndex()
-    val toTab = targetState.destination.tabIndex()
-    return when {
-        // Troca de aba: a aba atual sai p/ o lado oposto da que entra.
-        fromTab != null && toTab != null ->
-            if (toTab > fromTab) slideOutToLeft() else slideOutToRight()
-        // Detalhe -> aba: o detalhe sai p/ direita revelando a aba.
-        toTab != null -> slideOutToRight()
-        // Detalhe: a tela atual fica parada embaixo da nova (efeito "por cima").
-        else -> ExitTransition.None
-    }
+    return ExitTransition.None
 }
 
 /** Entrada ao voltar (pop). */
 fun AnimatedContentTransitionScope<NavBackStackEntry>.vzPopEnterTransition(): EnterTransition {
-    val fromTab = initialState.destination.tabIndex() // tela que esta saindo
+    val fromTab = initialState.destination.tabIndex() // tela que está saindo
     val toTab = targetState.destination.tabIndex() // tela p/ onde volta
     return when {
-        // Volta entre abas: inverte a direcao da ida.
+        // Volta entre abas: inverte a direção da ida.
         fromTab != null && toTab != null ->
             if (toTab < fromTab) slideInFromLeft() else slideInFromRight()
-        // Detalhe: a tela anterior fica parada e e revelada.
+        // Detalhe: a tela anterior fica parada e é revelada.
         else -> EnterTransition.None
     }
 }
 
-/** Saida ao voltar (pop). */
+/** Saída ao voltar (pop). */
 fun AnimatedContentTransitionScope<NavBackStackEntry>.vzPopExitTransition(): ExitTransition {
     val fromTab = initialState.destination.tabIndex()
     val toTab = targetState.destination.tabIndex()

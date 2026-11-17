@@ -1,17 +1,75 @@
 #!/bin/bash
 set -e
 
-# VzTune - Animacoes de navegacao (slide com sentido)
+# VzTune - Animacao de entrada NA PRÓPRIA TELA (ScreenSlideIn)
 # Rode na raiz do projeto VzTune.
-# Detalhe: entra da direita por cima, volta saindo p/ direita.
-# Abas: direcao segue a ordem Home, Analytics, Library, Search.
+# A tela desliza da direita (detalhe / aba à direita) ou da esquerda
+# (aba à esquerda) junto com o conteúdo — por isso agora anima até
+# nas telas independentes (Search, playlist, álbum, artista, Library).
+# Voltar continua no NavHost: detalhe sai p/ direita, aba inverte.
 
 if [ ! -f "app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt" ]; then
   echo "ERRO: rode este script na raiz do projeto VzTune."
   exit 1
 fi
 
-# --- 1. app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/NavTransitions.kt ---
+# --- 1. app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/ScreenSlideIn.kt ---
+cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/ScreenSlideIn.kt" <<'EOF'
+package com.vztechcore.vztune.ui.navigation
+
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.launch
+
+/**
+ * Animação de entrada da própria tela — suave e rápida.
+ *
+ * A tela desliza da direita (detalhe ou aba à direita) ou da esquerda
+ * (aba à esquerda) + fade. Roda só na primeira composição da tela.
+ *
+ * Ao voltar (pop), a tela que volta já estava composta, então não anima
+ * de novo — a tela que sai usa a popExit do NavHost (sai p/ direita).
+ *
+ * Por que na tela e não só no NavHost? Telas independentes (Search,
+ * playlist, álbum, artista, Library...) carregam dado assíncrono do
+ * ViewModel, então o slide do NavHost rolava antes do conteúdo existir
+ * e parecia que não animava. Animando na tela, o slide acontece junto
+ * com o conteúdo.
+ */
+@Composable
+fun ScreenSlideIn(
+    fromLeft: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    // -1f = vem da esquerda (fora da tela), 1f = vem da direita.
+    val offset = remember { Animatable(if (fromLeft) -1f else 1f) }
+    val alpha = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        launch { offset.animateTo(0f, tween(300, easing = FastOutSlowInEasing)) }
+        launch { alpha.animateTo(1f, tween(200)) }
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                translationX = offset.value * size.width
+                this.alpha = alpha.value
+            },
+    ) {
+        content()
+    }
+}
+EOF
+
+# --- 2. app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/NavTransitions.kt ---
 cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/NavTransitions.kt" <<'EOF'
 package com.vztechcore.vztune.ui.navigation
 
@@ -29,24 +87,21 @@ import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 
 /**
- * Transicoes de navegacao do VzTune - suaves e rapidas.
+ * Transições de VOLTAR (pop) do VzTune — suaves e rápidas.
+ * A entrada p/ frente é feita pela própria tela (ScreenSlideIn).
  *
- * - Detalhe (playlist, album, artista, ver tudo, downloads, info da faixa):
- *   entra da direita, por cima da tela atual. Ao voltar, sai pra direita
- *   revelando a tela anterior.
- * - Abas (Home, Analytics, Library, Search): a direcao segue a ordem das abas.
- *   Indo p/ uma aba a direita, a nova entra da direita; indo p/ uma aba a
- *   esquerda, entra da esquerda. Voltar inverte.
- * - Detalhe -> aba (tocar na barra de baixo dentro de um detalhe): o detalhe
- *   sai pra direita revelando a aba, como se fosse um voltar.
+ * - Detalhe (playlist, álbum, artista, ver tudo, downloads, info da faixa):
+ *   ao voltar, sai pra direita revelando a tela anterior.
+ * - Abas (Home, Analytics, Library, Search): a direção segue a ordem das abas.
+ *   Voltando p/ uma aba à esquerda, a tela atual sai p/ direita; voltando
+ *   p/ uma aba à direita, sai p/ esquerda.
  */
 
-// Suave mas rapida: slide em ~300ms + fade em ~200ms.
 private const val SLIDE_IN_MS = 300
 private const val SLIDE_OUT_MS = 280
 private const val FADE_MS = 200
 
-/** Indice da aba na barra de baixo, da esquerda p/ direita. */
+/** Índice da aba na barra de baixo, da esquerda p/ direita. */
 private fun NavDestination.tabIndex(): Int? = when {
     hasRoute<Routes.Home>() -> 0
     hasRoute<Routes.Analytics>() -> 1
@@ -71,50 +126,30 @@ private fun slideOutToRight(): ExitTransition =
     slideOutHorizontally(tween(SLIDE_OUT_MS, easing = FastOutSlowInEasing)) { it } +
         fadeOut(tween(FADE_MS))
 
-/** Entrada ao navegar p/ frente. */
+/** Entrada ao navegar p/ frente — não usada (a tela anima via ScreenSlideIn). */
 fun AnimatedContentTransitionScope<NavBackStackEntry>.vzEnterTransition(): EnterTransition {
-    val fromTab = initialState.destination.tabIndex()
-    val toTab = targetState.destination.tabIndex()
-    return when {
-        // Troca de aba: direcao segue a ordem das abas.
-        fromTab != null && toTab != null ->
-            if (toTab > fromTab) slideInFromRight() else slideInFromLeft()
-        // Detalhe -> aba: a aba fica parada e e revelada (o detalhe sai na exit).
-        toTab != null -> EnterTransition.None
-        // Detalhe (ou aba -> detalhe): entra da direita por cima.
-        else -> slideInFromRight()
-    }
+    return EnterTransition.None
 }
 
-/** Saida ao navegar p/ frente. */
+/** Saída ao navegar p/ frente — não usada (a tela que entra cobre a atual). */
 fun AnimatedContentTransitionScope<NavBackStackEntry>.vzExitTransition(): ExitTransition {
-    val fromTab = initialState.destination.tabIndex()
-    val toTab = targetState.destination.tabIndex()
-    return when {
-        // Troca de aba: a aba atual sai p/ o lado oposto da que entra.
-        fromTab != null && toTab != null ->
-            if (toTab > fromTab) slideOutToLeft() else slideOutToRight()
-        // Detalhe -> aba: o detalhe sai p/ direita revelando a aba.
-        toTab != null -> slideOutToRight()
-        // Detalhe: a tela atual fica parada embaixo da nova (efeito "por cima").
-        else -> ExitTransition.None
-    }
+    return ExitTransition.None
 }
 
 /** Entrada ao voltar (pop). */
 fun AnimatedContentTransitionScope<NavBackStackEntry>.vzPopEnterTransition(): EnterTransition {
-    val fromTab = initialState.destination.tabIndex() // tela que esta saindo
+    val fromTab = initialState.destination.tabIndex() // tela que está saindo
     val toTab = targetState.destination.tabIndex() // tela p/ onde volta
     return when {
-        // Volta entre abas: inverte a direcao da ida.
+        // Volta entre abas: inverte a direção da ida.
         fromTab != null && toTab != null ->
             if (toTab < fromTab) slideInFromLeft() else slideInFromRight()
-        // Detalhe: a tela anterior fica parada e e revelada.
+        // Detalhe: a tela anterior fica parada e é revelada.
         else -> EnterTransition.None
     }
 }
 
-/** Saida ao voltar (pop). */
+/** Saída ao voltar (pop). */
 fun AnimatedContentTransitionScope<NavBackStackEntry>.vzPopExitTransition(): ExitTransition {
     val fromTab = initialState.destination.tabIndex()
     val toTab = targetState.destination.tabIndex()
@@ -128,7 +163,7 @@ fun AnimatedContentTransitionScope<NavBackStackEntry>.vzPopExitTransition(): Exi
 }
 EOF
 
-# --- 2. app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt ---
+# --- 3. app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt ---
 cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt" <<'EOF'
 package com.vztechcore.vztune.ui.navigation
 
@@ -155,6 +190,8 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.navigation.compose.rememberNavController
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.data.prefs.models.StoredTrack
@@ -202,6 +239,21 @@ fun AppNavHost(modifier: Modifier = Modifier) {
         backStackEntry?.destination?.hasRoute<Routes.Analytics>() == true -> AppTab.ANALYTICS
         backStackEntry?.destination?.hasRoute<Routes.Library>() == true -> AppTab.LIBRARY
         else -> AppTab.HOME
+    }
+
+    // Última aba visitada — dá o sentido do slide nas trocas de aba.
+    // Só atualiza quando a tela atual É uma aba (detalhe não conta).
+    var lastTab by remember { mutableStateOf(AppTab.HOME) }
+    fun tabFromLeft(tab: AppTab): Boolean = tab.ordinal < lastTab.ordinal
+    LaunchedEffect(backStackEntry) {
+        val tab = when {
+            backStackEntry?.destination?.hasRoute<Routes.Search>() == true -> AppTab.SEARCH
+            backStackEntry?.destination?.hasRoute<Routes.Analytics>() == true -> AppTab.ANALYTICS
+            backStackEntry?.destination?.hasRoute<Routes.Library>() == true -> AppTab.LIBRARY
+            backStackEntry?.destination?.hasRoute<Routes.Home>() == true -> AppTab.HOME
+            else -> null
+        }
+        if (tab != null) lastTab = tab
     }
 
     val isMediaListScreen = backStackEntry?.destination?.hasRoute<Routes.MediaList>() == true
@@ -307,256 +359,281 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             NavHost(
                 navController = navController,
                 startDestination = Routes.Home,
-                enterTransition = { vzEnterTransition() },
-                exitTransition = { vzExitTransition() },
+                // Entrada: a própria tela anima (ScreenSlideIn) — NavHost não anima.
+                enterTransition = { EnterTransition.None },
+                exitTransition = { ExitTransition.None },
                 popEnterTransition = { vzPopEnterTransition() },
                 popExitTransition = { vzPopExitTransition() },
             ) {
-                composable<Routes.Home> { Placeholder("Home — coming soon") }
-                composable<Routes.Analytics> { Placeholder("Analytics — coming soon") }
+                composable<Routes.Home> {
+                    ScreenSlideIn(fromLeft = tabFromLeft(AppTab.HOME)) {
+                        Placeholder("Home — coming soon")
+                    }
+                }
+                composable<Routes.Analytics> {
+                    ScreenSlideIn(fromLeft = tabFromLeft(AppTab.ANALYTICS)) {
+                        Placeholder("Analytics — coming soon")
+                    }
+                }
 
                 composable<Routes.Library> {
-                    val vm: LibraryViewModel = hiltViewModel()
-                    val state by vm.uiState.collectAsStateWithLifecycle()
-                    LibraryScreen(
-                        state = state,
-                        onTabSelected = vm::onTabSelected,
-                        onShortcutClick = { navController.navigate(Routes.LibraryList(it.name)) },
-                        onTrackClick = vm::onTrackClick,
-                        onTrackInfoClick = { t ->
-                            openTrackMenu(t, context = TrackMenuContext.RECENT_HISTORY)
-                        },
-                        onPlaylistClick = { item ->
-                            navController.navigate(
-                                Routes.MediaList(
-                                    id = item.id,
-                                    // Favorito de álbum abre como álbum, senão crashava com key duplicada
-                                    isAlbum = item.isAlbum,
-                                    title = item.title,
-                                    subtitle = item.subtitle,
-                                    thumbnailUrl = item.imageUrl,
+                    ScreenSlideIn(fromLeft = tabFromLeft(AppTab.LIBRARY)) {
+                        val vm: LibraryViewModel = hiltViewModel()
+                        val state by vm.uiState.collectAsStateWithLifecycle()
+                        LibraryScreen(
+                            state = state,
+                            onTabSelected = vm::onTabSelected,
+                            onShortcutClick = { navController.navigate(Routes.LibraryList(it.name)) },
+                            onTrackClick = vm::onTrackClick,
+                            onTrackInfoClick = { t ->
+                                openTrackMenu(t, context = TrackMenuContext.RECENT_HISTORY)
+                            },
+                            onPlaylistClick = { item ->
+                                navController.navigate(
+                                    Routes.MediaList(
+                                        id = item.id,
+                                        // Favorito de álbum abre como álbum, senão crashava com key duplicada
+                                        isAlbum = item.isAlbum,
+                                        title = item.title,
+                                        subtitle = item.subtitle,
+                                        thumbnailUrl = item.imageUrl,
+                                    )
                                 )
-                            )
-                        },
-                        onCreatePlaylist = vm::createPlaylist,
-                    )
+                            },
+                            onCreatePlaylist = vm::createPlaylist,
+                        )
+                    }
                 }
 
                 composable<Routes.LibraryList> {
-                    val vm: LibraryListViewModel = hiltViewModel()
-                    val state by vm.uiState.collectAsStateWithLifecycle()
-                    LibraryListScreen(
-                        state = state,
-                        onBackClick = { navController.popBackStack() },
-                        onTrackClick = vm::onTrackClick,
-                        onTrackInfoClick = { t -> openTrackMenu(t, context = TrackMenuContext.DEFAULT) },
-                        onArtistClick = { artist ->
-                            navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl))
-                        },
-                        onShuffleClick = vm::onShuffleClick,
-                        onPlayAllClick = vm::onPlayAllClick,
-                        onDownloadsHistoryClick = { navController.navigate(Routes.Downloads) },
-                    )
+                    ScreenSlideIn(fromLeft = false) {
+                        val vm: LibraryListViewModel = hiltViewModel()
+                        val state by vm.uiState.collectAsStateWithLifecycle()
+                        LibraryListScreen(
+                            state = state,
+                            onBackClick = { navController.popBackStack() },
+                            onTrackClick = vm::onTrackClick,
+                            onTrackInfoClick = { t -> openTrackMenu(t, context = TrackMenuContext.DEFAULT) },
+                            onArtistClick = { artist ->
+                                navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl))
+                            },
+                            onShuffleClick = vm::onShuffleClick,
+                            onPlayAllClick = vm::onPlayAllClick,
+                            onDownloadsHistoryClick = { navController.navigate(Routes.Downloads) },
+                        )
+                    }
                 }
 
                 composable<Routes.Downloads> {
-                    val vm: DownloadsViewModel = hiltViewModel()
-                    val state by vm.uiState.collectAsStateWithLifecycle()
-                    DownloadsScreen(
-                        state = state,
-                        onBackClick = { navController.popBackStack() },
-                        onTabSelected = vm::onTabSelected,
-                        onTogglePauseResume = vm::onTogglePauseResume,
-                        onCancelDownload = vm::onCancelDownload,
-                        onDeleteDownload = vm::onDeleteDownload,
-                        onPlayTrack = vm::onPlayTrack,
-                        onPauseAll = vm::onPauseAll,
-                        onResumeAll = vm::onResumeAll,
-                        onCancelAll = vm::onCancelAll,
-                    )
+                    ScreenSlideIn(fromLeft = false) {
+                        val vm: DownloadsViewModel = hiltViewModel()
+                        val state by vm.uiState.collectAsStateWithLifecycle()
+                        DownloadsScreen(
+                            state = state,
+                            onBackClick = { navController.popBackStack() },
+                            onTabSelected = vm::onTabSelected,
+                            onTogglePauseResume = vm::onTogglePauseResume,
+                            onCancelDownload = vm::onCancelDownload,
+                            onDeleteDownload = vm::onDeleteDownload,
+                            onPlayTrack = vm::onPlayTrack,
+                            onPauseAll = vm::onPauseAll,
+                            onResumeAll = vm::onResumeAll,
+                            onCancelAll = vm::onCancelAll,
+                        )
+                    }
                 }
 
                 composable<Routes.Search> {
-                    val vm: SearchViewModel = hiltViewModel()
-                    val state by vm.uiState.collectAsStateWithLifecycle()
+                    ScreenSlideIn(fromLeft = tabFromLeft(AppTab.SEARCH)) {
+                        val vm: SearchViewModel = hiltViewModel()
+                        val state by vm.uiState.collectAsStateWithLifecycle()
 
-                    LaunchedEffect(Unit) {
-                        vm.navigationEvent.collect { event ->
-                            when (event) {
-                                is SearchViewModel.NavigationEvent.OpenPlaylist -> navController.navigate(
-                                    Routes.MediaList(
-                                        id = event.id,
-                                        isAlbum = false,
-                                        title = event.title,
-                                        subtitle = event.owner,
-                                        thumbnailUrl = event.thumbnailUrl,
+                        LaunchedEffect(Unit) {
+                            vm.navigationEvent.collect { event ->
+                                when (event) {
+                                    is SearchViewModel.NavigationEvent.OpenPlaylist -> navController.navigate(
+                                        Routes.MediaList(
+                                            id = event.id,
+                                            isAlbum = false,
+                                            title = event.title,
+                                            subtitle = event.owner,
+                                            thumbnailUrl = event.thumbnailUrl,
+                                        )
                                     )
-                                )
-                                is SearchViewModel.NavigationEvent.OpenArtist -> navController.navigate(
-                                    Routes.Artist(
-                                        id = event.id,
-                                        name = event.name,
-                                        thumbnailUrl = event.thumbnailUrl,
+                                    is SearchViewModel.NavigationEvent.OpenArtist -> navController.navigate(
+                                        Routes.Artist(
+                                            id = event.id,
+                                            name = event.name,
+                                            thumbnailUrl = event.thumbnailUrl,
+                                        )
                                     )
-                                )
-                                is SearchViewModel.NavigationEvent.OpenAlbum -> navController.navigate(
-                                    Routes.MediaList(
-                                        id = event.id,
-                                        isAlbum = true,
-                                        title = event.title,
-                                        subtitle = event.artist,
-                                        thumbnailUrl = event.thumbnailUrl,
+                                    is SearchViewModel.NavigationEvent.OpenAlbum -> navController.navigate(
+                                        Routes.MediaList(
+                                            id = event.id,
+                                            isAlbum = true,
+                                            title = event.title,
+                                            subtitle = event.artist,
+                                            thumbnailUrl = event.thumbnailUrl,
+                                        )
                                     )
-                                )
+                                }
                             }
                         }
-                    }
 
-                    SearchScreen(
-                        state = state,
-                        favoriteKeys = favoriteKeys,
-                        downloadedKeys = downloadedKeys,
-                        activeDownloads = activeDownloads,
-                        localPlaylists = localPlaylists,
-                        resolvedAlbum = resolvedAlbum,
-                        onQueryChange = vm::onQueryChange,
-                        onFocusChanged = vm::onFocusChanged,
-                        onFilterSelect = vm::onFilterSelect,
-                        onSubmit = vm::onSubmit,
-                        onRefresh = vm::onRefresh,
-                        onRemoveHistory = vm::onRemoveHistory,
-                        onClearHistory = vm::onClearHistory,
-                        onLoadMore = vm::onLoadMore,
-                        onHitClick = vm::onHitClick,
-                        onPlayNextClick = vm::onPlayNextClick,
-                        onAddToQueueClick = vm::onAddToQueueClick,
-                        onToggleFavorite = vm::onToggleFavorite,
-                        onAddToPlaylist = vm::onAddToPlaylist,
-                        onDownloadTrack = vm::onDownloadTrack,
-                        onRemoveDownload = vm::onRemoveDownload,
-                        onOpenDownloadsScreen = { navController.navigate(Routes.Downloads) },
-                        onPrepareTrackMenu = menuVm::resolveAlbumFor,
-                        onOpenAlbum = { album -> navController.openAlbum(album) },
-                        onOpenArtistByName = vm::onOpenArtistByName,
-                        onTrackInfoClick = { navController.navigateToTrackInfo(it) },
-                    )
+                        SearchScreen(
+                            state = state,
+                            favoriteKeys = favoriteKeys,
+                            downloadedKeys = downloadedKeys,
+                            activeDownloads = activeDownloads,
+                            localPlaylists = localPlaylists,
+                            resolvedAlbum = resolvedAlbum,
+                            onQueryChange = vm::onQueryChange,
+                            onFocusChanged = vm::onFocusChanged,
+                            onFilterSelect = vm::onFilterSelect,
+                            onSubmit = vm::onSubmit,
+                            onRefresh = vm::onRefresh,
+                            onRemoveHistory = vm::onRemoveHistory,
+                            onClearHistory = vm::onClearHistory,
+                            onLoadMore = vm::onLoadMore,
+                            onHitClick = vm::onHitClick,
+                            onPlayNextClick = vm::onPlayNextClick,
+                            onAddToQueueClick = vm::onAddToQueueClick,
+                            onToggleFavorite = vm::onToggleFavorite,
+                            onAddToPlaylist = vm::onAddToPlaylist,
+                            onDownloadTrack = vm::onDownloadTrack,
+                            onRemoveDownload = vm::onRemoveDownload,
+                            onOpenDownloadsScreen = { navController.navigate(Routes.Downloads) },
+                            onPrepareTrackMenu = menuVm::resolveAlbumFor,
+                            onOpenAlbum = { album -> navController.openAlbum(album) },
+                            onOpenArtistByName = vm::onOpenArtistByName,
+                            onTrackInfoClick = { navController.navigateToTrackInfo(it) },
+                        )
+                    }
                 }
 
                 composable<Routes.MediaList> {
-                    val vm: MediaListViewModel = hiltViewModel()
-                    val state by vm.uiState.collectAsStateWithLifecycle()
-                    val playlistId = state.listId
-                    val menuCtx = when {
-                        state.isAlbum -> TrackMenuContext.DEFAULT
-                        state.isLocal || isLocalPlaylistId(playlistId) -> TrackMenuContext.LOCAL_PLAYLIST
-                        else -> TrackMenuContext.EXTERNAL_PLAYLIST
-                    }
+                    ScreenSlideIn(fromLeft = false) {
+                        val vm: MediaListViewModel = hiltViewModel()
+                        val state by vm.uiState.collectAsStateWithLifecycle()
+                        val playlistId = state.listId
+                        val menuCtx = when {
+                            state.isAlbum -> TrackMenuContext.DEFAULT
+                            state.isLocal || isLocalPlaylistId(playlistId) -> TrackMenuContext.LOCAL_PLAYLIST
+                            else -> TrackMenuContext.EXTERNAL_PLAYLIST
+                        }
 
-                    LaunchedEffect(Unit) {
-                        vm.navigationEvent.collect { event ->
-                            when (event) {
-                                is MediaListViewModel.NavigationEvent.OpenArtist -> navController.navigate(
-                                    Routes.Artist(event.artist.id, event.artist.name, event.artist.thumbnailUrl)
-                                )
-                                MediaListViewModel.NavigationEvent.CloseScreen -> navController.popBackStack()
+                        LaunchedEffect(Unit) {
+                            vm.navigationEvent.collect { event ->
+                                when (event) {
+                                    is MediaListViewModel.NavigationEvent.OpenArtist -> navController.navigate(
+                                        Routes.Artist(event.artist.id, event.artist.name, event.artist.thumbnailUrl)
+                                    )
+                                    MediaListViewModel.NavigationEvent.CloseScreen -> navController.popBackStack()
+                                }
                             }
                         }
-                    }
 
-                    MediaListScreen(
-                        state = state,
-                        activeDownloads = activeDownloads,
-                        onBackClick = { navController.popBackStack() },
-                        onTabSelected = vm::onTabSelected,
-                        onTrackClick = vm::onTrackClick,
-                        onPlayAllClick = vm::onPlayAll,
-                        onShuffleClick = vm::onShuffle,
-                        onSortSelected = vm::onSortOrderSelected,
-                        onReorder = vm::onReorder,
-                        onStartShuffle = vm::startShuffle,
-                        onShuffleOnce = vm::shuffleOnce,
-                        onStopShuffle = vm::stopShuffle,
-                        onPlayNextClick = vm::onPlayNextClick,
-                        onTrackInfoClick = { t ->
-                            openTrackMenu(
-                                targetTrack = t,
-                                context = menuCtx,
-                                localPlaylistId = playlistId.takeIf { menuCtx == TrackMenuContext.LOCAL_PLAYLIST },
-                            )
-                        },
-                        onFavoriteClick = vm::onFavoriteClick,
-                        onPlayNextAll = vm::onPlayNextAll,
-                        onAddToQueueAll = vm::onAddToQueueAll,
-                        onDownloadAll = vm::onDownloadAll,
-                        onOpenDownloadsScreen = { navController.navigate(Routes.Downloads) },
-                        onOpenArtistByName = vm::onOpenArtistByName,
-                        onOpenArtist = vm::onOpenArtist,
-                        onAlbumClick = { album ->
-                            if (album.id != state.listId) navController.openAlbum(album)
-                        },
-                        onDeleteLocalPlaylist = vm::onDeleteLocalPlaylist,
-                        onRenameLocalPlaylist = vm::onRenameLocalPlaylist,
-                        onChangeLocalPlaylistCover = vm::onChangeLocalPlaylistCover,
-                    )
+                        MediaListScreen(
+                            state = state,
+                            activeDownloads = activeDownloads,
+                            onBackClick = { navController.popBackStack() },
+                            onTabSelected = vm::onTabSelected,
+                            onTrackClick = vm::onTrackClick,
+                            onPlayAllClick = vm::onPlayAll,
+                            onShuffleClick = vm::onShuffle,
+                            onSortSelected = vm::onSortOrderSelected,
+                            onReorder = vm::onReorder,
+                            onStartShuffle = vm::startShuffle,
+                            onShuffleOnce = vm::shuffleOnce,
+                            onStopShuffle = vm::stopShuffle,
+                            onPlayNextClick = vm::onPlayNextClick,
+                            onTrackInfoClick = { t ->
+                                openTrackMenu(
+                                    targetTrack = t,
+                                    context = menuCtx,
+                                    localPlaylistId = playlistId.takeIf { menuCtx == TrackMenuContext.LOCAL_PLAYLIST },
+                                )
+                            },
+                            onFavoriteClick = vm::onFavoriteClick,
+                            onPlayNextAll = vm::onPlayNextAll,
+                            onAddToQueueAll = vm::onAddToQueueAll,
+                            onDownloadAll = vm::onDownloadAll,
+                            onOpenDownloadsScreen = { navController.navigate(Routes.Downloads) },
+                            onOpenArtistByName = vm::onOpenArtistByName,
+                            onOpenArtist = vm::onOpenArtist,
+                            onAlbumClick = { album ->
+                                if (album.id != state.listId) navController.openAlbum(album)
+                            },
+                            onDeleteLocalPlaylist = vm::onDeleteLocalPlaylist,
+                            onRenameLocalPlaylist = vm::onRenameLocalPlaylist,
+                            onChangeLocalPlaylistCover = vm::onChangeLocalPlaylistCover,
+                        )
+                    }
                 }
 
                 composable<Routes.Artist> {
-                    val vm: ArtistViewModel = hiltViewModel()
-                    val state by vm.uiState.collectAsStateWithLifecycle()
-                    ArtistScreen(
-                        state = state,
-                        onBackClick = { navController.popBackStack() },
-                        onRandomClick = vm::onRandomClick,
-                        onFollowClick = vm::onFollowClick,
-                        onSongClick = vm::onSongClick,
-                        onVideoClick = vm::onVideoClick,
-                        onTrackInfoClick = { t -> openTrackMenu(t, context = TrackMenuContext.DEFAULT) },
-                        onAlbumClick = { navController.openAlbum(it) },
-                        onPlaylistClick = { navController.openPlaylist(it) },
-                        onArtistClick = { artist ->
-                            navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl))
-                        },
-                        onSeeAllClick = { kind, ref ->
-                            navController.navigate(
-                                Routes.ArtistList(
-                                    artistId = state.artistId,
-                                    artistName = state.name,
-                                    kind = kind.name,
-                                    browseId = ref.browseId,
-                                    params = ref.params,
+                    ScreenSlideIn(fromLeft = false) {
+                        val vm: ArtistViewModel = hiltViewModel()
+                        val state by vm.uiState.collectAsStateWithLifecycle()
+                        ArtistScreen(
+                            state = state,
+                            onBackClick = { navController.popBackStack() },
+                            onRandomClick = vm::onRandomClick,
+                            onFollowClick = vm::onFollowClick,
+                            onSongClick = vm::onSongClick,
+                            onVideoClick = vm::onVideoClick,
+                            onTrackInfoClick = { t -> openTrackMenu(t, context = TrackMenuContext.DEFAULT) },
+                            onAlbumClick = { navController.openAlbum(it) },
+                            onPlaylistClick = { navController.openPlaylist(it) },
+                            onArtistClick = { artist ->
+                                navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl))
+                            },
+                            onSeeAllClick = { kind, ref ->
+                                navController.navigate(
+                                    Routes.ArtistList(
+                                        artistId = state.artistId,
+                                        artistName = state.name,
+                                        kind = kind.name,
+                                        browseId = ref.browseId,
+                                        params = ref.params,
+                                    )
                                 )
-                            )
-                        },
-                    )
+                            },
+                        )
+                    }
                 }
 
                 composable<Routes.ArtistList> {
-                    val vm: ArtistListViewModel = hiltViewModel()
-                    val state by vm.uiState.collectAsStateWithLifecycle()
-                    ArtistListScreen(
-                        state = state,
-                        onBackClick = { navController.popBackStack() },
-                        onLoadMore = vm::onLoadMore,
-                        onTrackClick = vm::onTrackClick,
-                        onTrackInfoClick = { t -> openTrackMenu(t, context = TrackMenuContext.DEFAULT) },
-                        onAlbumClick = { navController.openAlbum(it) },
-                        onPlaylistClick = { navController.openPlaylist(it) },
-                    )
+                    ScreenSlideIn(fromLeft = false) {
+                        val vm: ArtistListViewModel = hiltViewModel()
+                        val state by vm.uiState.collectAsStateWithLifecycle()
+                        ArtistListScreen(
+                            state = state,
+                            onBackClick = { navController.popBackStack() },
+                            onLoadMore = vm::onLoadMore,
+                            onTrackClick = vm::onTrackClick,
+                            onTrackInfoClick = { t -> openTrackMenu(t, context = TrackMenuContext.DEFAULT) },
+                            onAlbumClick = { navController.openAlbum(it) },
+                            onPlaylistClick = { navController.openPlaylist(it) },
+                        )
+                    }
                 }
 
                 composable<Routes.TrackInfo> {
-                    val vm: TrackInfoViewModel = hiltViewModel()
-                    val state by vm.uiState.collectAsStateWithLifecycle()
-                    TrackInfoScreen(
-                        state = state,
-                        isDownloaded = state.isDownloaded,
-                        onBackClick = { navController.popBackStack() },
-                        onFavoriteClick = vm::onFavoriteClick,
-                        onAddToPlaylist = vm::onAddToPlaylist,
-                        onDownloadClick = {
-                            if (state.isDownloaded) vm.onRemoveDownloadClick() else vm.onDownloadClick()
-                        },
-                    )
+                    ScreenSlideIn(fromLeft = false) {
+                        val vm: TrackInfoViewModel = hiltViewModel()
+                        val state by vm.uiState.collectAsStateWithLifecycle()
+                        TrackInfoScreen(
+                            state = state,
+                            isDownloaded = state.isDownloaded,
+                            onBackClick = { navController.popBackStack() },
+                            onFavoriteClick = vm::onFavoriteClick,
+                            onAddToPlaylist = vm::onAddToPlaylist,
+                            onDownloadClick = {
+                                if (state.isDownloaded) vm.onRemoveDownloadClick() else vm.onDownloadClick()
+                            },
+                        )
+                    }
                 }
             }
 
@@ -587,4 +664,4 @@ private fun Placeholder(message: String) {
 }
 EOF
 
-echo "Animacoes de navegacao aplicadas: NavTransitions + AppNavHost."
+echo "Animacao nas telas aplicada: ScreenSlideIn + NavTransitions + AppNavHost."

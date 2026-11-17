@@ -1,0 +1,50 @@
+{
+  "allFiles": [
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml",
+      "selection": {
+        "end": {
+          "column": 16,
+          "index": 337,
+          "line": 5
+        },
+        "start": {
+          "column": 16,
+          "index": 337,
+          "line": 5
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml",
+      "selection": {
+        "end": {
+          "column": 16,
+          "index": 337,
+          "line": 5
+        },
+        "start": {
+          "column": 16,
+          "index": 337,
+          "line": 5
+        }
+      }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/AndroidManifest.xml",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 2671,
+          "line": 59
+        },
+        "start": {
+          "column": 0,
+          "index": 2671,
+          "line": 59
+        }
+      }
+    }
+  ],
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml"
+}

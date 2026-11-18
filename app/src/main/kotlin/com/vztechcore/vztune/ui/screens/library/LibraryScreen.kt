@@ -61,7 +61,7 @@ fun LibraryScreen(
 ) {
     var showCreateSheet by remember { mutableStateOf(false) }
 
-    Box(modifier.fillMaxSize().background(Color.Black)) {
+    Box(modifier.fillMaxSize()) {
         LazyColumn(
             contentPadding = PaddingValues(bottom = 200.dp),
             modifier = Modifier.fillMaxSize(),

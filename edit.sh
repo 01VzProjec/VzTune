@@ -1,51 +1,51 @@
 #!/bin/bash
 set -e
 
-# VzTune HOTFIX - corrige o erro grande do build (lint + 3 arquivos quebrados)
+# VzTune - Glow pequeno no canto + MiniPlayer com progresso suave
 # Rode na raiz do projeto VzTune.
 #
-# O que quebrou:
-# 1) O script anterior copiou junto a linha '===== Fim do arquivo [...] =====' do
-#    dump pra dentro de 3 arquivos .kt. O Kotlin nao entende essa linha e o
-#    build falhou com 'Expecting a top level declaration' em:
-#    - EclipseBackground.kt:108 | LibraryListSearchOverlay.kt:231 | MediaListSearchOverlay.kt:219
-#    Este script reescreve os 3 arquivos LIMPOS, sem essa linha, ja com os fixes
-#    de navegacao imediata (Eclipse 300 ms + teclado apos o slide).
-# 2) Lint do modulo :data falhou: MissingPermission ACCESS_NETWORK_STATE em
-#    TrackDownloader.kt:80 (registerDefaultNetworkCallback). O :app tem a permissao,
-#    mas o :data nao tinha manifest proprio com ela. Este script cria/arruma o
-#    manifest do :data com todas as permissoes que o :data usa (rede, foreground
-#    service, notificacao, wake lock), o que tambem cobre os outros erros de lint
-#    do :data (startForeground / startForegroundService).
-#
-# AppNavHost.kt e NavTransitions.kt JA estao certos do script anterior (sem a linha
-# Fim do arquivo), por isso este hotfix NAO os reescreve.
+# 1) EclipseBackground: antes era um degrade vertical na tela inteira, dividindo
+#    a tela. Agora e so um brilho radial bem pequeno (220 dp) no canto superior
+#    esquerdo, o resto fica preto puro. Vale pra Home, Search, Analytics e Library.
+# 2) LibraryScreen: a raiz dela tinha background(Color.Black) opaco, que tampava o
+#    glow global do AppNavHost. Por isso a Library parecia nao ter degrade.
+#    Este script tira esse fundo opaco, ai o glow aparece na Library tambem.
+# 3) MiniPlayerBar + CompactMiniPlayerBar: o playback.progress so atualiza 1x por
+#    segundo, por isso o contorno da thumbnail e a barra inferior pulavam a cada
+#    segundo. Agora os dois interpolam entre um update e o proximo com animacao
+#    linear de 1000 ms, ai o slide anda continuo, sem pulo. Seek / troca de faixa
+#    pula direto, nao desliza pra tras.
 
 if [ ! -f "app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt" ]; then
   echo "ERRO: rode este script na raiz do projeto VzTune."
   exit 1
 fi
 
-# --- app/src/main/kotlin/com/vztechcore/vztune/ui/components/feedback/EclipseBackground.kt (limpo, sem a linha 'Fim do arquivo') ---
+# --- app/src/main/kotlin/com/vztechcore/vztune/ui/components/feedback/EclipseBackground.kt ---
 cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/components/feedback/EclipseBackground.kt" <<'EOF'
 package com.vztechcore.vztune.ui.components.feedback
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.palette.graphics.Palette
 import coil.imageLoader
@@ -95,8 +95,10 @@ fun rememberDominantColor(url: String?): Color {
 }
 
 /**
- * App-wide background gradient: the dominant color of the current image
- * (top) fading into black (bottom).
+ * App-wide background glow: a small radial glow in the top-left corner,
+ * using the dominant color of the current track image.
+ * It does NOT divide the screen anymore: just a little glow in the corner,
+ * the rest stays pure black.
  */
 @Composable
 fun EclipseBackground(
@@ -104,9 +106,7 @@ fun EclipseBackground(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    // 300 ms = igual ao slide das telas. Antes era 900 ms e o fundo ficava
-    // "arrastando" 600 ms depois do slide terminar, o que fazia o app
-    // parecer lento mesmo com a navegacao ja tendo terminado.
+    // 300 ms = igual ao slide das telas.
     val animated by animateColorAsState(
         targetValue = baseColor,
         animationSpec = tween(durationMillis = 300),
@@ -118,520 +118,548 @@ fun EclipseBackground(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0.0f to animated.copy(alpha = 0.55f),
-                            0.45f to animated.copy(alpha = 0.16f),
-                            1.0f to Color.Black,
-                        )
-                    )
+        // Glow bem pequeno, so no canto superior esquerdo (220 dp).
+        // Centro do radial no canto (0, 0), some ate transparente.
+        Canvas(
+            modifier = Modifier
+                .size(220.dp)
+                .align(Alignment.TopStart)
+        ) {
+            drawRect(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        animated.copy(alpha = 0.55f),
+                        animated.copy(alpha = 0.18f),
+                        Color.Transparent,
+                    ),
+                    center = Offset.Zero,
+                    radius = size.maxDimension * 1.1f,
                 )
-        )
+            )
+        }
         content()
     }
 }
 EOF
 
-# --- app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/list/LibraryListSearchOverlay.kt (limpo, sem a linha 'Fim do arquivo') ---
-cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/list/LibraryListSearchOverlay.kt" <<'EOF'
-package com.vztechcore.vztune.ui.screens.library.list
+# --- app/src/main/kotlin/com/vztechcore/vztune/ui/components/player/MiniPlayerBar.kt ---
+cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/components/player/MiniPlayerBar.kt" <<'EOF'
+package com.vztechcore.vztune.ui.components.player
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import kotlinx.coroutines.delay
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
-import com.vztechcore.vztune.data.prefs.models.FollowedArtist
-import com.vztechcore.vztune.ui.components.AppCredits
-import com.vztechcore.vztune.ui.components.cards.ArtistCircleCard
-import com.vztechcore.vztune.ui.components.cards.TrackListRow
+import com.vztechcore.vztune.ui.components.text.TrackSubtitle
 import com.vztechcore.vztune.ui.icons.VzIcons
-import com.vztechcore.vztune.ui.icons.actions.Close
-import com.vztechcore.vztune.ui.icons.navigation.Search
+import com.vztechcore.vztune.ui.icons.player.Pause
+import com.vztechcore.vztune.ui.icons.player.Play
+import com.vztechcore.vztune.ui.icons.player.SkipNext
+import com.vztechcore.vztune.ui.icons.player.SkipPrevious
+
+private val GlassFill = Color.Black.copy(alpha = 0.75f)
+private val GlassBorder = Color.White.copy(alpha = 0.15f)
 
 @Composable
-internal fun LibraryListSearchOverlay(
-    tracks: List<Track>,
-    artists: List<FollowedArtist>,
-    isArtistMode: Boolean,
-    onClose: () -> Unit,
-    onTrackClick: (Track) -> Unit,
-    onTrackInfoClick: (Track) -> Unit,
-    onArtistClick: (FollowedArtist) -> Unit,
+fun MiniPlayerBar(
+    track: Track,
+    isPlaying: Boolean,
+    isLoading: Boolean = false,
+    progress: Float = 0f,
+    dominantColor: Color,
+    onPlayPauseClick: () -> Unit,
+    onNextClick: () -> Unit,
+    onPrevClick: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    var query by remember { mutableStateOf("") }
-    val focusRequester = remember { FocusRequester() }
-    val keyboardController = LocalSoftwareKeyboardController.current
+    val shape = RoundedCornerShape(20.dp)
+    val isVideo = track.source == Source.YOUTUBE
 
-    LaunchedEffect(Unit) {
-        // Espera o slide da tela terminar (300 ms) antes de abrir o teclado.
-        // Antes o teclado abria no meio do slide -> resize + recomposicao
-        // travavam o slide e parecia que a tela demorava pra abrir.
-        delay(320)
-        focusRequester.requestFocus()
-    }
-
-    val filteredTracks = remember(tracks, query) {
-        if (query.isBlank()) tracks.sortedBy { it.title.lowercase() }
-        else tracks.filter {
-            it.title.contains(query, ignoreCase = true) ||
-                it.artist.contains(query, ignoreCase = true)
+    // Smooth progress: playback.progress so atualiza 1x por segundo, por isso
+    // o contorno da thumbnail pulava a cada segundo. Aqui a gente interpola
+    // entre um update e o proximo com animacao linear de 1000 ms, ai o slide
+    // anda continuo, sem pulo. Seek / troca de faixa pula direto, nao desliza.
+    val smoothProgressAnim = remember { Animatable(progress.coerceIn(0f, 1f)) }
+    LaunchedEffect(progress, track.id) {
+        val target = progress.coerceIn(0f, 1f)
+        val delta = target - smoothProgressAnim.value
+        if (kotlin.math.abs(delta) > 0.08f) {
+            smoothProgressAnim.snapTo(target)
+        } else {
+            smoothProgressAnim.animateTo(
+                targetValue = target,
+                animationSpec = tween(durationMillis = 1000, easing = LinearEasing),
+            )
         }
     }
-    val filteredArtists = remember(artists, query) {
-        if (query.isBlank()) artists.sortedBy { it.name.lowercase() }
-        else artists.filter { it.name.contains(query, ignoreCase = true) }
-    }
+    val smoothProgress = smoothProgressAnim.value
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF0A0F1E))) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
-
-            SearchInputBar(
-                query = query,
-                onQueryChange = { query = it },
-                onClose = onClose,
-                placeholder = if (isArtistMode) "Pesquisar artista…" else "Pesquisar faixa…",
-                focusRequester = focusRequester,
-                onSearch = { keyboardController?.hide() },
-            )
-
-            val count = if (isArtistMode) filteredArtists.size else filteredTracks.size
-            Text(
-                text = if (query.isBlank()) "$count ${if (isArtistMode) "artistas" else "faixas"} • A → Z"
-                else "$count resultados",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
-
-            when {
-                isArtistMode && filteredArtists.isEmpty() -> EmptySearchResult(query)
-                !isArtistMode && filteredTracks.isEmpty() -> EmptySearchResult(query)
-
-                isArtistMode -> LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    items(filteredArtists, key = { it.id }) { artist ->
-                        ArtistCircleCard(
-                            name = artist.name,
-                            imageUrl = artist.thumbnailUrl,
-                            onClick = { onArtistClick(artist) },
-                            size = 150.dp,
-                        )
-                    }
-                    item(key = "credits", span = { GridItemSpan(maxLineSpan) }) { AppCredits() }
-                }
-
-                else -> LazyColumn(
-                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 32.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    itemsIndexed(
-                        filteredTracks,
-                        key = { _, t -> "${t.source.name}_${t.id}" },
-                    ) { _, track ->
-                        TrackListRow(
-                            track = track,
-                            onClick = { onTrackClick(track) },
-                            onMoreClick = { onTrackInfoClick(track) },
-                        )
-                    }
-                    item(key = "credits") { AppCredits() }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptySearchResult(query: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = if (query.isBlank()) "Nada por aqui." else "Nada encontrado para \"$query\"",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.5f),
-        )
-    }
-}
-
-@Composable
-private fun SearchInputBar(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onClose: () -> Unit,
-    placeholder: String,
-    focusRequester: FocusRequester,
-    onSearch: () -> Unit,
-) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 28.dp, end = 28.dp, top = 8.dp, bottom = 4.dp)
+            .clip(shape)
+            .background(GlassFill)
+            .border(1.dp, GlassBorder, shape)
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(50))
-                .background(Color.White.copy(alpha = 0.12f))
-                .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(50))
-                .padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(VzIcons.Search, null, tint = Color.White.copy(alpha = 0.55f), modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(10.dp))
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                singleLine = true,
-                textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
-                cursorBrush = SolidColor(Color.White),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-                modifier = Modifier.weight(1f).focusRequester(focusRequester),
-                decorationBox = { inner ->
-                    Box(contentAlignment = Alignment.CenterStart) {
-                        if (query.isEmpty()) {
-                            Text(placeholder, color = Color.White.copy(alpha = 0.45f), fontSize = 15.sp)
-                        }
-                        inner()
-                    }
-                },
-            )
-            if (query.isNotEmpty()) {
-                Box(
-                    Modifier.size(24.dp).clip(CircleShape).clickable { onQueryChange("") },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(VzIcons.Close, "Limpar", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
-                }
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
+            if (isVideo) {
+                SquareThumbWithProgress(
+                    imageUrl = track.thumbnailUrl,
+                    progress = smoothProgress,
+                    dominantColor = dominantColor,
+                    isLoading = isLoading
+                )
+            } else {
+                DiscThumbWithProgress(
+                    imageUrl = track.thumbnailUrl,
+                    progress = smoothProgress,
+                    dominantColor = dominantColor,
+                    isPlaying = isPlaying,
+                    isLoading = isLoading
+                )
             }
         }
-        Spacer(Modifier.width(8.dp))
+
+        Spacer(Modifier.width(12.dp))
+
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = track.title,
+                style = MaterialTheme.typography.titleSmall,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            TrackSubtitle(
+                track = track,
+                style = MaterialTheme.typography.bodySmall,
+                prefixColor = Color.White.copy(alpha = 0.55f),
+                artistColor = Color.White.copy(alpha = 0.75f),
+            )
+        }
+
+        Spacer(Modifier.width(4.dp))
+
+        IconButton(onClick = onPrevClick, modifier = Modifier.size(34.dp)) {
+            Icon(VzIcons.SkipPrevious, "Anterior", tint = Color.White, modifier = Modifier.size(22.dp))
+        }
+        IconButton(onClick = onPlayPauseClick, modifier = Modifier.size(38.dp)) {
+            if (isLoading) {
+                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+            } else {
+                Icon(if (isPlaying) VzIcons.Pause else VzIcons.Play, if (isPlaying) "Pausar" else "Tocar", tint = Color.White, modifier = Modifier.size(26.dp))
+            }
+        }
+        IconButton(onClick = onNextClick, modifier = Modifier.size(34.dp)) {
+            Icon(VzIcons.SkipNext, "Próxima", tint = Color.White, modifier = Modifier.size(22.dp))
+        }
+    }
+}
+
+@Composable
+private fun SquareThumbWithProgress(
+    imageUrl: String?,
+    progress: Float,
+    dominantColor: Color,
+    isLoading: Boolean
+) {
+    Box(Modifier.fillMaxSize()) {
+        Canvas(Modifier.fillMaxSize()) {
+            val strokeWidth = 3.dp.toPx()
+            val stroke = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+            val inset = strokeWidth / 2f
+            val cornerRadius = 8.dp.toPx()
+            val rect = Rect(inset, inset, size.width - inset, size.height - inset)
+            val path = Path().apply { addRoundRect(RoundRect(rect, CornerRadius(cornerRadius))) }
+
+            drawPath(path, color = Color.White.copy(alpha = 0.15f), style = stroke)
+
+            if (progress > 0f) {
+                val measure = PathMeasure().apply { setPath(path, false) }
+                val partial = Path()
+                measure.getSegment(0f, measure.length * progress.coerceIn(0f, 1f), partial, true)
+                drawPath(partial, color = dominantColor, style = stroke)
+            }
+        }
+
+        AsyncImage(
+            model = imageUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color.White.copy(alpha = 0.06f)),
+        )
+
+        if (isLoading) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiscThumbWithProgress(
+    imageUrl: String?,
+    progress: Float,
+    dominantColor: Color,
+    isPlaying: Boolean,
+    isLoading: Boolean
+) {
+    val discRotation = remember { Animatable(0f) }
+
+    LaunchedEffect(isPlaying, isLoading) {
+        if (isPlaying || isLoading) {
+            while (true) {
+                discRotation.animateTo(
+                    targetValue = discRotation.value + 360f,
+                    animationSpec = tween(durationMillis = 12000, easing = LinearEasing)
+                )
+            }
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        Canvas(Modifier.fillMaxSize()) {
+            val strokeWidth = 3.dp.toPx()
+            val stroke = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+            val inset = strokeWidth / 2f
+
+            drawCircle(color = Color.White.copy(alpha = 0.15f), radius = size.minDimension / 2 - inset, style = stroke)
+
+            if (progress > 0f) {
+                drawArc(
+                    color = dominantColor,
+                    startAngle = -90f,
+                    sweepAngle = 360f * progress.coerceIn(0f, 1f),
+                    useCenter = false,
+                    topLeft = Offset(inset, inset),
+                    size = Size(size.width - inset * 2, size.height - inset * 2),
+                    style = stroke
+                )
+            }
+        }
+
         Box(
-            Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
-                .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape).clickable { onClose() },
-            contentAlignment = Alignment.Center,
+            Modifier
+                .fillMaxSize()
+                .padding(4.dp)
+                .graphicsLayer { rotationZ = discRotation.value }
+                .clip(CircleShape)
+                .background(Color(0xFF0F1E3D))
         ) {
-            Icon(VzIcons.Close, "Fechar busca", tint = Color.White, modifier = Modifier.size(22.dp))
+            AsyncImage(model = imageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            Box(Modifier.align(Alignment.Center).size(10.dp).clip(CircleShape).background(Color.Black))
+        }
+
+        if (isLoading) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f), CircleShape), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+            }
         }
     }
 }
 EOF
 
-# --- app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListSearchOverlay.kt (limpo, sem a linha 'Fim do arquivo') ---
-cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListSearchOverlay.kt" <<'EOF'
-package com.vztechcore.vztune.ui.screens.medialist
+# --- app/src/main/kotlin/com/vztechcore/vztune/ui/components/player/CompactMiniPlayerBar.kt ---
+cat > "app/src/main/kotlin/com/vztechcore/vztune/ui/components/player/CompactMiniPlayerBar.kt" <<'EOF'
+package com.vztechcore.vztune.ui.components.player
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import kotlinx.coroutines.delay
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
-import com.vztechcore.vztune.ui.components.AppCredits
-import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.icons.VzIcons
-import com.vztechcore.vztune.ui.icons.actions.Close
-import com.vztechcore.vztune.ui.icons.navigation.Search
+import com.vztechcore.vztune.ui.icons.player.Pause
+import com.vztechcore.vztune.ui.icons.player.Play
+import com.vztechcore.vztune.ui.icons.player.SkipNext
+
+private val GlassFill = Color.Black.copy(alpha = 0.75f)
+private val GlassBorder = Color.White.copy(alpha = 0.15f)
 
 @Composable
-internal fun MediaListSearchOverlay(
-    allTracks: List<Track>,
-    isAlbum: Boolean = false,
-    onClose: () -> Unit,
-    onTrackClick: (Track) -> Unit,
-    onPlayNextClick: (Track) -> Unit,
-    onTrackInfoClick: (Track) -> Unit,
+fun CompactMiniPlayerBar(
+    track: Track,
+    isPlaying: Boolean,
+    isLoading: Boolean = false,
+    progress: Float = 0f,
+    dominantColor: Color = Color.White,
+    onPlayPauseClick: () -> Unit,
+    onNextClick: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    var query by remember { mutableStateOf("") }
-    val focusRequester = remember { FocusRequester() }
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val nowPlaying = LocalNowPlaying.current
+    val shape = RoundedCornerShape(50)
+    val isVideo = track.source == Source.YOUTUBE
+    val clampedProgress = progress.coerceIn(0f, 1f)
 
-    LaunchedEffect(Unit) {
-        // Espera o slide da tela terminar (300 ms) antes de abrir o teclado.
-        // Antes o teclado abria no meio do slide -> resize + recomposicao travavam o slide.
-        delay(320)
-        focusRequester.requestFocus()
+    // Smooth progress: mesmo motivo do MiniPlayerBar, a barra inferior pulava
+    // 1x por segundo. Interpola com animacao linear de 1000 ms pra ela andar
+    // continua, sem pulo. Seek / troca de faixa pula direto.
+    val smoothProgressAnim = remember { Animatable(progress.coerceIn(0f, 1f)) }
+    LaunchedEffect(progress, track.id) {
+        val target = progress.coerceIn(0f, 1f)
+        val delta = target - smoothProgressAnim.value
+        if (kotlin.math.abs(delta) > 0.08f) {
+            smoothProgressAnim.snapTo(target)
+        } else {
+            smoothProgressAnim.animateTo(
+                targetValue = target,
+                animationSpec = tween(durationMillis = 1000, easing = LinearEasing),
+            )
+        }
     }
+    val smoothProgress = smoothProgressAnim.value
 
-    val filteredTracks = remember(allTracks, query) {
-        val q = query.trim().lowercase()
-        if (q.isEmpty()) allTracks
-        else allTracks.filter {
-            it.title.lowercase().contains(q) || it.artist.lowercase().contains(q)
+    val discRotation = remember { Animatable(0f) }
+
+    LaunchedEffect(isPlaying, isVideo, isLoading) {
+        if ((isPlaying || isLoading) && !isVideo) {
+            while (true) {
+                discRotation.animateTo(
+                    targetValue = discRotation.value + 360f,
+                    animationSpec = tween(durationMillis = 12000, easing = LinearEasing)
+                )
+            }
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.96f))
-            .statusBarsPadding(),
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .clip(shape)
+            .background(GlassFill)
+            .border(1.dp, GlassBorder, shape)
+            .clickable { onClick() },
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .fillMaxSize()
+                .padding(start = if (isVideo) 12.dp else 6.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
+                Modifier
+                    .size(if (isVideo) 36.dp else 40.dp)
+                    .clip(if (isVideo) RoundedCornerShape(6.dp) else CircleShape)
                     .background(Color.White.copy(alpha = 0.1f))
-                    .clickable {
-                        keyboardController?.hide()
-                        onClose()
-                    },
-                contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = VzIcons.Close,
-                    contentDescription = "Fechar pesquisa",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp),
+                if (isVideo) {
+                    AsyncImage(
+                        model = track.thumbnailUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(6.dp))
+                    )
+                } else {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { rotationZ = discRotation.value }
+                            .clip(CircleShape)
+                    ) {
+                        AsyncImage(
+                            model = track.thumbnailUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(1f)
+                        )
+                        Box(
+                            Modifier
+                                .align(Alignment.Center)
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black)
+                        )
+                    }
+                }
+
+                if (isLoading) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(
+                                Color.Black.copy(alpha = 0.45f),
+                                if (isVideo) RoundedCornerShape(6.dp) else CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.width(10.dp))
+
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = track.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = track.artist,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
 
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.White.copy(alpha = 0.08f))
-                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(50))
-                    .padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = VzIcons.Search,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.6f),
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Box(Modifier.weight(1f)) {
-                    if (query.isEmpty()) {
-                        Text(
-                            text = if (isAlbum) "Pesquisar no álbum..." else "Pesquisar na playlist...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.45f),
-                        )
-                    }
-                    BasicTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        singleLine = true,
-                        textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
-                        cursorBrush = SolidColor(Color.White),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focusRequester),
+            Spacer(Modifier.width(4.dp))
+
+            IconButton(onClick = onPlayPauseClick, modifier = Modifier.size(36.dp)) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(20.dp)
                     )
-                }
-                if (query.isNotEmpty()) {
+                } else {
                     Icon(
-                        imageVector = VzIcons.Close,
-                        contentDescription = "Limpar texto",
-                        tint = Color.White.copy(alpha = 0.65f),
-                        modifier = Modifier
-                            .size(18.dp)
-                            .clickable { query = "" },
+                        imageVector = if (isPlaying) VzIcons.Pause else VzIcons.Play,
+                        contentDescription = if (isPlaying) "Pausar" else "Tocar",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp),
                     )
                 }
+            }
+
+            IconButton(onClick = onNextClick, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = VzIcons.SkipNext,
+                    contentDescription = "Próxima",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp),
+                )
             }
         }
 
-        if (filteredTracks.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "Nenhuma faixa encontrada para \"$query\"",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.55f),
+        // Bottom track progress bar
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .height(3.dp)
+                .background(Color.White.copy(alpha = 0.15f))
+        ) {
+            if (smoothProgress > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(smoothProgress)
+                        .fillMaxHeight()
+                        .background(dominantColor)
                 )
-            }
-        } else {
-            LazyColumn(
-                contentPadding = PaddingValues(top = 4.dp, bottom = 140.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                itemsIndexed(
-                    items = filteredTracks,
-                    key = { index, t -> "search_${t.source.name}_${t.id}_$index" },
-                ) { _, track ->
-                    val isCurrent = nowPlaying.isCurrent(track.id, track.source)
-                    val originalIndex = if (isAlbum) {
-                        allTracks.indexOfFirst { it.id == track.id && it.source == track.source }
-                            .takeIf { it >= 0 }
-                            ?.plus(1)
-                    } else {
-                        null
-                    }
-
-                    MediaListTrackRow(
-                        track = track,
-                        index = originalIndex,
-                        isPlaying = isCurrent && nowPlaying.isPlaying,
-                        isPaused = isCurrent && !nowPlaying.isPlaying,
-                        onClick = {
-                            keyboardController?.hide()
-                            onTrackClick(track)
-                        },
-                        onMoreClick = { onTrackInfoClick(track) },
-                        onPlayNext = { onPlayNextClick(track) },
-                        showDragHandle = false,
-                        dragHandleModifier = Modifier,
-                    )
-                }
-                item(key = "credits_search") { AppCredits() }
             }
         }
     }
 }
 EOF
 
-# --- data/src/main/AndroidManifest.xml (cria se nao existir, arruma se existir) ---
-MANIFEST="data/src/main/AndroidManifest.xml"
-ensure_perm() {
-  local perm="$1"
-  if grep -q "android.permission.$perm" "$MANIFEST"; then
-    echo "  ja tem: $perm"
-  elif grep -q "<application" "$MANIFEST"; then
-    sed -i "/<application/i \    <uses-permission android:name=\"android.permission.$perm\" />" "$MANIFEST"
-    echo "  adicionada: $perm"
-  else
-    sed -i "s|</manifest>|    <uses-permission android:name=\"android.permission.$perm\" />\n</manifest>|" "$MANIFEST"
-    echo "  adicionada: $perm"
-  fi
-}
-if [ ! -f "$MANIFEST" ]; then
-  mkdir -p data/src/main
-  cat > "$MANIFEST" <<'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Permissoes que o modulo :data usa (TrackDownloader, PlaybackService, etc).
-         Sem elas o lint do :data falha com MissingPermission, mesmo o :app ja tendo. -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-</manifest>
-EOF
-  echo "Manifest do :data criado com as 6 permissoes."
+# --- LibraryScreen.kt: tira o fundo preto opaco da raiz (preserva o resto do arquivo) ---
+LIB="app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/LibraryScreen.kt"
+if grep -q "Box(modifier.fillMaxSize().background(Color.Black))" "$LIB"; then
+  sed -i "s/Box(modifier.fillMaxSize().background(Color.Black))/Box(modifier.fillMaxSize())/" "$LIB"
+  echo "LibraryScreen: fundo opaco removido, glow agora aparece."
 else
-  echo "Manifest do :data ja existe, garantindo as permissoes:"
-  ensure_perm "INTERNET"
-  ensure_perm "ACCESS_NETWORK_STATE"
-  ensure_perm "FOREGROUND_SERVICE"
-  ensure_perm "FOREGROUND_SERVICE_MEDIA_PLAYBACK"
-  ensure_perm "WAKE_LOCK"
-  ensure_perm "POST_NOTIFICATIONS"
+  echo "LibraryScreen: raiz ja sem fundo opaco, nada a fazer."
 fi
 
 echo ""
-echo "Hotfix aplicado. Verificacao rapida:"
-grep -c "Fim do arquivo" app/src/main/kotlin/com/vztechcore/vztune/ui/components/feedback/EclipseBackground.kt app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/list/LibraryListSearchOverlay.kt app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListSearchOverlay.kt || echo "  nenhum Fim do arquivo nos 3 arquivos (certo)"
-grep -c "ACCESS_NETWORK_STATE" "$MANIFEST"
+echo "Pronto. Verifica rapida:"
+grep -n "size(220.dp)" app/src/main/kotlin/com/vztechcore/vztune/ui/components/feedback/EclipseBackground.kt
+grep -n "smoothProgress" app/src/main/kotlin/com/vztechcore/vztune/ui/components/player/MiniPlayerBar.kt | head -5
+grep -n "smoothProgress" app/src/main/kotlin/com/vztechcore/vztune/ui/components/player/CompactMiniPlayerBar.kt | head -5
+grep -n "Box(modifier.fillMaxSize())" app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/LibraryScreen.kt | head -2
 echo "Roda o build agora."

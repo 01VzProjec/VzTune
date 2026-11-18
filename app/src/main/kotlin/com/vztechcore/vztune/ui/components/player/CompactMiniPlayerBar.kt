@@ -64,6 +64,24 @@ fun CompactMiniPlayerBar(
     val isVideo = track.source == Source.YOUTUBE
     val clampedProgress = progress.coerceIn(0f, 1f)
 
+    // Smooth progress: mesmo motivo do MiniPlayerBar, a barra inferior pulava
+    // 1x por segundo. Interpola com animacao linear de 1000 ms pra ela andar
+    // continua, sem pulo. Seek / troca de faixa pula direto.
+    val smoothProgressAnim = remember { Animatable(progress.coerceIn(0f, 1f)) }
+    LaunchedEffect(progress, track.id) {
+        val target = progress.coerceIn(0f, 1f)
+        val delta = target - smoothProgressAnim.value
+        if (kotlin.math.abs(delta) > 0.08f) {
+            smoothProgressAnim.snapTo(target)
+        } else {
+            smoothProgressAnim.animateTo(
+                targetValue = target,
+                animationSpec = tween(durationMillis = 1000, easing = LinearEasing),
+            )
+        }
+    }
+    val smoothProgress = smoothProgressAnim.value
+
     val discRotation = remember { Animatable(0f) }
 
     LaunchedEffect(isPlaying, isVideo, isLoading) {
@@ -208,10 +226,10 @@ fun CompactMiniPlayerBar(
                 .height(3.dp)
                 .background(Color.White.copy(alpha = 0.15f))
         ) {
-            if (clampedProgress > 0f) {
+            if (smoothProgress > 0f) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(clampedProgress)
+                        .fillMaxWidth(smoothProgress)
                         .fillMaxHeight()
                         .background(dominantColor)
                 )

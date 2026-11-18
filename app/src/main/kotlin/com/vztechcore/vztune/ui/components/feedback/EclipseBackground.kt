@@ -2,20 +2,25 @@ package com.vztechcore.vztune.ui.components.feedback
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.palette.graphics.Palette
 import coil.imageLoader
@@ -65,8 +70,10 @@ fun rememberDominantColor(url: String?): Color {
 }
 
 /**
- * App-wide background gradient: the dominant color of the current image
- * (top) fading into black (bottom).
+ * App-wide background glow: a small radial glow in the top-left corner,
+ * using the dominant color of the current track image.
+ * It does NOT divide the screen anymore: just a little glow in the corner,
+ * the rest stays pure black.
  */
 @Composable
 fun EclipseBackground(
@@ -74,9 +81,7 @@ fun EclipseBackground(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    // 300 ms = igual ao slide das telas. Antes era 900 ms e o fundo ficava
-    // "arrastando" 600 ms depois do slide terminar, o que fazia o app
-    // parecer lento mesmo com a navegacao ja tendo terminado.
+    // 300 ms = igual ao slide das telas.
     val animated by animateColorAsState(
         targetValue = baseColor,
         animationSpec = tween(durationMillis = 300),
@@ -88,19 +93,25 @@ fun EclipseBackground(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0.0f to animated.copy(alpha = 0.55f),
-                            0.45f to animated.copy(alpha = 0.16f),
-                            1.0f to Color.Black,
-                        )
-                    )
+        // Glow bem pequeno, so no canto superior esquerdo (220 dp).
+        // Centro do radial no canto (0, 0), some ate transparente.
+        Canvas(
+            modifier = Modifier
+                .size(220.dp)
+                .align(Alignment.TopStart)
+        ) {
+            drawRect(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        animated.copy(alpha = 0.55f),
+                        animated.copy(alpha = 0.18f),
+                        Color.Transparent,
+                    ),
+                    center = Offset.Zero,
+                    radius = size.maxDimension * 1.1f,
                 )
-        )
+            )
+        }
         content()
     }
 }

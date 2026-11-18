@@ -64,6 +64,25 @@ fun MiniPlayerBar(
     val shape = RoundedCornerShape(20.dp)
     val isVideo = track.source == Source.YOUTUBE
 
+    // Smooth progress: playback.progress so atualiza 1x por segundo, por isso
+    // o contorno da thumbnail pulava a cada segundo. Aqui a gente interpola
+    // entre um update e o proximo com animacao linear de 1000 ms, ai o slide
+    // anda continuo, sem pulo. Seek / troca de faixa pula direto, nao desliza.
+    val smoothProgressAnim = remember { Animatable(progress.coerceIn(0f, 1f)) }
+    LaunchedEffect(progress, track.id) {
+        val target = progress.coerceIn(0f, 1f)
+        val delta = target - smoothProgressAnim.value
+        if (kotlin.math.abs(delta) > 0.08f) {
+            smoothProgressAnim.snapTo(target)
+        } else {
+            smoothProgressAnim.animateTo(
+                targetValue = target,
+                animationSpec = tween(durationMillis = 1000, easing = LinearEasing),
+            )
+        }
+    }
+    val smoothProgress = smoothProgressAnim.value
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -79,14 +98,14 @@ fun MiniPlayerBar(
             if (isVideo) {
                 SquareThumbWithProgress(
                     imageUrl = track.thumbnailUrl,
-                    progress = progress,
+                    progress = smoothProgress,
                     dominantColor = dominantColor,
                     isLoading = isLoading
                 )
             } else {
                 DiscThumbWithProgress(
                     imageUrl = track.thumbnailUrl,
-                    progress = progress,
+                    progress = smoothProgress,
                     dominantColor = dominantColor,
                     isPlaying = isPlaying,
                     isLoading = isLoading

@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,7 +57,6 @@ import com.vztechcore.vztune.ui.components.cards.TrackListRow
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Close
 import com.vztechcore.vztune.ui.icons.navigation.Search
-import kotlinx.coroutines.delay
 
 @Composable
 internal fun LibraryListSearchOverlay(
@@ -74,7 +74,7 @@ internal fun LibraryListSearchOverlay(
 
     LaunchedEffect(Unit) {
         // Espera o slide da tela terminar (300 ms) antes de abrir o teclado.
-        // Antes o teclado abria no meio do slide -> resize da janela + recomposição
+        // Antes o teclado abria no meio do slide -> resize + recomposicao
         // travavam o slide e parecia que a tela demorava pra abrir.
         delay(320)
         focusRequester.requestFocus()
@@ -227,5 +227,3 @@ private fun SearchInputBar(
         }
     }
 }
-
-===== Fim do arquivo [app/src/main/kotlin/com/vztechcore/vztune/ui/screens/library/list/LibraryListSearchOverlay.kt] =====

@@ -76,7 +76,7 @@ fun EclipseBackground(
 ) {
     // 300 ms = igual ao slide das telas. Antes era 900 ms e o fundo ficava
     // "arrastando" 600 ms depois do slide terminar, o que fazia o app
-    // parecer lento mesmo com a navegação já tendo terminado.
+    // parecer lento mesmo com a navegacao ja tendo terminado.
     val animated by animateColorAsState(
         targetValue = baseColor,
         animationSpec = tween(durationMillis = 300),
@@ -104,5 +104,3 @@ fun EclipseBackground(
         content()
     }
 }
-
-===== Fim do arquivo [app/src/main/kotlin/com/vztechcore/vztune/ui/components/feedback/EclipseBackground.kt] =====

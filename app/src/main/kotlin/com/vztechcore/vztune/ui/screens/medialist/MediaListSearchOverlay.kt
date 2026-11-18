@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,7 +51,6 @@ import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Close
 import com.vztechcore.vztune.ui.icons.navigation.Search
-import kotlinx.coroutines.delay
 
 @Composable
 internal fun MediaListSearchOverlay(
@@ -68,7 +68,7 @@ internal fun MediaListSearchOverlay(
 
     LaunchedEffect(Unit) {
         // Espera o slide da tela terminar (300 ms) antes de abrir o teclado.
-        // Antes o teclado abria no meio do slide -> resize + recomposição travavam o slide.
+        // Antes o teclado abria no meio do slide -> resize + recomposicao travavam o slide.
         delay(320)
         focusRequester.requestFocus()
     }
@@ -215,5 +215,3 @@ internal fun MediaListSearchOverlay(
         }
     }
 }
-
-===== Fim do arquivo [app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListSearchOverlay.kt] =====

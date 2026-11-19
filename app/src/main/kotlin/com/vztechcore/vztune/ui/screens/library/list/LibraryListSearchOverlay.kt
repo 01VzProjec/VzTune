@@ -151,7 +151,3 @@ internal fun LibraryListSearchOverlay(
         }
     }
 }
-
-@Composable
-
-@Composable

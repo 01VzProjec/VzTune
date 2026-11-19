@@ -474,7 +474,18 @@ class YTMusicRepository @Inject constructor(
         }
 
         // 4. Mais parecido (SimpMusic: bestMatchingIndex por Levenshtein)
-        return@withContext ranked.first().first
+        // FIX7 threshold: se NENHUM candidato tem nome parecido, nao navega.
+        // Antes devolvia ranked.first() mesmo com distancia 11 (ex: "Sanary Xenon"
+        // -> "360View Lab", que so tem "Sanary" num video "SANARY SUR MER").
+        // Agora retorna null e a UI nao abre canal errado.
+        // Threshold: max(3, len/3) - erro de digitacao pequeno passa, nome totalmente
+        // diferente nao passa.
+        val best = ranked.first()
+        val maxDist = maxOf(3, cleanQuery.length / 3)
+        if (best.second > maxDist) {
+            return@withContext null
+        }
+        return@withContext best.first
     }
 
     suspend fun featuredArtists(): List<Artist> = withContext(Dispatchers.IO) {
@@ -572,27 +583,17 @@ class YTMusicRepository @Inject constructor(
             if (channelId == null || author == null) return@withContext null
             val cleanName = YTMusicTextUtils.cleanArtistName(author)
             if (cleanName.isBlank()) return@withContext null
-            val detail = runCatching { browseArtist(channelId) }.getOrNull()
-            val isMusicArtist = detail != null &&
-                detail.name != "Artista" && detail.name != "Unknown Artist" &&
-                (detail.topSongs.isNotEmpty() || detail.albums.isNotEmpty() ||
-                    detail.singles.isNotEmpty() || detail.videos.isNotEmpty() ||
-                    detail.featured.isNotEmpty() || detail.relatedArtists.isNotEmpty())
-            if (isMusicArtist) {
-                Artist(
-                    id = channelId,
-                    name = detail!!.name,
-                    thumbnailUrl = detail.thumbnailUrl,
-                    source = Source.YOUTUBE_MUSIC,
-                )
-            } else {
-                Artist(
-                    id = channelId,
-                    name = cleanName,
-                    thumbnailUrl = detail?.thumbnailUrl,
-                    source = Source.YOUTUBE,
-                )
-            }
+            // FIX7: "Ir para o canal" NUNCA vira artista do YT Music.
+            // O author do video e quem postou. Se o YT Music tiver pagina
+            // pra esse UC, ela pode ser de OUTRO artista com nome parecido
+            // (ex: musica "Jazzghost" do Moldrin dentro do video do gamer
+            // Jazzghost) e era isso que abria o Moldrin. Sempre YOUTUBE.
+            return@withContext Artist(
+                id = channelId,
+                name = cleanName,
+                thumbnailUrl = null,
+                source = Source.YOUTUBE,
+            )
         }
 
     // ================= QUEUE =================

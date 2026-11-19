@@ -195,11 +195,12 @@ class TrackMenuViewModel @Inject constructor(
      */
     fun onOpenChannelForTrack(track: Track) {
         viewModelScope.launch {
-            val fromInnerTube = runCatching { ytMusicRepository.getArtistFromVideo(track.id) }.getOrNull()
-            if (fromInnerTube != null) {
-                _navigationEvent.emit(MenuNavigationEvent.OpenArtist(fromInnerTube))
-                return@launch
-            }
+            // FIX7: NewPipe PRIMEIRO (estilo SimpMusic).
+            // StreamExtractor.uploaderUrl = quem POSTOU o video (fonte da verdade).
+            // InnerTube.player com cliente YTMUSIC devolve a MUSICA do video,
+            // nao quem postou (video do gamer Jazzghost com musica "Jazzghost"
+            // do Moldrin -> devolvia UC do Moldrin). So usa InnerTube se o
+            // NewPipe falhar.
             val channel = runCatching { youTubeRepository.getChannelForVideo(track.id) }.getOrNull()
             if (channel != null) {
                 _navigationEvent.emit(
@@ -212,6 +213,12 @@ class TrackMenuViewModel @Inject constructor(
                         )
                     )
                 )
+                return@launch
+            }
+            val fromInnerTube = runCatching { ytMusicRepository.getArtistFromVideo(track.id) }.getOrNull()
+            if (fromInnerTube != null) {
+                _navigationEvent.emit(MenuNavigationEvent.OpenArtist(fromInnerTube))
+                return@launch
             }
             // channel == null -> não navega. A UI já mostra "Ir para o canal" só pra
             // vídeos do YouTube; sem canal real não há pra onde ir.

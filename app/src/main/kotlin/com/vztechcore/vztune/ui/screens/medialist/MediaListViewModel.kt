@@ -21,6 +21,7 @@ import com.vztechcore.vztune.data.prefs.store.DownloadedPlaylistsStore
 import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
 import com.vztechcore.vztune.data.prefs.store.MediaListPreferencesStore
 import com.vztechcore.vztune.data.ytmusic.YTMusicOwnerValidator
+import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -44,6 +45,7 @@ class MediaListViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     @ApplicationContext private val context: Context,
     private val ytMusicRepository: YTMusicRepository,
+    private val youTubeRepository: YouTubeRepository,
     private val youTubeRepository: com.vztechcore.vztune.data.youtube.YouTubeRepository,
     private val playerController: PlayerController,
     private val trackDownloader: TrackDownloader,
@@ -362,6 +364,30 @@ class MediaListViewModel @Inject constructor(
 
     fun onOpenArtist() {
         val state = _uiState.value
+        // FIX7: playlist do YouTube usa getChannelForPlaylist (NewPipe
+        // PlaylistExtractor.uploaderUrl) como fonte da verdade.
+        // O header do YT Music pra playlist do YouTube pode trazer UC de
+        // outro canal (ex: playlist "Jazzghost" da Sanary Xenon -> 360View Lab,
+        // que tem video "SANARY SUR MER"). Se o NewPipe falhar, nao navega
+        // em vez de abrir canal errado.
+        if (isYouTubePlaylist(state)) {
+            viewModelScope.launch {
+                val channel = runCatching { youTubeRepository.getChannelForPlaylist(route.id) }.getOrNull()
+                if (channel != null) {
+                    _navigationEvent.emit(
+                        NavigationEvent.OpenArtist(
+                            Artist(
+                                id = channel.channelId,
+                                name = channel.channelName,
+                                thumbnailUrl = channel.avatarUrl ?: state.ownerAvatarUrl,
+                                source = Source.YOUTUBE,
+                            )
+                        )
+                    )
+                }
+            }
+            return
+        }
         val directId = state.artistId?.takeIf { it.startsWith("UC") }
         val artistName = state.owner?.takeIf { it.isNotBlank() }
         if (directId != null && artistName != null) {

@@ -35,6 +35,7 @@ class ArtistViewModel @Inject constructor(
             artistId = route.id,
             name = route.name,
             thumbnailUrl = route.thumbnailUrl,
+            isYouTubeChannel = route.isYouTubeChannel,
         )
     )
     val uiState: StateFlow<ArtistUiState> = _uiState.asStateFlow()
@@ -51,6 +52,32 @@ class ArtistViewModel @Inject constructor(
     private fun loadContent() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            // FIX5: canal do YouTube pula o YT Music. Antes ele tentava o YT Music
+            // primeiro e, se voltasse qualquer coisa, mostrava artista do YT Music
+            // e nunca chegava no canal real. Agora canal vai direto pro NewPipe.
+            if (route.isYouTubeChannel) {
+                val channel = runCatching { youTubeRepository.browseChannel(route.id) }.getOrNull()
+                if (channel != null) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = null,
+                            isYouTubeChannel = true,
+                            name = channel.channelName ?: it.name,
+                            thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl,
+                            bannerUrl = channel.bannerUrl,
+                            description = channel.description,
+                            subscribers = channel.subscriberCount ?: it.subscribers,
+                            videos = channel.videos,
+                            shorts = channel.shorts,
+                            channelPlaylists = channel.playlists,
+                        )
+                    }
+                } else {
+                    _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar este canal.") }
+                }
+                return@launch
+            }
             val result = runCatching { ytMusicRepository.browseArtist(route.id) }.getOrNull()
             if (result != null) {
                 val isEmpty = result.topSongs.isEmpty() && result.albums.isEmpty() && result.singles.isEmpty() &&

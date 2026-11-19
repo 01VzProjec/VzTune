@@ -22,6 +22,10 @@ object Routes {
         val id: String,
         val name: String,
         val thumbnailUrl: String? = null,
+        // true = canal do YouTube (videos/shorts/playlists via NewPipe).
+        // false = artista do YT Music (musicas/albuns via InnerTube).
+        // Sem essa flag, o AppNavHost perdia o source e todo mundo caia no YT Music.
+        val isYouTubeChannel: Boolean = false,
     )
 
     /** "See all" list of an artist. [kind] is an ArtistListKind name. */

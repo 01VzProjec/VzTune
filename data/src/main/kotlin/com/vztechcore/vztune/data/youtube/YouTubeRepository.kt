@@ -192,11 +192,11 @@ class YouTubeRepository @Inject constructor(
                 extractor.fetchPage()
                 val session = VideoSearchSession(extractor, extractor.initialPage.nextPage)
                 shortSearches[searchId] = session
-                val items = parseShortItems(extractor.initialPage.items).take(pageSize)
+                val items = parseShortItems(extractor.initialPage.items, requireShortsUrl = false).take(pageSize)
                 if (items.isEmpty()) {
                     val generic = ServiceList.YouTube.getSearchExtractor(query)
                     generic.fetchPage()
-                    val genericItems = parseShortItems(generic.initialPage.items).take(pageSize)
+                    val genericItems = parseShortItems(generic.initialPage.items, requireShortsUrl = true).take(pageSize)
                     ShortPage(genericItems, generic.initialPage.nextPage != null)
                 } else {
                     ShortPage(items, session.nextPage != null)
@@ -208,7 +208,7 @@ class YouTubeRepository @Inject constructor(
                     ?: return@runCatching ShortPage(emptyList(), false)
                 val next = session.extractor.getPage(page)
                 session.nextPage = next.nextPage
-                ShortPage(parseShortItems(next.items).take(pageSize), session.nextPage != null)
+                ShortPage(parseShortItems(next.items, requireShortsUrl = false).take(pageSize), session.nextPage != null)
             }
         }.getOrElse { e ->
             Log.e(TAG, "searchShorts failed for query=$query", e)
@@ -550,10 +550,12 @@ class YouTubeRepository @Inject constructor(
         }
     }
 
-    private fun parseShortItems(items: List<InfoItem>): List<SearchHit.ShortHit> {
+    private fun parseShortItems(items: List<InfoItem>, requireShortsUrl: Boolean = true): List<SearchHit.ShortHit> {
         return items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
             val rawUrl = stream.url ?: return@mapNotNull null
-            if (!rawUrl.contains("/shorts/")) return@mapNotNull null
+            // Se a busca ja usou o filtro "shorts", todo resultado ja e Short.
+            // Se foi busca generica, ai sim precisa filtrar por /shorts/.
+            if (requireShortsUrl && !rawUrl.contains("/shorts/")) return@mapNotNull null
             val videoId = extractVideoId(rawUrl) ?: return@mapNotNull null
             SearchHit.ShortHit(
                 Track(

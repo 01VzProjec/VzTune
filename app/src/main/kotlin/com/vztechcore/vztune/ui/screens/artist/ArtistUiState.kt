@@ -22,6 +22,11 @@ data class ArtistUiState(
     val singles: List<Album> = emptyList(),
     val singlesMore: BrowseRef? = null,
     val videos: List<Track> = emptyList(),
+    // Canal do YouTube (FIX5): Shorts e playlists do canal, banner do header.
+    val shorts: List<Track> = emptyList(),
+    val channelPlaylists: List<Playlist> = emptyList(),
+    val bannerUrl: String? = null,
+    val isYouTubeChannel: Boolean = false,
     val videosMore: BrowseRef? = null,
     val featured: List<Playlist> = emptyList(),
     val featuredMore: BrowseRef? = null,

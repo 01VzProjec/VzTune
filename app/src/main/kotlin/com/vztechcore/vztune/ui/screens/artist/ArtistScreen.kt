@@ -97,7 +97,7 @@ fun ArtistScreen(
     val context = LocalContext.current
     // Compartilhar artista: abre a barra de compartilhar do Android com link do YouTube Music
     val onShareClick: () -> Unit = {
-        val url = "https://music.youtube.com/browse/${state.artistId}"
+        val url = if (state.isYouTubeChannel) "https://www.youtube.com/channel/${state.artistId}" else "https://music.youtube.com/browse/${state.artistId}"
         val shareText = "Confere esse artista no VzTune 🎧\n${state.name}\n$url"
         val sendIntent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
@@ -209,7 +209,36 @@ fun ArtistScreen(
                         )
                     }
 
+                                        // FIX5: canal do YouTube mostra Shorts e playlists do canal.
                     rowSection(
+                        key = "shorts", title = "Shorts", items = state.shorts,
+                        onMoreClick = null,
+                        itemKey = { it.id },
+                    ) { short ->
+                        val playback = nowPlaying.playbackOf(short)
+                        MediaListVideoCard(
+                            track = short,
+                            isPlaying = playback.isPlaying,
+                            isPaused = playback.isPaused,
+                            onClick = { onVideoClick(short) },
+                            onMoreClick = { onTrackInfoClick(short) },
+                            modifier = Modifier.width(160.dp),
+                            horizontalPadding = 0.dp,
+                        )
+                    }
+
+                    rowSection(
+                        key = "channelPlaylists", title = "Playlists", items = state.channelPlaylists,
+                        onMoreClick = null,
+                        itemKey = { it.id },
+                    ) { playlist ->
+                        CoverCard(
+                            title = playlist.title, subtitle = playlist.owner, imageUrl = playlist.thumbnailUrl,
+                            onClick = { onPlaylistClick(playlist) }, modifier = Modifier.width(CoverWidth),
+                        )
+                    }
+
+rowSection(
                         key = "featured", title = "Destacado", items = state.featured,
                         onMoreClick = seeAll(ArtistListKind.FEATURED, state.featuredMore),
                         itemKey = { it.id },

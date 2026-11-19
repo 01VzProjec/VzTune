@@ -372,7 +372,9 @@ class MediaListViewModel @Inject constructor(
                             id = directId,
                             name = artistName,
                             thumbnailUrl = state.ownerAvatarUrl,
-                            source = Source.YOUTUBE_MUSIC,
+                            // Playlist do YouTube => canal. Antes era fixo YOUTUBE_MUSIC,
+                            // entao o AppNavHost (agora com flag) caia no artista do YT Music.
+                            source = if (isYouTubePlaylist(state)) Source.YOUTUBE else Source.YOUTUBE_MUSIC,
                         )
                     )
                 )

@@ -26,6 +26,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.navigation.compose.rememberNavController
+import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.data.prefs.models.StoredTrack
 import com.vztechcore.vztune.data.prefs.models.isLocalPlaylistId
@@ -130,7 +131,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
             when (event) {
                 is TrackMenuViewModel.MenuNavigationEvent.OpenAlbum -> navController.openAlbum(event.album)
                 is TrackMenuViewModel.MenuNavigationEvent.OpenArtist -> navController.navigate(
-                    Routes.Artist(event.artist.id, event.artist.name, event.artist.thumbnailUrl)
+                    Routes.Artist(event.artist.id, event.artist.name, event.artist.thumbnailUrl, isYouTubeChannel = event.artist.source == Source.YOUTUBE)
                 )
             }
         }
@@ -251,7 +252,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             onTrackClick = vm::onTrackClick,
                             onTrackInfoClick = { t -> openTrackMenu(t, context = TrackMenuContext.DEFAULT) },
                             onArtistClick = { artist ->
-                                navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl))
+                                navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl, isYouTubeChannel = artist.source == Source.YOUTUBE))
                             },
                             onShuffleClick = vm::onShuffleClick,
                             onPlayAllClick = vm::onPlayAllClick,
@@ -362,7 +363,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             vm.navigationEvent.collect { event ->
                                 when (event) {
                                     is MediaListViewModel.NavigationEvent.OpenArtist -> navController.navigate(
-                                        Routes.Artist(event.artist.id, event.artist.name, event.artist.thumbnailUrl)
+                                        Routes.Artist(event.artist.id, event.artist.name, event.artist.thumbnailUrl, isYouTubeChannel = event.artist.source == Source.YOUTUBE)
                                     )
                                     MediaListViewModel.NavigationEvent.CloseScreen -> navController.popBackStack()
                                 }
@@ -422,7 +423,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             onAlbumClick = { navController.openAlbum(it) },
                             onPlaylistClick = { navController.openPlaylist(it) },
                             onArtistClick = { artist ->
-                                navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl))
+                                navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl, isYouTubeChannel = artist.source == Source.YOUTUBE))
                             },
                             onSeeAllClick = { kind, ref ->
                                 navController.navigate(

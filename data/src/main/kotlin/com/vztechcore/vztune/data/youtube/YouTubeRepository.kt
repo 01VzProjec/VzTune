@@ -178,10 +178,6 @@ class YouTubeRepository @Inject constructor(
         // FIX8_SHORTS - Shorts definitivo: 3 tentativas + parser que nao joga tudo fora.
     // Antes: filtro "shorts" falhava e o parser so aceitava /shorts/, entao busca generica voltava vazia.
     // Agora: 1) filtro shorts, 2) busca normal, 3) busca "query shorts". Parser aceita /shorts/ e, como fallback, watch curto (<=65s).
-    data class ShortPage(
-        val items: List<SearchHit.ShortHit>,
-        val hasMore: Boolean,
-    )
 
     suspend fun searchShorts(
         query: String,

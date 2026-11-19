@@ -28,7 +28,10 @@ import coil.compose.AsyncImage
 import com.vztechcore.vztune.ui.components.player.DefaultPlaylistCover
 import com.vztechcore.vztune.ui.components.player.PlaylistCoverPalette
 import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
+import com.vztechcore.vztune.ui.components.rows.SheetDownloadProgressRow
+import com.vztechcore.vztune.ui.components.rows.SheetOptionRow
 import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.theme.DownloadGreen
 import com.vztechcore.vztune.ui.icons.actions.AddPhotoAlternate
 import com.vztechcore.vztune.ui.icons.actions.Delete
 import com.vztechcore.vztune.ui.icons.actions.DeleteFilled
@@ -45,7 +48,6 @@ import com.vztechcore.vztune.ui.icons.player.PlayCircleFilled
 import com.vztechcore.vztune.ui.screens.medialist.MediaListUiState
 
 private val SheetContainerColor = Color(0xFF121829)
-private val DownloadGreen = Color(0xFF4ADE80)
 private val DangerRed = Color(0xFFF87171)
 
 /**
@@ -429,51 +431,11 @@ private fun BatchDownloadProgressRow(
     label: String,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 20.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier.size(28.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (progress > 0f) {
-                CircularProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.size(28.dp),
-                    color = DownloadGreen,
-                    trackColor = DownloadGreen.copy(alpha = 0.2f),
-                    strokeWidth = 2.5.dp,
-                )
-            } else {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(28.dp),
-                    color = DownloadGreen,
-                    trackColor = DownloadGreen.copy(alpha = 0.2f),
-                    strokeWidth = 2.5.dp,
-                )
-            }
-            Icon(
-                imageVector = VzIcons.Download,
-                contentDescription = null,
-                tint = DownloadGreen,
-                modifier = Modifier.size(15.dp),
-            )
-        }
-        Spacer(Modifier.width(14.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = Color.White.copy(alpha = 0.65f),
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+    // Atalho fino: logica mora em components/rows/SheetOptionRow.kt
+    SheetDownloadProgressRow(progress = progress, label = label, onClick = onClick)
 }
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -637,49 +599,11 @@ private fun ListOptionRow(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    val rowModifier = if (enabled) {
-        Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 20.dp, vertical = 13.dp)
-    } else {
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 13.dp)
-    }
-
-    Row(
-        modifier = rowModifier,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = iconTint,
-            modifier = Modifier.size(24.dp),
-        )
-        Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                color = labelColor,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (!subtitle.isNullOrBlank()) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.5f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
+    // Atalho fino: logica mora em components/rows/SheetOptionRow.kt
+    SheetOptionRow(icon = icon, label = label, subtitle = subtitle, iconTint = iconTint, labelColor = labelColor, enabled = enabled, onClick = onClick)
 }
+
+
 
 private fun shareMediaList(context: Context, state: MediaListUiState) {
     val cleanId = state.listId.removePrefix("VL")

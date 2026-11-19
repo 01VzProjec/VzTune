@@ -1,0 +1,117 @@
+package com.vztechcore.vztune.ui.components.feedback
+
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.core.graphics.drawable.toBitmap
+import androidx.palette.graphics.Palette
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+/**
+ * Extracts the most vibrant color from an image URL.
+ * Returns Color.Black if the image is missing or extraction fails.
+ */
+@Composable
+fun rememberDominantColor(url: String?): Color {
+    var color by remember { mutableStateOf(Color.Black) }
+    val context = LocalContext.current
+
+    LaunchedEffect(url) {
+        if (url.isNullOrBlank()) {
+            color = Color.Black
+            return@LaunchedEffect
+        }
+        val extracted = withContext(Dispatchers.IO) {
+            try {
+                val request = ImageRequest.Builder(context)
+                    .data(url)
+                    .allowHardware(false)
+                    .size(96)
+                    .build()
+                val drawable = (context.imageLoader.execute(request) as? SuccessResult)?.drawable
+                val bitmap = drawable?.toBitmap()
+                if (bitmap != null) {
+                    val palette = Palette.from(bitmap).generate()
+                    Color(
+                        palette.getVibrantColor(
+                            palette.getDominantColor(android.graphics.Color.BLACK)
+                        )
+                    )
+                } else null
+            } catch (e: Exception) {
+                null
+            }
+        }
+        if (extracted != null) color = extracted
+    }
+    return color
+}
+
+/**
+ * App-wide background glow: a small radial glow in the top-left corner,
+ * using the dominant color of the current track image.
+ * It does NOT divide the screen anymore: just a little glow in the corner,
+ * the rest stays pure black.
+ */
+@Composable
+fun EclipseBackground(
+    baseColor: Color,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    // 300 ms = igual ao slide das telas.
+    val animated by animateColorAsState(
+        targetValue = baseColor,
+        animationSpec = tween(durationMillis = 300),
+        label = "eclipse",
+    )
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        // Glow bem pequeno, so no canto superior esquerdo (220 dp).
+        // Centro do radial no canto (0, 0), some ate transparente.
+        Canvas(
+            modifier = Modifier
+                .size(220.dp)
+                .align(Alignment.TopStart)
+        ) {
+            drawRect(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        animated.copy(alpha = 0.55f),
+                        animated.copy(alpha = 0.18f),
+                        Color.Transparent,
+                    ),
+                    center = Offset.Zero,
+                    radius = size.maxDimension * 1.1f,
+                )
+            )
+        }
+        content()
+    }
+}

@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vztechcore.vztune.ui.components.feedback.SkeletonColumn
+import com.vztechcore.vztune.ui.components.feedback.VzEmptyState
 import com.vztechcore.vztune.ui.components.feedback.fadeOutBottom
 
 /** Loading state: skeleton cards (like YouTube / YT Music) that fade out at the bottom. */
@@ -77,15 +78,6 @@ fun SearchErrorState(
 /** Shown when the search returned no results. */
 @Composable
 fun SearchNoResultsState(query: String, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.fillMaxSize().padding(32.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "Nada encontrado para \"$query\"",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center,
-        )
-    }
+    // Atalho fino: logica mora em components/feedback/VzEmptyState.kt
+    VzEmptyState(text = "Nada encontrado para \"$query\"", modifier = modifier, fillMaxSize = true)
 }

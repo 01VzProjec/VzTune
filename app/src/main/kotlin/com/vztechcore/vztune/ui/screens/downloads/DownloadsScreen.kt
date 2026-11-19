@@ -27,6 +27,8 @@ import com.vztechcore.vztune.data.download.TrackDownloadItem
 import com.vztechcore.vztune.data.download.TrackDownloader
 import com.vztechcore.vztune.data.prefs.models.DownloadedTrack
 import com.vztechcore.vztune.ui.components.AppCredits
+import com.vztechcore.vztune.ui.components.feedback.VzEmptyState
+import com.vztechcore.vztune.ui.theme.DownloadGreen
 import com.vztechcore.vztune.ui.components.layout.DetailTopBar
 import com.vztechcore.vztune.ui.components.sheets.RemoveDownloadSheet
 import com.vztechcore.vztune.ui.icons.VzIcons
@@ -37,7 +39,6 @@ import com.vztechcore.vztune.ui.icons.player.Play
 
 private val NavyBorder = Color(0xFF1E3A8A)
 private val ProgressBlue = Color(0xFF3B82F6)
-private val DownloadGreen = Color(0xFF4ADE80)
 private val DangerRed = Color(0xFFF87171)
 
 @Composable
@@ -491,19 +492,8 @@ private fun CompletedDownloadCard(
 
 @Composable
 private fun EmptyDownloadsState(message: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.55f),
-            textAlign = TextAlign.Center,
-        )
-    }
+    // Atalho fino: logica mora em components/feedback/VzEmptyState.kt
+    VzEmptyState(text = message, fillMaxSize = true)
 }
 
 private fun formatBytes(bytes: Long): String? {

@@ -34,6 +34,7 @@ val NavyPrimary = DarkPrimary          // #1E40AF
 val NavyAccent = DarkSecondary         // #38BDF8
 val NavyLight = Color(0xFF3B82F6)      // lighter mid-blue for gradients
 val VzGold = Color(0xFFFBBF24)         // gold accent (used on search empty state)
+val DownloadGreen = Color(0xFF4ADE80) // verde de download, antes duplicado em 3 arquivos
 val DarkSurfaceVariantHigh = Color(0xFF1E2640)
 
 // ===== Accent colors for library cards (from legacy) =====

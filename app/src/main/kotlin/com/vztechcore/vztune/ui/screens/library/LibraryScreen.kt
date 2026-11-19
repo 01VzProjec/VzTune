@@ -44,6 +44,7 @@ import com.vztechcore.vztune.ui.components.AppCredits
 import com.vztechcore.vztune.ui.components.cards.CoverCard
 import com.vztechcore.vztune.ui.components.layout.SectionHeader
 import com.vztechcore.vztune.ui.components.cards.TrackListRow
+import com.vztechcore.vztune.ui.components.feedback.VzEmptyState
 import com.vztechcore.vztune.ui.components.text.VzChipRow
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Add
@@ -61,7 +62,7 @@ fun LibraryScreen(
 ) {
     var showCreateSheet by remember { mutableStateOf(false) }
 
-    Box(modifier.fillMaxSize()) {
+    Box(modifier.fillMaxSize().background(Color.Black)) {
         LazyColumn(
             contentPadding = PaddingValues(bottom = 200.dp),
             modifier = Modifier.fillMaxSize(),
@@ -288,12 +289,6 @@ private fun CreatePlaylistCard(onClick: () -> Unit) {
 
 @Composable
 internal fun EmptyMessage(text: String, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 40.dp), contentAlignment = Alignment.Center) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.5f),
-            textAlign = TextAlign.Center,
-        )
-    }
+    // Atalho fino: logica mora em components/feedback/VzEmptyState.kt
+    VzEmptyState(text = text, modifier = modifier)
 }

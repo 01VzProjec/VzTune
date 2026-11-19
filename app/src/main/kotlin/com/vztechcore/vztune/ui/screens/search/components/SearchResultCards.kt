@@ -6,6 +6,11 @@ package com.vztechcore.vztune.ui.screens.search.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,9 +21,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.ui.components.AppCredits
@@ -48,6 +55,20 @@ fun SearchResultsContent(
     modifier: Modifier = Modifier,
 ) {
     val isVideoMode = hits.all { it is SearchHit.VideoHit } && hits.isNotEmpty()
+    val isShortsMode = hits.all { it is SearchHit.ShortHit } && hits.isNotEmpty()
+    if (isShortsMode) {
+        ShortsGridContent(
+            hits = hits.filterIsInstance<SearchHit.ShortHit>(),
+            isLoadingMore = isLoadingMore,
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            onLoadMore = onLoadMore,
+            onHitClick = onHitClick,
+            onTrackMoreClick = onTrackMoreClick,
+            modifier = modifier,
+        )
+        return
+    }
     val lazyListState = rememberLazyListState()
 
     LaunchedEffect(lazyListState) {
@@ -85,6 +106,7 @@ fun SearchResultsContent(
                             val track = when (hit) {
                                 is SearchHit.SongHit -> hit.track
                                 is SearchHit.VideoHit -> hit.track
+                                is SearchHit.ShortHit -> hit.track
                                 else -> null
                             }
                             if (track != null) onTrackMoreClick(track)
@@ -140,6 +162,18 @@ fun SearchResultCard(
                     imageUrl = hit.track.thumbnailUrl, shape = ThumbnailShape.SQUARE, title = hit.track.title,
                     subtitle = { TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f)) },
                     durationLabel = null,
+                    isPlaying = isCurrent && nowPlaying.isPlaying, isPaused = isCurrent && !nowPlaying.isPlaying,
+                    onClick = onClick, onMoreClick = onMoreClick, showMoreButton = true,
+                )
+            }
+        }
+        is SearchHit.ShortHit -> {
+            val isCurrent = nowPlaying.isCurrent(hit.track.id, hit.track.source)
+            SwipeableRow(onPlayNext = { onPlayNextClick(hit.track) }) {
+                VzRowCard(
+                    imageUrl = hit.track.thumbnailUrl, shape = ThumbnailShape.SQUARE, title = hit.track.title,
+                    subtitle = { TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f)) },
+                    durationLabel = formatDuration(hit.track.durationSeconds),
                     isPlaying = isCurrent && nowPlaying.isPlaying, isPaused = isCurrent && !nowPlaying.isPlaying,
                     onClick = onClick, onMoreClick = onMoreClick, showMoreButton = true,
                 )
@@ -222,4 +256,111 @@ private fun formatDuration(seconds: Long): String? {
     val m = seconds / 60
     val s = seconds % 60
     return "%d:%02d".format(m, s)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ShortsGridContent(
+    hits: List<SearchHit.ShortHit>,
+    isLoadingMore: Boolean,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    onLoadMore: () -> Unit,
+    onHitClick: (SearchHit) -> Unit,
+    onTrackMoreClick: (Track) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val gridState = rememberLazyGridState()
+    LaunchedEffect(gridState) {
+        snapshotFlow {
+            val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val total = gridState.layoutInfo.totalItemsCount
+            total > 0 && last >= total - 4
+        }.collect { nearEnd -> if (nearEnd) onLoadMore() }
+    }
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            state = gridState,
+            contentPadding = PaddingValues(bottom = 160.dp, top = 8.dp, start = 12.dp, end = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            gridItemsIndexed(hits, key = { _, item -> item.stableKey }) { _, hit ->
+                ShortResultCard(
+                    hit = hit,
+                    onClick = { onHitClick(hit) },
+                    onMoreClick = { onTrackMoreClick(hit.track) },
+                )
+            }
+            if (isLoadingMore) {
+                item(span = { GridItemSpan(2) }) {
+                    Box(
+                        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        VzLoading(Modifier.size(96.dp))
+                    }
+                }
+            }
+            if (!isLoadingMore) {
+                item(span = { GridItemSpan(2) }) { AppCredits() }
+            }
+        }
+    }
+}
+
+@Composable
+fun ShortResultCard(hit: SearchHit.ShortHit, onClick: () -> Unit, onMoreClick: () -> Unit) {
+    val nowPlaying = LocalNowPlaying.current
+    val isCurrent = nowPlaying.isCurrent(hit.track.id, hit.track.source)
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onClick() }) {
+        Box(Modifier.fillMaxWidth().aspectRatio(9f / 16f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.06f))) {
+            if (hit.track.thumbnailUrl != null) {
+                AsyncImage(
+                    model = hit.track.thumbnailUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            if (hit.track.durationSeconds > 0) {
+                Box(
+                    Modifier.align(Alignment.BottomEnd).padding(6.dp)
+                        .clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.7f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        formatDuration(hit.track.durationSeconds),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                    )
+                }
+            }
+            if (isCurrent) {
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
+                    Text(
+                        if (nowPlaying.isPlaying) "Tocando" else "Pausado",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                Text(hit.track.title, style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(2.dp))
+                TrackSubtitle(hit.track, style = MaterialTheme.typography.bodySmall, prefixColor = Color.White.copy(alpha = 0.55f), artistColor = Color.White.copy(alpha = 0.6f))
+            }
+            IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
+                Icon(VzIcons.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
+            }
+        }
+    }
 }

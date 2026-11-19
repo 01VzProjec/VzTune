@@ -7,6 +7,7 @@ import com.vztechcore.vztune.core.domain.search.SearchFilter
 import com.vztechcore.vztune.core.domain.search.SearchHit
 import com.vztechcore.vztune.core.domain.search.SearchResult
 import com.vztechcore.vztune.core.domain.search.SearchSuggestions
+import com.vztechcore.vztune.data.youtube.YouTubeChannelInfo
 import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicTextUtils
@@ -34,6 +35,12 @@ class MusicRepository @Inject constructor(
         val mimeType: String?,
         val quality: String?,
     )
+
+    suspend fun getChannelForVideo(videoId: String): YouTubeChannelInfo? =
+        runCatching { youTubeRepository.getChannelForVideo(videoId) }.getOrNull()
+
+    suspend fun getChannelForPlaylist(playlistId: String): YouTubeChannelInfo? =
+        runCatching { youTubeRepository.getChannelForPlaylist(playlistId) }.getOrNull()
 
     /** Extração de áudio via NewPipe (delegado pro YouTubeRepository). */
     suspend fun getStreamUrl(track: Track): String? {
@@ -178,6 +185,7 @@ class MusicRepository @Inject constructor(
         return when (filter) {
             SearchFilter.ALL -> searchAll(query, loadMore, state)
             SearchFilter.VIDEOS -> searchVideos(query, loadMore, state)
+            SearchFilter.SHORTS -> searchShorts(query, loadMore, state)
             SearchFilter.SONGS -> searchSongs(query, loadMore, state)
             SearchFilter.PLAYLISTS -> searchPlaylists(query, loadMore, state)
             else -> searchOther(query, filter, loadMore, state)
@@ -229,6 +237,13 @@ class MusicRepository @Inject constructor(
         val ytPage = youTubeRepository.searchVideos(query, loadMore, 30, searchId = "$query|VIDEOS")
         state.ytHasMore = ytPage.hasMore
         val newHits = ytPage.items.filter { state.seenKeys.add(it.stableKey) }
+        return SearchResult.Success(newHits, state.ytHasMore)
+    }
+
+    private suspend fun searchShorts(query: String, loadMore: Boolean, state: SearchState): SearchResult {
+        val shortPage = youTubeRepository.searchShorts(query, loadMore, 30, searchId = "$query|SHORTS")
+        state.ytHasMore = shortPage.hasMore
+        val newHits = shortPage.items.filter { state.seenKeys.add(it.stableKey) }
         return SearchResult.Success(newHits, state.ytHasMore)
     }
 

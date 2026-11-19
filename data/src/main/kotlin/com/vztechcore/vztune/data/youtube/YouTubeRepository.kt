@@ -74,17 +74,23 @@ class YouTubeRepository @Inject constructor(
 
     private val videoSearches = mutableMapOf<String, VideoSearchSession>()
     private val playlistSearches = mutableMapOf<String, PlaylistSearchSession>()
+    private val shortSearches = mutableMapOf<String, VideoSearchSession>()
 
     fun resetSession() {
         videoSearches.clear()
         playlistSearches.clear()
+        shortSearches.clear()
     }
 
     /** Canal do YouTube (não-artista do YT Music): vídeos que ele postou. */
     data class ChannelPage(
         val videos: List<Track>,
+        val shorts: List<Track> = emptyList(),
+        val playlists: List<Playlist> = emptyList(),
         val channelName: String?,
         val avatarUrl: String?,
+        val bannerUrl: String? = null,
+        val description: String? = null,
         val subscriberCount: String?,
     )
 
@@ -159,6 +165,54 @@ class YouTubeRepository @Inject constructor(
         }.getOrElse { e ->
             Log.e(TAG, "searchPlaylists failed for query=$query", e)
             emptyList()
+        }
+    }
+
+    
+    data class ShortPage(
+        val items: List<SearchHit.ShortHit>,
+        val hasMore: Boolean,
+    )
+
+    suspend fun searchShorts(
+        query: String,
+        loadMore: Boolean,
+        pageSize: Int = 30,
+        searchId: String = query,
+    ): ShortPage = withContext(Dispatchers.IO) {
+        if (!NewPipeInitializer.ensureInitialized(downloader)) {
+            Log.e(TAG, "searchShorts: NewPipe not initialized")
+            return@withContext ShortPage(emptyList(), false)
+        }
+        runCatching {
+            if (!loadMore) {
+                val extractor = runCatching {
+                    ServiceList.YouTube.getSearchExtractor(query, listOf("shorts"), null)
+                }.getOrElse { ServiceList.YouTube.getSearchExtractor(query) }
+                extractor.fetchPage()
+                val session = VideoSearchSession(extractor, extractor.initialPage.nextPage)
+                shortSearches[searchId] = session
+                val items = parseShortItems(extractor.initialPage.items).take(pageSize)
+                if (items.isEmpty()) {
+                    val generic = ServiceList.YouTube.getSearchExtractor(query)
+                    generic.fetchPage()
+                    val genericItems = parseShortItems(generic.initialPage.items).take(pageSize)
+                    ShortPage(genericItems, generic.initialPage.nextPage != null)
+                } else {
+                    ShortPage(items, session.nextPage != null)
+                }
+            } else {
+                val session = shortSearches[searchId]
+                    ?: return@runCatching ShortPage(emptyList(), false)
+                val page = session.nextPage
+                    ?: return@runCatching ShortPage(emptyList(), false)
+                val next = session.extractor.getPage(page)
+                session.nextPage = next.nextPage
+                ShortPage(parseShortItems(next.items).take(pageSize), session.nextPage != null)
+            }
+        }.getOrElse { e ->
+            Log.e(TAG, "searchShorts failed for query=$query", e)
+            ShortPage(emptyList(), false)
         }
     }
 
@@ -514,7 +568,14 @@ class YouTubeRepository @Inject constructor(
     private fun extractVideoId(url: String): String? = try {
         val uri = Uri.parse(url)
         uri.getQueryParameter("v")
-            ?: uri.lastPathSegment?.takeIf { uri.host?.contains("youtu.be") == true }
+            ?: run {
+                val path = uri.path ?: ""
+                if (path.contains("/shorts/")) {
+                    path.substringAfter("/shorts/").substringBefore("/").substringBefore("?").takeIf { it.isNotBlank() }
+                } else {
+                    uri.lastPathSegment?.takeIf { uri.host?.contains("youtu.be") == true }
+                }
+            }
     } catch (e: Exception) {
         null
     }
@@ -556,7 +617,37 @@ class YouTubeRepository @Inject constructor(
         }.getOrNull()
     }
 
-    /**
+    
+    suspend fun getChannelForPlaylist(playlistId: String): YouTubeChannelInfo? = withContext(Dispatchers.IO) {
+        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
+        val rawId = playlistId.removePrefix("YT:").removePrefix("VL").trim()
+        if (rawId.isBlank()) return@withContext null
+        runCatching {
+            val extractor = ServiceList.YouTube.getPlaylistExtractor(
+                "https://www.youtube.com/playlist?list=$rawId"
+            )
+            extractor.fetchPage()
+            val uploaderName = extractor.uploaderName?.trim().orEmpty()
+            val uploaderUrl = extractor.uploaderUrl?.trim().orEmpty()
+            if (uploaderName.isBlank() || uploaderUrl.isBlank()) return@runCatching null
+            val channelId = extractChannelId(uploaderUrl) ?: return@runCatching null
+            val avatarUrl = runCatching {
+                val ch = ServiceList.YouTube.getChannelExtractor(
+                    "https://www.youtube.com/channel/$channelId"
+                )
+                ch.fetchPage()
+                ch.avatars?.lastOrNull()?.url
+            }.getOrNull()
+            YouTubeChannelInfo(
+                channelId = channelId,
+                channelName = cleanChannelName(uploaderName),
+                avatarUrl = avatarUrl,
+                channelUrl = uploaderUrl,
+            )
+        }.getOrNull()
+    }
+
+/**
      * Extrai o UC... de uma uploaderUrl do NewPipe.
      * Formas: .../channel/UC..., .../UC..., .../@handle, .../c/nome, .../user/nome.
      * @handle / /c / /user não têm UC na URL -> resolve via ChannelExtractor do NewPipe.
@@ -587,53 +678,78 @@ class YouTubeRepository @Inject constructor(
      * canal pelo ID, nunca por nome. O comportamento é o mesmo do FIX 6,
      * só muda a fonte da lista.
      */
+    private data class ChannelHeader(
+        val name: String,
+        val avatar: String?,
+        val banner: String?,
+        val description: String,
+        val subs: String?,
+    )
+
     suspend fun browseChannel(channelId: String): ChannelPage? = withContext(Dispatchers.IO) {
         if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
         if (channelId.isBlank() || !channelId.startsWith("UC")) return@withContext null
-        // 1) Cabeçalho (nome, avatar, inscritos) via ChannelExtractor.
-        //    Esses métodos existem na v0.26.5 (compilaram); best effort.
         val header = runCatching {
             val extractor = ServiceList.YouTube.getChannelExtractor(
                 "https://www.youtube.com/channel/$channelId"
             )
             extractor.fetchPage()
-            Triple(
-                runCatching { extractor.name }.getOrNull()?.trim().orEmpty(),
-                runCatching { extractor.avatars?.lastOrNull()?.url }.getOrNull(),
-                runCatching {
+            ChannelHeader(
+                name = runCatching { extractor.name }.getOrNull()?.trim().orEmpty(),
+                avatar = runCatching { extractor.avatars?.lastOrNull()?.url }.getOrNull(),
+                banner = runCatching { extractor.banners?.lastOrNull()?.url }.getOrNull(),
+                description = runCatching { extractor.description }.getOrNull()?.trim().orEmpty(),
+                subs = runCatching {
                     extractor.subscriberCount.takeIf { it > 0 }?.let { formatSubscribers(it) }
                 }.getOrNull(),
             )
         }.getOrNull()
-        val channelName = header?.first.orEmpty()
-        // 2) Vídeos via playlist "Uploads" (UU...). Sem vídeos, não há o que
-        //    mostrar: retorna null e a tela mostra erro, nunca outro canal.
-        val videos = runCatching {
+        val channelName = header?.name.orEmpty()
+        val allUploads = runCatching {
             val uploadsPlaylistId = "UU" + channelId.drop(2)
             val playlist = ServiceList.YouTube.getPlaylistExtractor(
                 "https://www.youtube.com/playlist?list=$uploadsPlaylistId"
             )
             playlist.fetchPage()
-            playlist.initialPage.items
-                .filterIsInstance<StreamInfoItem>()
-                .mapNotNull { stream ->
-                    val videoId = extractVideoId(stream.url) ?: return@mapNotNull null
-                    Track(
-                        id = videoId,
-                        title = stream.name ?: "Untitled",
-                        artist = channelName,
-                        durationSeconds = stream.duration,
-                        thumbnailUrl = stream.thumbnails.lastOrNull()?.url,
-                        source = Source.YOUTUBE,
-                    )
-                }
+            playlist.initialPage.items.filterIsInstance<StreamInfoItem>()
         }.getOrDefault(emptyList())
-        if (videos.isEmpty()) return@withContext null
+        val videos = allUploads.filterNot { it.url?.contains("/shorts/") == true }.mapNotNull { stream ->
+            val videoId = extractVideoId(stream.url ?: return@mapNotNull null) ?: return@mapNotNull null
+            Track(
+                id = videoId,
+                title = stream.name ?: "Untitled",
+                artist = channelName,
+                durationSeconds = stream.duration,
+                thumbnailUrl = stream.thumbnails.lastOrNull()?.url,
+                source = Source.YOUTUBE,
+            )
+        }
+        val shorts = allUploads.filter { it.url?.contains("/shorts/") == true }.mapNotNull { stream ->
+            val videoId = extractVideoId(stream.url ?: return@mapNotNull null) ?: return@mapNotNull null
+            Track(
+                id = videoId,
+                title = stream.name ?: "Untitled",
+                artist = channelName,
+                durationSeconds = stream.duration,
+                thumbnailUrl = stream.thumbnails.lastOrNull()?.url,
+                source = Source.YOUTUBE,
+            )
+        }
+        if (videos.isEmpty() && shorts.isEmpty()) return@withContext null
+        val playlists = if (channelName.isBlank()) emptyList() else runCatching {
+            searchPlaylists(channelName, loadMore = false, pageSize = 12, searchId = "channel_${channelId}_playlists")
+                .filter { it.playlist.owner?.equals(channelName, ignoreCase = true) == true }
+                .map { it.playlist }
+        }.getOrDefault(emptyList())
         ChannelPage(
             videos = videos,
+            shorts = shorts,
+            playlists = playlists,
             channelName = channelName.takeIf { it.isNotBlank() },
-            avatarUrl = header?.second,
-            subscriberCount = header?.third,
+            avatarUrl = header?.avatar,
+            bannerUrl = header?.banner,
+            description = header?.description?.takeIf { it.isNotBlank() },
+            subscriberCount = header?.subs,
         )
     }
 

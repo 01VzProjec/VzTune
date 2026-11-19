@@ -44,6 +44,7 @@ class MediaListViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     @ApplicationContext private val context: Context,
     private val ytMusicRepository: YTMusicRepository,
+    private val youTubeRepository: com.vztechcore.vztune.data.youtube.YouTubeRepository,
     private val playerController: PlayerController,
     private val trackDownloader: TrackDownloader,
     private val store: MediaListPreferencesStore,
@@ -198,6 +199,19 @@ class MediaListViewModel @Inject constructor(
                         !resolvedOwner.isNullOrBlank() && !isYouTubePlaylist
                     ) {
                         loadPlaylistOwnerAvatar(resolvedOwner)
+                    }
+
+                    // Playlist do YouTube sem UC no InnerTube: resolve via NewPipe
+                    if (isYouTubePlaylist && _uiState.value.artistId.isNullOrBlank()) {
+                        val channel = runCatching { youTubeRepository.getChannelForPlaylist(route.id) }.getOrNull()
+                        if (channel != null) {
+                            _uiState.update {
+                                it.copy(
+                                    artistId = channel.channelId,
+                                    ownerAvatarUrl = channel.avatarUrl ?: it.ownerAvatarUrl,
+                                )
+                            }
+                        }
                     }
                 }
             }.onFailure { e ->

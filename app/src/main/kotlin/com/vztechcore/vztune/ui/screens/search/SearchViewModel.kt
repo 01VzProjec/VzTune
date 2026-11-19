@@ -251,6 +251,7 @@ class SearchViewModel @Inject constructor(
         when (hit) {
             is SearchHit.SongHit -> playRadio(hit.track)
             is SearchHit.VideoHit -> playRadio(hit.track)
+            is SearchHit.ShortHit -> playRadio(hit.track)
             is SearchHit.PlaylistHit -> {
                 viewModelScope.launch {
                     _navigationEvent.emit(

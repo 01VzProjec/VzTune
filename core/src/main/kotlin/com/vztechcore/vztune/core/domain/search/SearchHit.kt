@@ -20,6 +20,10 @@ sealed interface SearchHit {
         override val stableKey: String get() = "video_${track.id}"
     }
 
+    data class ShortHit(val track: Track) : SearchHit {
+        override val stableKey: String get() = "short_${track.id}"
+    }
+
     data class PlaylistHit(val playlist: Playlist) : SearchHit {
         override val stableKey: String get() = "playlist_${playlist.source.name}_${playlist.id}"
     }

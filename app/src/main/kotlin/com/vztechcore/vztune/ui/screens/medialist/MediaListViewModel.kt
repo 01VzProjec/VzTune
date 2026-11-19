@@ -46,7 +46,6 @@ class MediaListViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val ytMusicRepository: YTMusicRepository,
     private val youTubeRepository: YouTubeRepository,
-    private val youTubeRepository: com.vztechcore.vztune.data.youtube.YouTubeRepository,
     private val playerController: PlayerController,
     private val trackDownloader: TrackDownloader,
     private val store: MediaListPreferencesStore,

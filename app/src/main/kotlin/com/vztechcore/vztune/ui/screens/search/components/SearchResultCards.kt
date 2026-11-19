@@ -3,6 +3,7 @@ package com.vztechcore.vztune.ui.screens.search.components
 // Unificacao: SwipeableRow, RowCard e VideoResultCard duplicados foram para components/rows e components/cards.
 // Aqui so ficou a lista + o mapeamento SearchHit -> card. Sem logica duplicada.
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -335,7 +336,7 @@ fun ShortResultCard(hit: SearchHit.ShortHit, onClick: () -> Unit, onMoreClick: (
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        formatDuration(hit.track.durationSeconds),
+                        formatDuration(hit.track.durationSeconds) ?: "",
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White,
                     )

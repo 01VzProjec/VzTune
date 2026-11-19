@@ -343,6 +343,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             onPrepareTrackMenu = menuVm::resolveAlbumFor,
                             onOpenAlbum = { album -> navController.openAlbum(album) },
                             onOpenArtistByName = vm::onOpenArtistByName,
+                        onOpenArtistForTrack = vm::onOpenArtistForTrack,
                             onTrackInfoClick = { navController.navigateToTrackInfo(it) },
                         )
                     }

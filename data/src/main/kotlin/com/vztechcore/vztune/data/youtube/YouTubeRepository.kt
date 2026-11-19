@@ -175,7 +175,8 @@ class YouTubeRepository @Inject constructor(
     )
 
 
-        // FIX8_SHORTS - Shorts definitivo: 3 tentativas + parser que nao joga tudo fora.
+        // FIX9_SEARCHSHORTS_DONE - Shorts definitivo (FIX8 + All)
+    // FIX8_SHORTS - Shorts definitivo: 3 tentativas + parser que nao joga tudo fora.
     // Antes: filtro "shorts" falhava e o parser so aceitava /shorts/, entao busca generica voltava vazia.
     // Agora: 1) filtro shorts, 2) busca normal, 3) busca "query shorts". Parser aceita /shorts/ e, como fallback, watch curto (<=65s).
 
@@ -205,7 +206,7 @@ class YouTubeRepository @Inject constructor(
         val attempt1 = runCatching {
             val extractor = ServiceList.YouTube.getSearchExtractor(query, listOf("shorts"), null)
             extractor.fetchPage()
-            val items = parseShortItemsStrict(extractor.initialPage.items).take(pageSize)
+            val items = parseShortItemsAll(extractor.initialPage.items).take(pageSize)
             if (items.isNotEmpty()) {
                 shortSearches[searchId] = VideoSearchSession(extractor, extractor.initialPage.nextPage)
                 return@withContext ShortPage(items, extractor.initialPage.nextPage != null)
@@ -230,12 +231,33 @@ class YouTubeRepository @Inject constructor(
             val extractor = ServiceList.YouTube.getSearchExtractor("$query shorts")
             extractor.fetchPage()
             val strict = parseShortItemsStrict(extractor.initialPage.items).take(pageSize)
-            val items = if (strict.isNotEmpty()) strict else parseShortItemsLoose(extractor.initialPage.items).take(pageSize)
+            val loose = if (strict.isNotEmpty()) strict else parseShortItemsLoose(extractor.initialPage.items).take(pageSize)
+            val items = if (loose.isNotEmpty()) loose else parseShortItemsAll(extractor.initialPage.items).take(pageSize)
             shortSearches[searchId] = VideoSearchSession(extractor, extractor.initialPage.nextPage)
             ShortPage(items, extractor.initialPage.nextPage != null)
         }.getOrElse { e ->
             Log.e(TAG, "searchShorts failed for query=$query", e)
             ShortPage(emptyList(), false)
+        }
+    }
+
+    // FIX9_ALL - Quando a busca ja veio filtrada pra Shorts, TODO item E Shorts.
+    // Nao filtra por /shorts/ nem por duracao: o NewPipe devolve Shorts com URL watch?v=
+    // mesmo filtrado, e o FIX8 jogava tudo fora por causa disso.
+    private fun parseShortItemsAll(items: List<InfoItem>): List<SearchHit.ShortHit> {
+        return items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
+            val rawUrl = stream.url ?: return@mapNotNull null
+            val videoId = extractVideoId(rawUrl) ?: return@mapNotNull null
+            SearchHit.ShortHit(
+                Track(
+                    id = videoId,
+                    title = stream.name ?: "Untitled",
+                    artist = stream.uploaderName ?: "",
+                    durationSeconds = stream.duration,
+                    thumbnailUrl = stream.thumbnails.lastOrNull()?.url,
+                    source = Source.YOUTUBE,
+                )
+            )
         }
     }
 

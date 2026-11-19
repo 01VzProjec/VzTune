@@ -66,6 +66,7 @@ fun SearchScreen(
     onPrepareTrackMenu: (Track) -> Unit = {},
     onOpenAlbum: (Album) -> Unit = {},
     onOpenArtistByName: (String) -> Unit = {},
+    onOpenArtistForTrack: (Track, String) -> Unit = { _, _ -> },
     onTrackInfoClick: (Track) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -98,6 +99,7 @@ fun SearchScreen(
             onOpenDownloadsScreen = onOpenDownloadsScreen,
             onOpenAlbum = onOpenAlbum,
             onOpenArtistByName = onOpenArtistByName,
+            onOpenArtistForTrack = onOpenArtistForTrack,
             onTrackInfo = onTrackInfoClick,
         )
     }

@@ -2,6 +2,8 @@ package com.vztechcore.vztune.ui.screens.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.vztechcore.vztune.core.domain.music.Artist
+import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchFilter
 import com.vztechcore.vztune.core.domain.search.SearchHit
@@ -18,6 +20,7 @@ import com.vztechcore.vztune.data.prefs.store.FavoriteTracksStore
 import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
 import com.vztechcore.vztune.data.prefs.store.RecentPlayedStore
 import com.vztechcore.vztune.data.prefs.store.SearchHistoryStore
+import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -39,6 +42,7 @@ import javax.inject.Inject
 class SearchViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
     private val ytMusicRepository: YTMusicRepository,
+    private val youTubeRepository: YouTubeRepository,
     private val historyStore: SearchHistoryStore,
     private val recentPlayedStore: RecentPlayedStore,
     private val favoriteTracksStore: FavoriteTracksStore,
@@ -329,6 +333,43 @@ class SearchViewModel @Inject constructor(
             if (found != null) {
                 _navigationEvent.emit(NavigationEvent.OpenArtist(found.id, found.name, found.thumbnailUrl))
             }
+        }
+    }
+
+    /** FIX9: Clique em artista DENTRO de uma faixa no Search. Igual ao TrackMenuViewModel. */
+    fun onOpenArtistForTrack(track: Track, artistName: String) {
+        // Video do YouTube: o "artista" e o CANAL. Nunca resolve por nome no YT Music.
+        if (track.source == Source.YOUTUBE) {
+            onOpenChannelForTrack(track)
+            return
+        }
+        viewModelScope.launch {
+            val found = runCatching {
+                ytMusicRepository.resolveArtist(
+                    artistName,
+                    trackTitle = track.title,
+                    albumTitle = track.album?.takeIf { it.isNotBlank() },
+                )
+            }.getOrNull()
+            if (found != null) {
+                _navigationEvent.emit(NavigationEvent.OpenArtist(found.id, found.name, found.thumbnailUrl))
+            }
+        }
+    }
+
+    /** FIX9: Canal real do video no Search. 1) InnerTube player -> UC. 2) NewPipe StreamExtractor -> UC. Sem nome. */
+    fun onOpenChannelForTrack(track: Track) {
+        viewModelScope.launch {
+            val fromInnerTube = runCatching { ytMusicRepository.getArtistFromVideo(track.id) }.getOrNull()
+            if (fromInnerTube != null) {
+                _navigationEvent.emit(NavigationEvent.OpenArtist(fromInnerTube.id, fromInnerTube.name, fromInnerTube.thumbnailUrl))
+                return@launch
+            }
+            val channel = runCatching { youTubeRepository.getChannelForVideo(track.id) }.getOrNull()
+            if (channel != null) {
+                _navigationEvent.emit(NavigationEvent.OpenArtist(channel.channelId, channel.channelName, channel.avatarUrl))
+            }
+            // channel == null -> nao navega. Nunca chuta artista por nome.
         }
     }
 

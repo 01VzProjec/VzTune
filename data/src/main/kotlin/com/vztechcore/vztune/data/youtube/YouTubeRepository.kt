@@ -550,6 +550,24 @@ class YouTubeRepository @Inject constructor(
         }
     }
 
+    private fun parseShortItems(items: List<InfoItem>): List<SearchHit.ShortHit> {
+        return items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
+            val rawUrl = stream.url ?: return@mapNotNull null
+            if (!rawUrl.contains("/shorts/")) return@mapNotNull null
+            val videoId = extractVideoId(rawUrl) ?: return@mapNotNull null
+            SearchHit.ShortHit(
+                Track(
+                    id = videoId,
+                    title = stream.name ?: "Untitled",
+                    artist = stream.uploaderName ?: "",
+                    durationSeconds = stream.duration,
+                    thumbnailUrl = stream.thumbnails.lastOrNull()?.url,
+                    source = Source.YOUTUBE,
+                )
+            )
+        }
+    }
+
     private fun parsePlaylistItems(items: List<InfoItem>): List<SearchHit.PlaylistHit> {
         return items.filterIsInstance<PlaylistInfoItem>().mapNotNull { playlist ->
             val listId = extractListId(playlist.url) ?: return@mapNotNull null

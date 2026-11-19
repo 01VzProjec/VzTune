@@ -1,8 +1,11 @@
 #!/bin/bash
-# VzTune HOTFIX FIX8 - ShortPage duplicado
-# Causa: FIX4 ja tinha "data class ShortPage" e o FIX8 inseriu outro.
-# O Kotlin nao deixa 2 classes com mesmo nome no mesmo arquivo -> Conflicting declarations.
-# Esse hotfix mantem o primeiro ShortPage e apaga os demais. Idempotente, pode rodar 2x.
+# VzTune HOTFIX FIX8 - ArtistViewModel Smart Cast
+# Erro: "Smart cast to 'String' is impossible, because 'channelName' is a public API property declared in different module."
+# Causa: channel.channelName vem do modulo :data (ChannelPage). O Kotlin NAO deixa fazer:
+#   if (channel.channelName != null) { channel.channelName.lowercase() }
+# porque o getter pode mudar entre a checagem e o uso. Tem que copiar pra variavel local primeiro.
+# Fix: val chName = channel?.channelName  e usar chName em vez de channel.channelName.
+# Idempotente: pode rodar 2x.
 set -e
 cd ~/VzTune 2>/dev/null || cd "$(dirname "$0")" || true
 python3 - << 'PY'
@@ -24,84 +27,75 @@ def must(cond, msg):
         print(f"FALHOU: {msg}")
         sys.exit(1)
 
-p = "data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeRepository.kt"
+p = "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistViewModel.kt"
 t = read(p)
 if t is not None:
-    # Conta ShortPage
-    count = t.count("data class ShortPage")
-    print(f"ShortPage antes: {count}x")
-    if count > 1:
-        # Mantem a primeira definicao, apaga as demais.
-        # Definicao padrao do FIX8/FIX4:
-        #     data class ShortPage(
-        #         val items: ...,
-        #         val hasMore: ...,
-        #     )
-        # Usa regex para achar todas as definicoes e remover da 2a em diante.
-        pattern = re.compile(r"    data class ShortPage\(\n(?:.*\n)*?    \)\n", re.MULTILINE)
-        matches = list(pattern.finditer(t))
-        print(f"Definicoes encontradas por regex: {len(matches)}")
-        if len(matches) > 1:
-            # Remove de tras pra frente para nao baguncar os indices
-            for m in reversed(matches[1:]):
-                t = t[:m.start()] + t[m.end():]
-            write(p, t)
-            print(f"OK: apagadas {len(matches)-1} duplicata(s) de ShortPage")
+    print(f"channel.channelName.lowercase antes: {t.count('channel.channelName.lowercase')}")
+    print(f"val chName antes: {t.count('val chName')}")
+    # 1) Cria variavel local antes do if, se ainda nao existe
+    if "val chName" not in t:
+        old_if = "            if (channel != null && channel.channelName != null) {"
+        if old_if in t:
+            t = t.replace(
+                old_if,
+                "            val chName = channel?.channelName\n            if (channel != null && chName != null) {",
+                1
+            )
+            print("OK: criado val chName antes do if")
         else:
-            # Fallback: definicao pode estar em linha unica ou formato diferente.
-            # Procura "data class ShortPage" e apaga ate o proximo "    )" ou ")"
-            parts = t.split("data class ShortPage")
-            # parts[0] + primeira + resto sem as demais
-            first = parts[1]
-            rest = "".join(parts[2:])
-            # No rest, remove blocos "(\n ... \n    )" que venham logo apos "data class ShortPage" removido
-            # Como ja removemos o marcador, o rest comeca com "(..." - apaga ate o primeiro "    )\n"
-            # Mas para nao apagar codigo errado, faz loop removendo o primeiro bloco ate "    )\n"
-            cleaned_rest = rest
-            # Se o rest ainda tem ShortPage duplicado, ele foi dividido - na verdade split ja removeu todos os marcadores,
-            # entao precisamos reconstruir: mantem primeira, e no resto remove o bloco "(...)" de cada duplicata.
-            # Como o split tirou o marcador, o resto tem "(...)" + codigo entre duplicatas. Vamos reconstruir com cuidado:
-            # Reconstroi a partir do original usando regex de novo com formato flexivel
-            t2 = read(p)  # ainda com duplicatas, pois write nao foi feito no fallback
-            # Regex flexivel: data class ShortPage + ate o primeiro ")\n" que fecha
-            pat2 = re.compile(r"\n    data class ShortPage\(.*?\)\n", re.DOTALL)
-            ms = list(pat2.finditer(t2))
-            if len(ms) > 1:
-                for m in reversed(ms[1:]):
-                    t2 = t2[:m.start()] + t2[m.end():]
+            print("AVISO: if do canal com formato diferente - tentando regex")
+            t2 = re.sub(
+                r"if \(channel != null && channel\.channelName != null\)",
+                "val chName = channel?.channelName\n            if (channel != null && chName != null)",
+                t, count=1
+            )
+            if t2 != t:
                 t = t2
-                write(p, t)
-                print(f"OK: apagadas {len(ms)-1} duplicata(s) via fallback")
-            else:
-                print("AVISO: formato de ShortPage diferente, nao consegui remover automatico - veja o arquivo")
+                print("OK: criado val chName via regex")
+    # 2) Usa chName no lugar de channel.channelName onde era smart cast
+    # 2a) lowercase - o erro do build
+    if "channel.channelName.lowercase()" in t:
+        t = t.replace("channel.channelName.lowercase()", "chName.lowercase()")
+        print("OK: channel.channelName.lowercase() -> chName.lowercase()")
+    # 2b) checagem dentro do if de videos
+    if "channel.shorts.isNotEmpty() || channel.channelName != null" in t:
+        t = t.replace(
+            "channel.shorts.isNotEmpty() || channel.channelName != null",
+            "channel.shorts.isNotEmpty() || chName != null"
+        )
+        print("OK: checagem shorts -> chName")
+    # 2c) name = channel.channelName ?: it.name  -> usa local (seguro e evita novo smart cast)
+    # So troca quando chName ja existe no escopo (ele existe, foi criado antes do primeiro if e fica visivel nos ifs seguintes)
+    if "name = channel.channelName ?: it.name" in t:
+        t = t.replace("name = channel.channelName ?: it.name", "name = chName ?: it.name")
+        print("OK: name = channel.channelName -> chName")
+    # 2d) qualquer outro channel.channelName que sobrou e ainda usa smart cast: troca por chName?. ou chName
+    # Nao troca "channel?.channelName" (a definicao do chName)
+    # Se sobrar "channel.channelName" solto, troca por "(chName ?: \"\")" para nao quebrar
+    remaining = [m.start() for m in re.finditer(r"channel\.channelName", t)]
+    # Remove a definicao "channel?.channelName" da contagem
+    remaining = [s for s in remaining if "channel?.channelName" not in t[max(0,s-2):s+30]]
+    if remaining:
+        print(f"AVISO: ainda restam {len(remaining)} usos de channel.channelName - trocando por chName com Elvis")
+        t = re.sub(r"channel\.channelName", "chName", t)
+        # Corrige a definicao que virou "chName = chName?.chName" se aconteceu
+        if "chName = chName?.chName" in t:
+            t = t.replace("chName = chName?.chName", "chName = channel?.channelName")
+        # Corrige "val chName = chName?.channelName" se aconteceu
+        if "val chName = chName" in t:
+            # volta para definicao correta
+            t = t.replace("val chName = chName?.channelName", "val chName = channel?.channelName")
+            t = t.replace("val chName = chName", "val chName = channel?.channelName")
+        print("OK: restantes trocados para chName")
+    write(p, t)
     t = read(p)
-    print(f"ShortPage depois: {t.count('data class ShortPage')}x")
-    must(t.count("data class ShortPage") == 1, "YouTubeRepository: ShortPage unico")
+    print(f"channel.channelName.lowercase depois: {t.count('channel.channelName.lowercase')}")
+    print(f"val chName depois: {t.count('val chName')}")
+    print(f"channel.channelName restante (sem ?. ): {t.count('channel.channelName')}")
+    must("channel.channelName.lowercase()" not in t, "ArtistViewModel: sem smart cast em channelName.lowercase")
+    must(t.count("val chName") == 1, "ArtistViewModel: chName unico")
+    must(t.count("{") == t.count("}"), "ArtistViewModel: chaves balanceadas")
+    print(f"Chaves: {t.count('{')} / {t.count('}')}")
 
-    # Seguranca: deduplica outras classes que o FIX8 pode ter duplicado junto (ChannelPage, ChannelHeader, VideoPage)
-    for cls in ["ChannelPage", "ChannelHeader", "VideoPage"]:
-        c = t.count(f"data class {cls}")
-        print(f"{cls}: {c}x")
-        if c > 1:
-            pat = re.compile(rf"    data class {cls}\(.*?    \)\n", re.DOTALL)
-            ms = list(pat.finditer(t))
-            if len(ms) > 1:
-                for m in reversed(ms[1:]):
-                    t = t[:m.start()] + t[m.end():]
-                write(p, t)
-                t = read(p)
-                print(f"OK: deduplicado {cls}")
-    # Deduplica funcoes que podem ter duplicado junto
-    for fn in ["fun searchShorts", "fun parseShortItemsStrict", "fun parseShortItemsLoose"]:
-        c = t.count(fn)
-        print(f"{fn}: {c}x")
-        if c > 1:
-            print(f"AVISO: {fn} duplicado - mantendo primeiro, removendo resto (verifique o build)")
-            # Remove duplicatas de funcao: acha todas as ocorrencias de "    suspend fun searchShorts" / "    private fun parse..."
-            # Para nao quebrar, so avisa - o erro atual e so ShortPage. Se build ainda falhar, me manda o novo erro.
-            pass
-    print(f"Chaves balanceadas: {t.count('{') - t.count('}')} (0 = ok)")
-    must(t.count("{") == t.count("}"), "YouTubeRepository: chaves balanceadas")
-
-print("\nHOTFIX aplicado. Roda o build de novo.")
+print("\nHOTFIX Smart Cast aplicado. Roda o build de novo.")
 PY

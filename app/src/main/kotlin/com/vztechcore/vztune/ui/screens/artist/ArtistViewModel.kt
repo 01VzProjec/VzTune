@@ -58,8 +58,9 @@ class ArtistViewModel @Inject constructor(
             val channel = if (isChannelId) runCatching { youTubeRepository.browseChannel(route.id) }.getOrNull() else null
             val music = runCatching { ytMusicRepository.browseArtist(route.id) }.getOrNull()
             val musicEmpty = music == null || (music.topSongs.isEmpty() && music.albums.isEmpty() && music.singles.isEmpty() && music.videos.isEmpty() && music.featured.isEmpty() && music.relatedArtists.isEmpty())
-            if (channel != null && channel.channelName != null) {
-                val channelNameNorm = channel.channelName.lowercase().trim()
+            val chName = channel?.channelName
+            if (channel != null && chName != null) {
+                val channelNameNorm = chName.lowercase().trim()
                 val musicNameNorm = (music?.name ?: "").lowercase().trim()
                 val namesMatch = !musicEmpty && (musicNameNorm.isNotBlank() && (channelNameNorm.contains(musicNameNorm) || musicNameNorm.contains(channelNameNorm) || channelNameNorm.split(" ").firstOrNull() == musicNameNorm.split(" ").firstOrNull()))
                 if (!musicEmpty && namesMatch) {
@@ -81,12 +82,12 @@ class ArtistViewModel @Inject constructor(
                     }
                     return@launch
                 }
-                if (channel.videos.isNotEmpty() || channel.shorts.isNotEmpty() || channel.channelName != null) {
+                if (channel.videos.isNotEmpty() || channel.shorts.isNotEmpty() || chName != null) {
                     // Canal real existe: mostra ele, mesmo que YT Music tenha devolvido artista diferente ou vazio.
                     _uiState.update {
                         it.copy(
                             isLoading = false, errorMessage = null,
-                            name = channel.channelName ?: it.name,
+                            name = chName ?: it.name,
                             thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl,
                             subscribers = channel.subscriberCount ?: it.subscribers,
                             description = channel.description ?: it.description,
@@ -115,7 +116,7 @@ class ArtistViewModel @Inject constructor(
             }
             if (channel != null) {
                 _uiState.update {
-                    it.copy(isLoading = false, errorMessage = null, name = channel.channelName ?: it.name, thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl, subscribers = channel.subscriberCount ?: it.subscribers, videos = channel.videos)
+                    it.copy(isLoading = false, errorMessage = null, name = chName ?: it.name, thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl, subscribers = channel.subscriberCount ?: it.subscribers, videos = channel.videos)
                 }
                 return@launch
             }

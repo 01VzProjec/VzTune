@@ -65,8 +65,10 @@ fun SearchResultsContent(
     ) {
         LazyColumn(
             state = lazyListState,
-            contentPadding = PaddingValues(bottom = 160.dp, top = 8.dp, start = 12.dp, end = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(if (isVideoMode) 20.dp else 4.dp),
+            // Tamanho igual a playlist: linha ja da 16dp esq / 8dp dir, entao o pai nao repete padding lateral.
+            // Video mantem 12dp do pai + VzVideoCard 0dp = 12dp, igual MediaList.
+            contentPadding = PaddingValues(bottom = 160.dp, top = 8.dp, start = if (isVideoMode) 12.dp else 0.dp, end = if (isVideoMode) 12.dp else 0.dp),
+            verticalArrangement = Arrangement.spacedBy(if (isVideoMode) 20.dp else 0.dp),
         ) {
             itemsIndexed(hits, key = { _, item -> item.stableKey }) { _, hit ->
                 if (isVideoMode && hit is SearchHit.VideoHit) {

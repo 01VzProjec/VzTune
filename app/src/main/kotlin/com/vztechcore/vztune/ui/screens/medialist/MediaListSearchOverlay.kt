@@ -28,7 +28,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.ui.components.AppCredits
+import com.vztechcore.vztune.ui.components.feedback.VzEmptyState
+import com.vztechcore.vztune.ui.components.layout.VzSearchInputBar
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Close
@@ -67,9 +68,6 @@ internal fun MediaListSearchOverlay(
     val nowPlaying = LocalNowPlaying.current
 
     LaunchedEffect(Unit) {
-        // Espera o slide da tela terminar (300 ms) antes de abrir o teclado.
-        // Antes o teclado abria no meio do slide -> resize + recomposicao travavam o slide.
-        delay(320)
         focusRequester.requestFocus()
     }
 
@@ -87,96 +85,18 @@ internal fun MediaListSearchOverlay(
             .background(Color.Black.copy(alpha = 0.96f))
             .statusBarsPadding(),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.1f))
-                    .clickable {
-                        keyboardController?.hide()
-                        onClose()
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = VzIcons.Close,
-                    contentDescription = "Fechar pesquisa",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.White.copy(alpha = 0.08f))
-                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(50))
-                    .padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = VzIcons.Search,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.6f),
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Box(Modifier.weight(1f)) {
-                    if (query.isEmpty()) {
-                        Text(
-                            text = if (isAlbum) "Pesquisar no álbum..." else "Pesquisar na playlist...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.45f),
-                        )
-                    }
-                    BasicTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        singleLine = true,
-                        textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
-                        cursorBrush = SolidColor(Color.White),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focusRequester),
-                    )
-                }
-                if (query.isNotEmpty()) {
-                    Icon(
-                        imageVector = VzIcons.Close,
-                        contentDescription = "Limpar texto",
-                        tint = Color.White.copy(alpha = 0.65f),
-                        modifier = Modifier
-                            .size(18.dp)
-                            .clickable { query = "" },
-                    )
-                }
-            }
-        }
+        VzSearchInputBar(
+            query = query,
+            onQueryChange = { query = it },
+            onClose = { keyboardController?.hide(); onClose() },
+            placeholder = if (isAlbum) "Pesquisar no álbum..." else "Pesquisar na playlist...",
+            focusRequester = focusRequester,
+            onSearch = { keyboardController?.hide() },
+            closeOnStart = true,
+        )
 
         if (filteredTracks.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "Nenhuma faixa encontrada para \"$query\"",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.55f),
-                )
-            }
+            VzEmptyState(text = "Nenhuma faixa encontrada para \"$query\"", fillMaxSize = true)
         } else {
             LazyColumn(
                 contentPadding = PaddingValues(top = 4.dp, bottom = 140.dp),

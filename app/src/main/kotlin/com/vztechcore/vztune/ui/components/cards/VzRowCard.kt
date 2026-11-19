@@ -31,6 +31,11 @@ import com.vztechcore.vztune.ui.icons.actions.MoreVert
 /**
  * Card generico de linha: thumbnail + titulo + subtitulo + duracao + botao •••.
  * Era o RowCard privado do Search. Agora e compartilhado.
+ *
+ * TAMANHO = IGUAL ao VzTrackRow (card das playlists):
+ * thumbnail 52dp, canto 6dp, padding 16dp esq / 8dp dir / 6dp cima-baixo,
+ * botao ••• 40dp. Antes era 56dp + 8dp, por isso o Search parecia maior.
+ * Altura total: 52 + 12 = 64dp, igual a playlist.
  */
 @Composable
 fun VzRowCard(
@@ -47,9 +52,9 @@ fun VzRowCard(
     mosaic: List<String> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onClick() }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (mosaic.size >= 4) { Box(Modifier.size(56.dp)) { PlaylistMosaic(mosaic) } }
-        else { MediaThumbnail(imageUrl = imageUrl, shape = shape, size = 56.dp, cornerRadius = 8.dp, isPlaying = isPlaying, isPaused = isPaused) }
+    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onClick() }.padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (mosaic.size >= 4) { Box(Modifier.size(52.dp)) { PlaylistMosaic(mosaic) } }
+        else { MediaThumbnail(imageUrl = imageUrl, shape = shape, size = 52.dp, cornerRadius = 6.dp, isPlaying = isPlaying, isPaused = isPaused) }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(text = title, style = MaterialTheme.typography.titleSmall, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -61,7 +66,7 @@ fun VzRowCard(
             Text(text = durationLabel, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
         }
         if (showMoreButton) {
-            IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
+            IconButton(onClick = onMoreClick, modifier = Modifier.size(40.dp)) {
                 Icon(imageVector = VzIcons.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.7f))
             }
         }

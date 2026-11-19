@@ -32,7 +32,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +53,8 @@ import com.vztechcore.vztune.data.prefs.models.FollowedArtist
 import com.vztechcore.vztune.ui.components.AppCredits
 import com.vztechcore.vztune.ui.components.cards.ArtistCircleCard
 import com.vztechcore.vztune.ui.components.cards.TrackListRow
+import com.vztechcore.vztune.ui.components.feedback.VzEmptyState
+import com.vztechcore.vztune.ui.components.layout.VzSearchInputBar
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Close
 import com.vztechcore.vztune.ui.icons.navigation.Search
@@ -72,13 +73,7 @@ internal fun LibraryListSearchOverlay(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    LaunchedEffect(Unit) {
-        // Espera o slide da tela terminar (300 ms) antes de abrir o teclado.
-        // Antes o teclado abria no meio do slide -> resize + recomposicao
-        // travavam o slide e parecia que a tela demorava pra abrir.
-        delay(320)
-        focusRequester.requestFocus()
-    }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     val filteredTracks = remember(tracks, query) {
         if (query.isBlank()) tracks.sortedBy { it.title.lowercase() }
@@ -95,7 +90,7 @@ internal fun LibraryListSearchOverlay(
     Box(Modifier.fillMaxSize().background(Color(0xFF0A0F1E))) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
 
-            SearchInputBar(
+            VzSearchInputBar(
                 query = query,
                 onQueryChange = { query = it },
                 onClose = onClose,
@@ -114,8 +109,8 @@ internal fun LibraryListSearchOverlay(
             )
 
             when {
-                isArtistMode && filteredArtists.isEmpty() -> EmptySearchResult(query)
-                !isArtistMode && filteredTracks.isEmpty() -> EmptySearchResult(query)
+                isArtistMode && filteredArtists.isEmpty() -> VzEmptyState(text = if (query.isBlank()) "Nada por aqui." else "Nada encontrado para \"$query\"", fillMaxSize = true)
+                !isArtistMode && filteredTracks.isEmpty() -> VzEmptyState(text = if (query.isBlank()) "Nada por aqui." else "Nada encontrado para \"$query\"", fillMaxSize = true)
 
                 isArtistMode -> LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
@@ -158,72 +153,5 @@ internal fun LibraryListSearchOverlay(
 }
 
 @Composable
-private fun EmptySearchResult(query: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = if (query.isBlank()) "Nada por aqui." else "Nada encontrado para \"$query\"",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.5f),
-        )
-    }
-}
 
 @Composable
-private fun SearchInputBar(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onClose: () -> Unit,
-    placeholder: String,
-    focusRequester: FocusRequester,
-    onSearch: () -> Unit,
-) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(
-            Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(50))
-                .background(Color.White.copy(alpha = 0.12f))
-                .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(50))
-                .padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(VzIcons.Search, null, tint = Color.White.copy(alpha = 0.55f), modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(10.dp))
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                singleLine = true,
-                textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
-                cursorBrush = SolidColor(Color.White),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-                modifier = Modifier.weight(1f).focusRequester(focusRequester),
-                decorationBox = { inner ->
-                    Box(contentAlignment = Alignment.CenterStart) {
-                        if (query.isEmpty()) {
-                            Text(placeholder, color = Color.White.copy(alpha = 0.45f), fontSize = 15.sp)
-                        }
-                        inner()
-                    }
-                },
-            )
-            if (query.isNotEmpty()) {
-                Box(
-                    Modifier.size(24.dp).clip(CircleShape).clickable { onQueryChange("") },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(VzIcons.Close, "Limpar", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
-                }
-            }
-        }
-        Spacer(Modifier.width(8.dp))
-        Box(
-            Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
-                .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape).clickable { onClose() },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(VzIcons.Close, "Fechar busca", tint = Color.White, modifier = Modifier.size(22.dp))
-        }
-    }
-}

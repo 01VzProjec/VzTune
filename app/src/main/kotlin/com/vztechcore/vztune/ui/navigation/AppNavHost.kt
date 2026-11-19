@@ -252,7 +252,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             onTrackClick = vm::onTrackClick,
                             onTrackInfoClick = { t -> openTrackMenu(t, context = TrackMenuContext.DEFAULT) },
                             onArtistClick = { artist ->
-                                navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl, isYouTubeChannel = artist.source == Source.YOUTUBE))
+                                navController.navigate(Routes.Artist(artist.id, artist.name, artist.thumbnailUrl, isYouTubeChannel = artist.isYouTubeChannel))
                             },
                             onShuffleClick = vm::onShuffleClick,
                             onPlayAllClick = vm::onPlayAllClick,

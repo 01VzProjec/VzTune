@@ -142,7 +142,7 @@ class ArtistViewModel @Inject constructor(
     fun onFollowClick() {
         val state = _uiState.value
         viewModelScope.launch {
-            followedStore.toggle(FollowedArtist(state.artistId, state.name, state.thumbnailUrl))
+            followedStore.toggle(FollowedArtist(state.artistId, state.name, state.thumbnailUrl, isYouTubeChannel = state.isYouTubeChannel))
         }
     }
 

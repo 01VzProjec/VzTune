@@ -49,87 +49,80 @@ class ArtistViewModel @Inject constructor(
         }
     }
 
+    // FIX8_ARTIST - Se UC tem canal real, o canal e a verdade. Se YT Music devolver nome totalmente diferente, ignora YT Music.
+    // Antes: se YT Music devolvesse qualquer artista nao-vazio (ex: Moldrin para JazzGhost), mostrava o errado e nunca tentava o canal.
     private fun loadContent() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            // FIX5: canal do YouTube pula o YT Music. Antes ele tentava o YT Music
-            // primeiro e, se voltasse qualquer coisa, mostrava artista do YT Music
-            // e nunca chegava no canal real. Agora canal vai direto pro NewPipe.
-            if (route.isYouTubeChannel) {
-                val channel = runCatching { youTubeRepository.browseChannel(route.id) }.getOrNull()
-                if (channel != null) {
+            val isChannelId = route.id.startsWith("UC")
+            val channel = if (isChannelId) runCatching { youTubeRepository.browseChannel(route.id) }.getOrNull() else null
+            val music = runCatching { ytMusicRepository.browseArtist(route.id) }.getOrNull()
+            val musicEmpty = music == null || (music.topSongs.isEmpty() && music.albums.isEmpty() && music.singles.isEmpty() && music.videos.isEmpty() && music.featured.isEmpty() && music.relatedArtists.isEmpty())
+            if (channel != null && channel.channelName != null) {
+                val channelNameNorm = channel.channelName.lowercase().trim()
+                val musicNameNorm = (music?.name ?: "").lowercase().trim()
+                val namesMatch = !musicEmpty && (musicNameNorm.isNotBlank() && (channelNameNorm.contains(musicNameNorm) || musicNameNorm.contains(channelNameNorm) || channelNameNorm.split(" ").firstOrNull() == musicNameNorm.split(" ").firstOrNull()))
+                if (!musicEmpty && namesMatch) {
+                    // Mesmo artista nos dois mundos: mostra YT Music + videos do canal
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
-                            errorMessage = null,
-                            isYouTubeChannel = true,
-                            name = channel.channelName ?: it.name,
-                            thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl,
-                            bannerUrl = channel.bannerUrl,
-                            description = channel.description,
-                            subscribers = channel.subscriberCount ?: it.subscribers,
-                            videos = channel.videos,
-                            shorts = channel.shorts,
-                            channelPlaylists = channel.playlists,
+                            isLoading = false, errorMessage = null,
+                            name = music.name.takeUnless { n -> n == "Artista" || n == "Unknown Artist" } ?: it.name,
+                            thumbnailUrl = music.thumbnailUrl ?: channel.avatarUrl ?: it.thumbnailUrl,
+                            subscribers = music.subscribers ?: channel.subscriberCount ?: it.subscribers,
+                            views = music.views, description = music.description,
+                            topSongs = music.topSongs, songsMore = music.songsMore,
+                            albums = music.albums, albumsMore = music.albumsMore,
+                            singles = music.singles, singlesMore = music.singlesMore,
+                            videos = if (channel.videos.isNotEmpty()) channel.videos else music.videos,
+                            videosMore = music.videosMore, featured = music.featured, featuredMore = music.featuredMore,
+                            relatedArtists = music.relatedArtists,
                         )
                     }
-                } else {
-                    _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar este canal.") }
+                    return@launch
                 }
-                return@launch
-            }
-            val result = runCatching { ytMusicRepository.browseArtist(route.id) }.getOrNull()
-            if (result != null) {
-                val isEmpty = result.topSongs.isEmpty() && result.albums.isEmpty() && result.singles.isEmpty() &&
-                    result.videos.isEmpty() && result.featured.isEmpty() && result.relatedArtists.isEmpty()
-                if (!isEmpty) {
+                if (channel.videos.isNotEmpty() || channel.shorts.isNotEmpty() || channel.channelName != null) {
+                    // Canal real existe: mostra ele, mesmo que YT Music tenha devolvido artista diferente ou vazio.
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
-                            errorMessage = null,
-                            // Keep the name/photo from the card when the page could not provide them
-                            name = result.name.takeUnless { n -> n == "Artista" || n == "Unknown Artist" } ?: it.name,
-                            thumbnailUrl = result.thumbnailUrl ?: it.thumbnailUrl,
-                            subscribers = result.subscribers,
-                            views = result.views,
-                            description = result.description,
-                            topSongs = result.topSongs,
-                            songsMore = result.songsMore,
-                            albums = result.albums,
-                            albumsMore = result.albumsMore,
-                            singles = result.singles,
-                            singlesMore = result.singlesMore,
-                            videos = result.videos,
-                            videosMore = result.videosMore,
-                            featured = result.featured,
-                            featuredMore = result.featuredMore,
-                            relatedArtists = result.relatedArtists,
+                            isLoading = false, errorMessage = null,
+                            name = channel.channelName ?: it.name,
+                            thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl,
+                            subscribers = channel.subscriberCount ?: it.subscribers,
+                            description = channel.description ?: it.description,
+                            videos = channel.videos,
                         )
                     }
                     return@launch
                 }
             }
-            // FIX 6: o YT Music NÃO tem página de artista pra esse UC...
-            // É um canal puro de vídeo (podcast, gamer, vlogger...), não um artista.
-            // NUNCA busca por nome (era isso que abria artista parecido).
-            // Abre o CANAL REAL pelo UC... via NewPipe e mostra OS VÍDEOS DELE.
-            // O nome/foto vêm da rota (que já veio do canal real do vídeo), não de busca.
-            val channel = runCatching { youTubeRepository.browseChannel(route.id) }.getOrNull()
-            if (channel != null && channel.videos.isNotEmpty()) {
+            if (!musicEmpty && music != null) {
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
-                        errorMessage = null,
-                        thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl,
-                        subscribers = channel.subscriberCount ?: it.subscribers,
-                        videos = channel.videos,
+                        isLoading = false, errorMessage = null,
+                        name = music.name.takeUnless { n -> n == "Artista" || n == "Unknown Artist" } ?: it.name,
+                        thumbnailUrl = music.thumbnailUrl ?: it.thumbnailUrl,
+                        subscribers = music.subscribers, views = music.views, description = music.description,
+                        topSongs = music.topSongs, songsMore = music.songsMore,
+                        albums = music.albums, albumsMore = music.albumsMore,
+                        singles = music.singles, singlesMore = music.singlesMore,
+                        videos = music.videos, videosMore = music.videosMore,
+                        featured = music.featured, featuredMore = music.featuredMore,
+                        relatedArtists = music.relatedArtists,
                     )
                 }
-            } else {
-                _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar este canal.") }
+                return@launch
             }
+            if (channel != null) {
+                _uiState.update {
+                    it.copy(isLoading = false, errorMessage = null, name = channel.channelName ?: it.name, thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl, subscribers = channel.subscriberCount ?: it.subscribers, videos = channel.videos)
+                }
+                return@launch
+            }
+            _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar este canal.") }
         }
     }
+
 
     /** Plays a random track of the artist (popular songs first, videos as fallback). */
     fun onRandomClick() {

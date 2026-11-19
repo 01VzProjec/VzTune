@@ -361,58 +361,41 @@ class MediaListViewModel @Inject constructor(
         }
     }
 
+    // FIX8_OPEN_ARTIST - Se nao tem UC ainda, tenta resolver na hora em vez de desistir. Canal grande precisava disso.
     fun onOpenArtist() {
         val state = _uiState.value
-        // FIX7: playlist do YouTube usa getChannelForPlaylist (NewPipe
-        // PlaylistExtractor.uploaderUrl) como fonte da verdade.
-        // O header do YT Music pra playlist do YouTube pode trazer UC de
-        // outro canal (ex: playlist "Jazzghost" da Sanary Xenon -> 360View Lab,
-        // que tem video "SANARY SUR MER"). Se o NewPipe falhar, nao navega
-        // em vez de abrir canal errado.
-        if (isYouTubePlaylist(state)) {
-            viewModelScope.launch {
-                val channel = runCatching { youTubeRepository.getChannelForPlaylist(route.id) }.getOrNull()
-                if (channel != null) {
-                    _navigationEvent.emit(
-                        NavigationEvent.OpenArtist(
-                            Artist(
-                                id = channel.channelId,
-                                name = channel.channelName,
-                                thumbnailUrl = channel.avatarUrl ?: state.ownerAvatarUrl,
-                                source = Source.YOUTUBE,
-                            )
-                        )
-                    )
-                }
-            }
-            return
-        }
         val directId = state.artistId?.takeIf { it.startsWith("UC") }
         val artistName = state.owner?.takeIf { it.isNotBlank() }
         if (directId != null && artistName != null) {
             viewModelScope.launch {
                 _navigationEvent.emit(
                     NavigationEvent.OpenArtist(
-                        Artist(
-                            id = directId,
-                            name = artistName,
-                            thumbnailUrl = state.ownerAvatarUrl,
-                            // Playlist do YouTube => canal. Antes era fixo YOUTUBE_MUSIC,
-                            // entao o AppNavHost (agora com flag) caia no artista do YT Music.
-                            source = if (isYouTubePlaylist(state)) Source.YOUTUBE else Source.YOUTUBE_MUSIC,
-                        )
+                        Artist(id = directId, name = artistName, thumbnailUrl = state.ownerAvatarUrl, source = Source.YOUTUBE_MUSIC)
                     )
                 )
             }
             return
         }
-        // Playlist do YouTube sem UC...: NÃO cai pra busca por nome no YT Music
-        // (era isso que abria artista qualquer com nome parecido). Sem canal, não abre nada.
-        if (isYouTubePlaylist(state)) return
+        // Playlist do YouTube sem UC ainda: tenta resolver o dono agora via NewPipe.
+        if (isYouTubePlaylist(state)) {
+            viewModelScope.launch {
+                val channel = runCatching { youTubeRepository.getChannelForPlaylist(route.id) }.getOrNull()
+                if (channel != null) {
+                    _uiState.update { it.copy(artistId = channel.channelId, ownerAvatarUrl = channel.avatarUrl ?: it.ownerAvatarUrl) }
+                    _navigationEvent.emit(
+                        NavigationEvent.OpenArtist(
+                            Artist(id = channel.channelId, name = channel.channelName.ifBlank { artistName ?: "Canal" }, thumbnailUrl = channel.avatarUrl ?: state.ownerAvatarUrl, source = Source.YOUTUBE_MUSIC)
+                        )
+                    )
+                }
+            }
+            return
+        }
         if (artistName != null) {
             onOpenArtistByName(artistName)
         }
     }
+
 
     private fun isYouTubePlaylist(state: MediaListUiState): Boolean {
         if (state.isAlbum || state.isLocal) return false

@@ -64,6 +64,7 @@ import com.vztechcore.vztune.ui.screens.medialist.MediaListCollapsedHeader
 import com.vztechcore.vztune.ui.screens.medialist.MediaListVideoCard
 import com.vztechcore.vztune.ui.screens.medialist.rememberHeaderCollapsed
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import com.vztechcore.vztune.ui.icons.VzIcons
@@ -181,11 +182,12 @@ fun ArtistScreen(
                         // ---------- CANAL: abas Videos | Playlists (sem Shorts) ----------
                         item(key = "channel_tabs") {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                listOf("Vídeos", "Playlists").forEachIndexed { idx, label ->
-                                    val sel = selectedChannelTab == idx
-                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (sel) Color.White else Color.Transparent).clickable { selectedChannelTab = idx }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
-                                        Text(text = label, style = MaterialTheme.typography.labelLarge, color = if (sel) Color.Black else Color.White, fontWeight = FontWeight.Bold)
-                                    }
+                                // Sem forEach: weight() so existe direto dentro do Row. Dentro de forEach o RowScope some e o weight nao resolve.
+                                Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (selectedChannelTab == 0) Color.White else Color.Transparent).clickable { selectedChannelTab = 0 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                    Text(text = "Vídeos", style = MaterialTheme.typography.labelLarge, color = if (selectedChannelTab == 0) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                }
+                                Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (selectedChannelTab == 1) Color.White else Color.Transparent).clickable { selectedChannelTab = 1 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                    Text(text = "Playlists", style = MaterialTheme.typography.labelLarge, color = if (selectedChannelTab == 1) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }

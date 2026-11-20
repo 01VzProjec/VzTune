@@ -150,7 +150,7 @@ fun ArtistScreen(
 
                 else -> {
                     // ---------- Popular songs (numbered) ----------
-                    if (state.topSongs.isNotEmpty()) {
+                    if (!state.isYouTubeChannel && state.topSongs.isNotEmpty()) {
                         item(key = "songs_header") {
                             SectionHeader(
                                 title = "Músicas populares",
@@ -168,7 +168,7 @@ fun ArtistScreen(
                         item(key = "songs_space") { Spacer(Modifier.height(SectionGap)) }
                     }
 
-                    rowSection(
+                    if (!state.isYouTubeChannel) rowSection(
                         key = "albums", title = "Álbuns", items = state.albums,
                         onMoreClick = seeAll(ArtistListKind.ALBUMS, state.albumsMore),
                         itemKey = { it.id },
@@ -179,7 +179,7 @@ fun ArtistScreen(
                         )
                     }
 
-                    rowSection(
+                    if (!state.isYouTubeChannel) rowSection(
                         key = "singles", title = "Singles", items = state.singles,
                         onMoreClick = seeAll(ArtistListKind.SINGLES, state.singlesMore),
                         itemKey = { it.id },
@@ -238,7 +238,7 @@ fun ArtistScreen(
                         )
                     }
 
-rowSection(
+if (!state.isYouTubeChannel) rowSection(
                         key = "featured", title = "Destacado", items = state.featured,
                         onMoreClick = seeAll(ArtistListKind.FEATURED, state.featuredMore),
                         itemKey = { it.id },
@@ -249,7 +249,7 @@ rowSection(
                         )
                     }
 
-                    rowSection(
+                    if (!state.isYouTubeChannel) rowSection(
                         key = "related", title = "Artistas relacionados", items = state.relatedArtists,
                         onMoreClick = null, spacing = 16.dp,
                         itemKey = { it.id },

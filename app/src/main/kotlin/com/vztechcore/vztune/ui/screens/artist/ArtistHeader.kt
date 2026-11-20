@@ -161,7 +161,7 @@ fun ArtistHeader(
                 isFollowing = state.isFollowing,
                 onClick = onFollowClick,
             )
-            if (hasPlayableItems && !state.isYouTubeChannel) {
+            if (hasPlayableItems) {
                 PillButton(
                     label = "Aleatório",
                     icon = VzIcons.Shuffle,

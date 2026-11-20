@@ -7,7 +7,11 @@ import androidx.navigation.toRoute
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.data.player.PlayerController
 import com.vztechcore.vztune.data.prefs.models.FollowedArtist
+import com.vztechcore.vztune.data.prefs.models.LocalPlaylist
+import com.vztechcore.vztune.data.prefs.models.StoredTrack
 import com.vztechcore.vztune.data.prefs.store.FollowedArtistsStore
+import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
+import com.vztechcore.vztune.core.domain.music.Playlist
 import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
@@ -26,6 +30,7 @@ class ArtistViewModel @Inject constructor(
     private val youTubeRepository: YouTubeRepository,
     private val playerController: PlayerController,
     private val followedStore: FollowedArtistsStore,
+    private val localPlaylistsStore: LocalPlaylistsStore,
 ) : ViewModel() {
 
     private val route = savedStateHandle.toRoute<Routes.Artist>()
@@ -76,6 +81,7 @@ class ArtistViewModel @Inject constructor(
                             albums = music.albums, albumsMore = music.albumsMore,
                             singles = music.singles, singlesMore = music.singlesMore,
                             videos = if (channel.videos.isNotEmpty()) channel.videos else music.videos,
+                            shorts = channel.shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true,
                             videosMore = music.videosMore, featured = music.featured, featuredMore = music.featuredMore,
                             relatedArtists = music.relatedArtists,
                         )
@@ -91,7 +97,7 @@ class ArtistViewModel @Inject constructor(
                             thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl,
                             subscribers = channel.subscriberCount ?: it.subscribers,
                             description = channel.description ?: it.description,
-                            videos = channel.videos,
+                            videos = channel.videos, shorts = channel.shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true,
                         )
                     }
                     return@launch
@@ -116,7 +122,7 @@ class ArtistViewModel @Inject constructor(
             }
             if (channel != null) {
                 _uiState.update {
-                    it.copy(isLoading = false, errorMessage = null, name = chName ?: it.name, thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl, subscribers = channel.subscriberCount ?: it.subscribers, videos = channel.videos)
+                    it.copy(isLoading = false, errorMessage = null, name = chName ?: it.name, thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl, subscribers = channel.subscriberCount ?: it.subscribers, videos = channel.videos, shorts = channel.shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true, description = channel.description ?: it.description)
                 }
                 return@launch
             }
@@ -150,5 +156,38 @@ class ArtistViewModel @Inject constructor(
         val videos = _uiState.value.videos
         val idx = videos.indexOfFirst { it.id == track.id }
         if (idx >= 0) playerController.playQueue(videos, idx) else playerController.playQueue(listOf(track), 0)
+    }
+
+    fun onShortClick(track: Track) {
+        val shorts = _uiState.value.shorts
+        val idx = shorts.indexOfFirst { it.id == track.id }
+        if (idx >= 0) playerController.playQueue(shorts, idx) else playerController.playQueue(listOf(track), 0)
+    }
+
+    private suspend fun loadChannelPlaylistTracks(playlist: Playlist): List<Track> {
+        return runCatching { ytMusicRepository.browsePlaylist(playlist.id).tracks }.getOrDefault(emptyList())
+    }
+
+    fun onPlaylistPlayNext(playlist: Playlist) {
+        viewModelScope.launch {
+            val tracks = loadChannelPlaylistTracks(playlist)
+            if (tracks.isEmpty()) return@launch
+            for (track in tracks.asReversed()) playerController.addToQueueNext(track)
+        }
+    }
+
+    fun onPlaylistAddToQueue(playlist: Playlist) {
+        viewModelScope.launch {
+            val tracks = loadChannelPlaylistTracks(playlist)
+            for (track in tracks) playerController.addToQueueEnd(track)
+        }
+    }
+
+    fun onSavePlaylistToLibrary(playlist: Playlist) {
+        viewModelScope.launch {
+            val tracks = loadChannelPlaylistTracks(playlist)
+            val stored = tracks.map { StoredTrack.from(it) }
+            localPlaylistsStore.addFirst(LocalPlaylist(id = playlist.id, name = playlist.title, coverPath = playlist.thumbnailUrl, tracks = stored))
+        }
     }
 }

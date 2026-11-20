@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -41,7 +42,9 @@ import com.vztechcore.vztune.ui.icons.actions.Share
 import com.vztechcore.vztune.ui.icons.media.Album
 import com.vztechcore.vztune.ui.icons.media.Artist
 import com.vztechcore.vztune.ui.icons.media.Download
-import com.vztechcore.vztune.ui.icons.media.DownloadDone
+import com.vztechcore.vztune.ui.icons.media.MusicNote
+import com.vztechcore.vztune.ui.icons.media.Download
+import com.vztechcore.vztune.ui.icons.media.MusicNoteDone
 import com.vztechcore.vztune.ui.icons.media.Groups
 import com.vztechcore.vztune.ui.icons.media.PlaylistAdd
 import com.vztechcore.vztune.ui.icons.media.QueueMusic
@@ -90,6 +93,7 @@ fun TrackOptionsSheet(
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showCredits by remember { mutableStateOf(false) }
     var showPlaylistPicker by remember { mutableStateOf(false) }
     var showArtistPicker by remember { mutableStateOf(false) }
     var showRemoveDownloadSheet by remember { mutableStateOf(false) }
@@ -145,6 +149,10 @@ fun TrackOptionsSheet(
         return
     }
 
+    if (showCredits) {
+        TrackCreditsSheet(track = track, onDismiss = { showCredits = false })
+        return
+    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -175,185 +183,91 @@ fun TrackOptionsSheet(
                 color = Color.White.copy(alpha = 0.08f),
             )
 
-            // Context-specific top removal actions
-            if (menuContext == TrackMenuContext.RECENT_HISTORY) {
-                SheetOptionRow(
-                    icon = VzIcons.DeleteFilled,
-                    iconTint = DangerRed,
-                    label = "Apagar",
-                    labelColor = DangerRed,
-                    onClick = {
-                        onRemoveFromRecentHistory(track)
-                        onDismiss()
-                    },
-                )
-            }
-
-            if (menuContext == TrackMenuContext.LOCAL_PLAYLIST) {
-                SheetOptionRow(
-                    icon = VzIcons.DeleteFilled,
-                    iconTint = DangerRed,
-                    label = "Excluir faixa da playlist",
-                    labelColor = DangerRed,
-                    onClick = {
-                        onRemoveFromLocalPlaylist(track)
-                        onDismiss()
-                    },
-                )
-            }
-
-            // 1. Favorite / Unfavorite
-            SheetOptionRow(
-                icon = if (isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
-                iconTint = if (isFavorite) Color(0xFFEC4899) else Color.White,
-                label = if (isFavorite) "Remover dos favoritos" else "Adicionar aos favoritos",
-                onClick = {
-                    onToggleFavorite(track)
+            // FIX10: 3 cards no topo (retangulos medios lado a lado, nome abaixo, icone dentro)
+    val isYouTubeVideoTop = track.source == Source.YOUTUBE
+    val downloadProgressTop = downloadItem?.progress ?: 0f
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        val isLocal = menuContext == TrackMenuContext.LOCAL_PLAYLIST
+        val isRecent = menuContext == TrackMenuContext.RECENT_HISTORY
+        if (isLocal) {
+            TopActionCard(icon = VzIcons.DeleteFilled, label = "Excluir da playlist", iconTint = Color(0xFFFF6B6B), onClick = { onRemoveFromLocalPlaylist(track); onDismiss() })
+        } else if (isRecent) {
+            TopActionCard(icon = VzIcons.DeleteFilled, label = "Apagar", iconTint = Color(0xFFFF6B6B), onClick = { onRemoveFromRecentHistory(track); onDismiss() })
+        } else if (isDownloading) {
+            TopActionCard(icon = VzIcons.Download, label = "Baixando...", iconTint = DownloadGreen, onClick = { onOpenDownloadsScreen(); onDismiss() })
+        } else if (isDownloaded) {
+            TopActionCard(icon = VzIcons.DownloadDone, label = "Baixada", iconTint = DownloadGreen, onClick = { showRemoveDownloadSheet = true })
+        } else {
+            TopActionCard(icon = VzIcons.Download, label = "Baixar faixa", iconTint = Color.White, onClick = { onDownload(track); onDismiss() })
+        }
+        TopActionCard(icon = VzIcons.PlaylistAdd, label = "Adicionar a uma playlist", iconTint = Color.White, onClick = { showPlaylistPicker = true })
+        TopActionCard(icon = VzIcons.Share, label = "Compartilhar", iconTint = Color.White, onClick = { shareTrack(context, track); onDismiss() })
+    }
+    // 1. Baixar (somente playlist local / recentemente tocadas: vira primeiro da lista)
+    if (menuContext == TrackMenuContext.LOCAL_PLAYLIST || menuContext == TrackMenuContext.RECENT_HISTORY) {
+        if (isDownloading) {
+            SheetDownloadProgressRow(progress = downloadProgressTop, label = "Baixando...", onClick = { onOpenDownloadsScreen(); onDismiss() })
+        } else if (isDownloaded) {
+            SheetOptionRow(icon = VzIcons.DownloadDone, label = "Baixada", subtitle = "Ver em Downloads", iconTint = DownloadGreen, onClick = { onOpenDownloadsScreen(); onDismiss() })
+        } else {
+            SheetOptionRow(icon = VzIcons.Download, label = "Baixar faixa", subtitle = "Ouvir offline", onClick = { onDownload(track); onDismiss() })
+        }
+    }
+    // 2. Salvar aos favoritos
+    SheetOptionRow(
+        icon = if (isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
+        label = if (isFavorite) "Remover dos favoritos" else "Salvar aos favoritos",
+        iconTint = if (isFavorite) Color(0xFFEC4899) else Color.White,
+        onClick = { onToggleFavorite(track); onDismiss() },
+    )
+    // 3. Reproduzir como proxima faixa
+    SheetOptionRow(icon = VzIcons.PlayCircleFilled, label = "Reproduzir como proxima faixa", subtitle = "Toca logo depois da atual", onClick = { onPlayNext(track); onDismiss() })
+    // 4. Adicionar a fila
+    SheetOptionRow(icon = VzIcons.QueueMusic, label = "Adicionar a fila", subtitle = "Toca no final da fila", onClick = { onAddToQueue(track); onDismiss() })
+    // 5. Iniciar radio
+    SheetOptionRow(icon = VzIcons.Radio, label = "Iniciar radio", subtitle = "Baseada nesta faixa", onClick = { onStartRadio(track); onDismiss() })
+    // 6. Ir para o album
+    if (resolvedAlbum != null || !track.album.isNullOrBlank()) {
+        SheetOptionRow(
+            icon = VzIcons.Album,
+            label = "Ir para o album",
+            subtitle = resolvedAlbum?.title ?: track.album,
+            onClick = {
+                if (resolvedAlbum != null) onOpenAlbum(resolvedAlbum) else onOpenAlbumForTrack(track)
+                onDismiss()
+            },
+        )
+    }
+    // 7. Ir para a pagina do artista (1 artista / varios artistas / video = canal)
+    if (artists.isNotEmpty()) {
+        val hasMultipleArtists = artists.size > 1 && !isYouTubeVideoTop
+        SheetOptionRow(
+            icon = if (hasMultipleArtists) VzIcons.Groups else VzIcons.Artist,
+            label = when {
+                isYouTubeVideoTop -> "Ir para o canal"
+                hasMultipleArtists -> "Ir para a pagina do artista..."
+                else -> "Ir para a pagina do artista"
+            },
+            subtitle = if (hasMultipleArtists) artists.joinToString(", ") else artists.first(),
+            onClick = {
+                if (hasMultipleArtists) {
+                    showArtistPicker = true
+                } else {
                     onDismiss()
-                },
-            )
-
-            // 2. Add to playlist / Add to another playlist
-            SheetOptionRow(
-                icon = VzIcons.PlaylistAdd,
-                label = addToPlaylistLabel,
-                onClick = { showPlaylistPicker = true },
-            )
-
-            // 3. Play next
-            SheetOptionRow(
-                icon = VzIcons.PlayCircleFilled,
-                label = "Reproduzir como próxima faixa",
-                onClick = {
-                    onPlayNext(track)
-                    onDismiss()
-                },
-            )
-
-            // 4. Add to queue
-            SheetOptionRow(
-                icon = VzIcons.QueueMusic,
-                label = "Adicionar à fila",
-                onClick = {
-                    onAddToQueue(track)
-                    onDismiss()
-                },
-            )
-
-            // 4b. FIX 3: Iniciar rádio (Mix infinito) - a partir de qualquer faixa,
-            // em qualquer lugar (busca, playlist, álbum, artista). Nome "Iniciar rádio":
-            // é o termo do YT Music / Spotify, mais profissional que "Mix".
-            // Ícone de rádio (ondas) do YT Music, não o play genérico.
-            SheetOptionRow(
-                icon = VzIcons.Radio,
-                label = "Iniciar rádio",
-                subtitle = "Mix infinito a partir desta faixa",
-                onClick = {
-                    onStartRadio(track)
-                    onDismiss()
-                },
-            )
-
-            // 5. Download / Downloading / Downloaded
-            when {
-                isDownloading -> {
-                    val progress = downloadItem?.progress ?: 0f
-                    val pct = downloadItem?.percentage ?: 0
-                    val statusLabel = if (downloadItem?.status == DownloadStatus.PAUSED) {
-                        "Download pausado ($pct%)"
-                    } else if (pct > 0) {
-                        "Baixando faixa ($pct%)"
-                    } else {
-                        "Baixando faixa"
-                    }
-                    SheetDownloadProgressRow(
-                        progress = progress,
-                        label = statusLabel,
-                        onClick = {
-                            onDismiss()
-                            onOpenDownloadsScreen()
-                        },
-                    )
+                    onOpenArtistForTrack(track, artists.first())
                 }
-                isDownloaded -> {
-                    SheetOptionRow(
-                        icon = VzIcons.DownloadDone,
-                        iconTint = DownloadGreen,
-                        label = "Faixa baixada",
-                        labelColor = Color.White,
-                        onClick = { showRemoveDownloadSheet = true },
-                    )
-                }
-                else -> {
-                    SheetOptionRow(
-                        icon = VzIcons.Download,
-                        iconTint = Color.White,
-                        label = "Baixar faixa",
-                        onClick = {
-                            onDownload(track)
-                            onDismiss()
-                        },
-                    )
-                }
-            }
-
-            // 6. Share
-            SheetOptionRow(
-                icon = VzIcons.Share,
-                label = "Compartilhar",
-                onClick = {
-                    shareTrack(context, track)
-                    onDismiss()
-                },
-            )
-
-            // 7. Go to album (shows immediately when track.album is known or once resolved)
-            val albumTitle = resolvedAlbum?.title ?: track.album?.takeIf {
-                it.isNotBlank() && !it.equals("Desconhecido", ignoreCase = true)
-            }
-            if (!albumTitle.isNullOrBlank()) {
-                SheetOptionRow(
-                    icon = VzIcons.Album,
-                    label = "Álbum",
-                    subtitle = albumTitle,
-                    onClick = {
-                        onDismiss()
-                        if (resolvedAlbum != null) {
-                            onOpenAlbum(resolvedAlbum)
-                        } else {
-                            onOpenAlbumForTrack(track)
-                        }
-                    },
-                )
-            }
-
-            // 8. Go to artist(s) / canal
-            // FIX 2: vídeo do YouTube -> "Ir para o canal" (resolve o canal real via NewPipe).
-            // YT Music -> "Ir para o(s) artista(s)" como antes.
-            // Sem canal real, o ViewModel não navega (nunca chuta artista por nome).
-            if (artists.isNotEmpty()) {
-                val isYouTubeVideo = track.source == Source.YOUTUBE
-                val hasMultiple = artists.size > 1 && !isYouTubeVideo
-                SheetOptionRow(
-                    icon = if (hasMultiple) VzIcons.Groups else VzIcons.Artist,
-                    label = when {
-                        isYouTubeVideo -> "Ir para o canal"
-                        hasMultiple -> "Ir para os artistas"
-                        else -> "Ir para o artista"
-                    },
-                    subtitle = if (hasMultiple) artists.joinToString(", ") else artists.first(),
-                    onClick = {
-                        if (hasMultiple) {
-                            showArtistPicker = true
-                        } else {
-                            onDismiss()
-                            onOpenArtistForTrack(track, artists.first())
-                        }
-                    },
-                )
-            }
-
-            // 9. Track details
+            },
+        )
+    }
+    // 8. Mostrar creditos (somente musica ou video clipe da musica)
+    val showCreditsOption = track.source == Source.YOUTUBE_MUSIC || (track.source == Source.YOUTUBE && !track.album.isNullOrBlank())
+    if (showCreditsOption) {
+        SheetOptionRow(icon = VzIcons.MusicNote, label = "Mostrar creditos da musica", subtitle = "Compositores, produtores e mais", onClick = { showCredits = true })
+    }
+    // 9. Track details
             SheetOptionRow(
                 icon = VzIcons.Info,
                 label = "Ver informações da faixa",
@@ -685,4 +599,15 @@ private fun shareTrack(context: Context, track: Track) {
     }
     val chooser = Intent.createChooser(sendIntent, "Compartilhar faixa")
     context.startActivity(chooser)
+}
+
+@Composable
+private fun TopActionCard(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, iconTint: Color = Color.White, onClick: () -> Unit) {
+    Column(Modifier.weight(1f).clickable { onClick() }, horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
+            Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(26.dp))
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.85f), maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+    }
 }

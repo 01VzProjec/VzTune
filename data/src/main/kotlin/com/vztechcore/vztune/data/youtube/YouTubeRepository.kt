@@ -15,6 +15,8 @@ import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.search.SearchExtractor
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
+import java.time.OffsetDateTime
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -839,7 +841,7 @@ class YouTubeRepository @Inject constructor(
                 pl.fetchPage()
                 pl.initialPage.items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
                     val vid = extractVideoId(stream.url) ?: return@mapNotNull null
-                    Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE)
+                    Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate))
                 }
             }.getOrDefault(emptyList())
         }
@@ -849,7 +851,7 @@ class YouTubeRepository @Inject constructor(
                 pl.fetchPage()
                 pl.initialPage.items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
                     val vid = extractVideoId(stream.url) ?: return@mapNotNull null
-                    Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE)
+                    Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate))
                 }
             }.getOrDefault(emptyList())
         }
@@ -868,17 +870,32 @@ class YouTubeRepository @Inject constructor(
                 pl.fetchPage()
                 pl.initialPage.items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
                     val vid = extractVideoId(stream.url) ?: return@mapNotNull null
-                    Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE)
+                    Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate))
                 }
             }.getOrDefault(emptyList())
         }
         if (shorts.isEmpty() && channelName.isNotBlank()) {
             shorts = runCatching { searchShorts(channelName, loadMore = false, pageSize = 12, searchId = "channel:$uc").items.map { it.track } }.getOrDefault(emptyList())
         }
+        // Playlists do canal: tenta /playlists como pagina, fallback busca por nome do canal.
+        var channelPlaylists: List<Playlist> = emptyList()
+        if (uc.startsWith("UC")) {
+            channelPlaylists = runCatching {
+                val pl = ServiceList.YouTube.getPlaylistExtractor("https://www.youtube.com/channel/$uc/playlists")
+                pl.fetchPage()
+                pl.initialPage.items.filterIsInstance<PlaylistInfoItem>().mapNotNull { item ->
+                    val pid = Regex("list=([^&]+)").find(item.url ?: "")?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    Playlist(id = pid, title = item.name ?: "Playlist", owner = channelName, thumbnailUrl = item.thumbnails.lastOrNull()?.url, trackCount = item.streamCount.takeIf { it > 0 }?.toInt(), source = Source.YOUTUBE)
+                }
+            }.getOrDefault(emptyList())
+        }
+        if (channelPlaylists.isEmpty() && channelName.isNotBlank()) {
+            channelPlaylists = runCatching { searchPlaylists(channelName, loadMore = false, pageSize = 12, searchId = "channelPlaylists:$uc").map { it.playlist } }.getOrDefault(emptyList())
+        }
         ChannelPage(
             videos = videos,
             shorts = shorts,
-            playlists = emptyList(),
+            playlists = channelPlaylists,
             channelName = channelName.takeIf { it.isNotBlank() },
             avatarUrl = header?.avatar,
             bannerUrl = header?.banner,
@@ -887,6 +904,36 @@ class YouTubeRepository @Inject constructor(
         )
     }
 
+
+    /** "hoje", "ha 1 dia", "ha 3 semanas", "ha 5 meses", "ha 2 anos" a partir do uploadDate do NewPipe. */
+    fun formatPublished(uploadDate: OffsetDateTime?): String? {
+        if (uploadDate == null) return null
+        val now = OffsetDateTime.now()
+        val days = ChronoUnit.DAYS.between(uploadDate, now)
+        if (days < 0) return null
+        return when {
+            days == 0L -> "hoje"
+            days == 1L -> "ha 1 dia"
+            days < 7 -> "ha $days dias"
+            days < 30 -> { val w = days / 7; if (w == 1L) "ha 1 semana" else "ha $w semanas" }
+            days < 365 -> { val m = days / 30; if (m == 1L) "ha 1 mes" else "ha $m meses" }
+            else -> { val y = days / 365; if (y == 1L) "ha 1 ano" else "ha $y anos" }
+        }
+    }
+
+    /** Faixas de uma playlist do YouTube (PL..., UU..., OL...). Usado no menu da playlist do canal. */
+    suspend fun getYouTubePlaylistTracks(playlistId: String): List<Track> = withContext(Dispatchers.IO) {
+        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext emptyList()
+        val url = if (playlistId.startsWith("http")) playlistId else "https://www.youtube.com/playlist?list=$playlistId"
+        runCatching {
+            val pl = ServiceList.YouTube.getPlaylistExtractor(url)
+            pl.fetchPage()
+            pl.initialPage.items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
+                val vid = extractVideoId(stream.url) ?: return@mapNotNull null
+                Track(id = vid, title = stream.name ?: "Untitled", artist = stream.uploaderName ?: "", durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate))
+            }
+        }.getOrDefault(emptyList())
+    }
 
     private fun formatSubscribers(count: Long): String {
         return when {

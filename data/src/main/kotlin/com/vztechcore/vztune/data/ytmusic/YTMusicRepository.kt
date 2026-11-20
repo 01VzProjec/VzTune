@@ -664,6 +664,51 @@ class YTMusicRepository @Inject constructor(
             }.getOrNull()
         }
 
+
+    /** Creditos que o InnerTube disponibiliza: artista(s), album, ano, views, descricao + compositores/produtores/letra extraidos da descricao. */
+    data class TrackCredits(
+        val artists: List<String>,
+        val albumTitle: String?,
+        val albumYear: String?,
+        val viewCount: String?,
+        val description: String?,
+        val composers: List<String>,
+        val producers: List<String>,
+        val lyricists: List<String>,
+    )
+
+    suspend fun getTrackCredits(track: Track): TrackCredits? = withContext(Dispatchers.IO) {
+        val details = runCatching { getVideoDetails(track.id) }.getOrNull()
+        val album = runCatching { findAlbumForTrack(track) }.getOrNull()
+        val albumRes = if (album != null) runCatching { browseAlbum(album.id) }.getOrNull() else null
+        val desc = details?.description ?: albumRes?.description
+        val artists = track.artist.split(",", "&", "feat.", "ft.", " e ").map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        fun parseRole(keywords: List<String>): List<String> {
+            if (desc.isNullOrBlank()) return emptyList()
+            val out = mutableListOf<String>()
+            for (line in desc.lines()) {
+                val low = line.lowercase()
+                if (keywords.any { low.contains(it) }) {
+                    val after = line.substringAfter(":", line).substringAfter("-", line).trim()
+                    if (after.isNotBlank() && after != line) {
+                        after.split(",", "&", ";").map { it.trim() }.filter { it.isNotBlank() }.forEach { out.add(it) }
+                    }
+                }
+            }
+            return out.distinct()
+        }
+        TrackCredits(
+            artists = artists,
+            albumTitle = album?.title ?: track.album,
+            albumYear = albumRes?.year,
+            viewCount = details?.viewCount,
+            description = desc,
+            composers = parseRole(listOf("compositor", "composer", "escrito por", "written by")),
+            producers = parseRole(listOf("produtor", "producer", "produzido por")),
+            lyricists = parseRole(listOf("letra", "lyricist", "letrista")),
+        )
+    }
+
     // ================= HELPERS =================
 
     private fun extractPlaylistHeaderExtras(json: JSONObject): PlaylistHeaderExtras {

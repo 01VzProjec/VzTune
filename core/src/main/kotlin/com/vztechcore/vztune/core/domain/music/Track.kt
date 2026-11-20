@@ -14,4 +14,9 @@ data class Track(
     val streamUrl: String? = null,
     // True when the source flags the track as containing explicit lyrics.
     val isExplicit: Boolean = false,
+    // Canal / video YouTube (NewPipe StreamInfoItem). Null quando nao vem do YouTube
+    // ou quando o NewPipe nao expoe. Usado nos cards de canal e nos Shorts.
+    val viewCount: Long? = null,
+    // Texto ja formatado em pt-BR: hoje, ha 1 dia, ha 3 semanas, ha 2 meses, ha 1 ano.
+    val publishedText: String? = null,
 )

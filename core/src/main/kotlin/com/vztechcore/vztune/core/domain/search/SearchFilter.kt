@@ -7,5 +7,4 @@ enum class SearchFilter(val label: String, val params: String?) {
     ARTISTS("Artistas", "EgWKAQIgAWoKEAkQBRAKEAMQBA%3D%3D"),
     PLAYLISTS("Playlists", "EgWKAQIoAWoKEAkQBRAKEAMQBA%3D%3D"),
     VIDEOS("Vídeos", null),
-    SHORTS("Shorts", null),
 }

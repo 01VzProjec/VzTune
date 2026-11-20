@@ -417,6 +417,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                             state = state,
                             onBackClick = { navController.popBackStack() },
                             onRandomClick = vm::onRandomClick,
+                        onPlayAllClick = vm::onPlayAllClick,
                             onFollowClick = vm::onFollowClick,
                             onSongClick = vm::onSongClick,
                             onVideoClick = vm::onVideoClick,

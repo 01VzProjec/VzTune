@@ -185,7 +185,6 @@ class MusicRepository @Inject constructor(
         return when (filter) {
             SearchFilter.ALL -> searchAll(query, loadMore, state)
             SearchFilter.VIDEOS -> searchVideos(query, loadMore, state)
-            SearchFilter.SHORTS -> searchShorts(query, loadMore, state)
             SearchFilter.SONGS -> searchSongs(query, loadMore, state)
             SearchFilter.PLAYLISTS -> searchPlaylists(query, loadMore, state)
             else -> searchOther(query, filter, loadMore, state)

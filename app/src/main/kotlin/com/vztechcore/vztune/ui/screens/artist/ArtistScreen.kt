@@ -63,6 +63,12 @@ import com.vztechcore.vztune.ui.screens.medialist.CollapsedHeaderHost
 import com.vztechcore.vztune.ui.screens.medialist.MediaListCollapsedHeader
 import com.vztechcore.vztune.ui.screens.medialist.MediaListVideoCard
 import com.vztechcore.vztune.ui.screens.medialist.rememberHeaderCollapsed
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.ArrowForward
+import com.vztechcore.vztune.ui.icons.player.Play
 
 private val RowPadding = PaddingValues(horizontal = 16.dp)
 private val CoverWidth = 160.dp
@@ -81,6 +87,7 @@ fun ArtistScreen(
     state: ArtistUiState,
     onBackClick: () -> Unit,
     onRandomClick: () -> Unit,
+    onPlayAllClick: () -> Unit = onRandomClick,
     onFollowClick: () -> Unit,
     onSongClick: (Track) -> Unit,
     onVideoClick: (Track) -> Unit,
@@ -101,7 +108,6 @@ fun ArtistScreen(
     val isCollapsed by rememberHeaderCollapsed(listState)
     val nowPlaying = LocalNowPlaying.current
     var selectedChannelTab by remember { mutableStateOf(0) }
-    var shortMenuTrack by remember { mutableStateOf<Track?>(null) }
     var playlistMenu by remember { mutableStateOf<Playlist?>(null) }
 
     // Fundo sempre preto AMOLED - camaleao desativado por enquanto
@@ -122,10 +128,6 @@ fun ArtistScreen(
         context.startActivity(Intent.createChooser(sendIntent, "Compartilhar artista"))
     }
 
-    shortMenuTrack?.let { st ->
-        val sk = StoredTrack.from(st).key
-        ShortsOptionsSheet(track = st, isFavorite = sk in favoriteKeys, onToggleFavorite = onToggleFavorite, onDismiss = { shortMenuTrack = null })
-    }
     playlistMenu?.let { pl ->
         PlaylistOptionsSheet(playlist = pl, onDismiss = { playlistMenu = null }, onPlayNext = { onPlaylistPlayNext(it); playlistMenu = null }, onAddToQueue = { onPlaylistAddToQueue(it); playlistMenu = null }, onSaveToLibrary = { onSavePlaylistToLibrary(it); playlistMenu = null }, onShare = { p -> val url = "https://www.youtube.com/playlist?list=" + p.id; val si = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, p.title + "\n" + url) }; context.startActivity(Intent.createChooser(si, "Compartilhar playlist")); playlistMenu = null })
     }
@@ -171,160 +173,99 @@ fun ArtistScreen(
                 }
 
                 else -> {
-                    // ---------- Abas UNIFICADAS: mesma para Artista e Canal ----------
-                    // Nao separa mais por isYouTubeChannel. A pagina e uma so, o que muda e o conteudo que a conta tem.
-                    // Ordem: Inicio | Musicas | Albuns & Singles | Playlists | Videos | Shorts
-                    // Aba so aparece se tiver conteudo, menos Inicio que sempre aparece.
-                    val hasAlbumsSingles = state.albums.isNotEmpty() || state.singles.isNotEmpty()
-                    val allPlaylists = (state.channelPlaylists + state.featured).distinctBy { it.id }
-                    val tabs = listOf(
-                        "home" to "Início",
-                        "songs" to "Músicas",
-                        "albums" to "Álbuns & Singles",
-                        "playlists" to "Playlists",
-                        "videos" to "Vídeos",
-                        "shorts" to "Shorts",
-                    ).filter { (key, _) ->
-                        when (key) {
-                            "home" -> true
-                            "songs" -> state.topSongs.isNotEmpty()
-                            "albums" -> hasAlbumsSingles
-                            "playlists" -> allPlaylists.isNotEmpty()
-                            "videos" -> state.videos.isNotEmpty()
-                            "shorts" -> state.shorts.isNotEmpty()
-                            else -> true
-                        }
-                    }
-                    val safeTabIndex = selectedChannelTab.coerceIn(0, (tabs.size - 1).coerceAtLeast(0))
-                    val selectedKey = tabs.getOrNull(safeTabIndex)?.first ?: "home"
+                    // FIX14 REBUILD - Regra: tem musica = ARTISTA (so Home, sem abas). Sem musica = CANAL (abas Videos | Playlists).
+                    val hasMusic = state.topSongs.isNotEmpty() || state.albums.isNotEmpty() || state.singles.isNotEmpty()
+                    val isChannel = !hasMusic
 
-                    // Barrinha colada no header, antes de qualquer lista
-                    item(key = "unified_tabs") {
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            items(tabs, key = { it.first }) { (key, label) ->
-                                val sel = key == selectedKey
-                                Box(
-                                    Modifier.clip(RoundedCornerShape(50)).background(if (sel) Color.White else Color.White.copy(alpha = 0.08f)).clickable { selectedChannelTab = tabs.indexOfFirst { it.first == key } }.padding(horizontal = 18.dp, vertical = 10.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(text = label, style = MaterialTheme.typography.labelLarge, color = if (sel) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                    if (isChannel) {
+                        // ---------- CANAL: abas Videos | Playlists (sem Shorts) ----------
+                        item(key = "channel_tabs") {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                listOf("Vídeos", "Playlists").forEachIndexed { idx, label ->
+                                    val sel = selectedChannelTab == idx
+                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (sel) Color.White else Color.Transparent).clickable { selectedChannelTab = idx }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                        Text(text = label, style = MaterialTheme.typography.labelLarge, color = if (sel) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
-                    }
-                    item(key = "unified_tabs_space") { Spacer(Modifier.height(16.dp)) }
-
-                    when (selectedKey) {
-                        "songs" -> {
-                            item(key = "songs_tab_header") {
-                                SectionHeader(title = "Músicas", onActionClick = seeAll(ArtistListKind.SONGS, state.songsMore))
+                        item(key = "channel_tabs_space") { Spacer(Modifier.height(16.dp)) }
+                        if (selectedChannelTab == 0) {
+                            if (state.videos.isNotEmpty()) {
+                                itemsIndexed(state.videos, key = { _, v -> "cv_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
+                            } else {
+                                item(key = "channel_videos_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
                             }
-                            itemsIndexed(state.topSongs, key = { _, t -> "song_${t.id}" }) { index, track ->
-                                TrackListRow(track = track, number = index + 1, onClick = { onSongClick(track) }, onMoreClick = { onTrackInfoClick(track) })
-                            }
-                            item(key = "songs_tab_space") { Spacer(Modifier.height(SectionGap)) }
-                        }
-                        "albums" -> {
-                            rowSection(
-                                key = "albums_tab", title = "Álbuns", items = state.albums,
-                                onMoreClick = seeAll(ArtistListKind.ALBUMS, state.albumsMore),
-                                itemKey = { it.id },
-                            ) { album ->
-                                CoverCard(title = album.title, subtitle = "Álbum", imageUrl = album.thumbnailUrl, onClick = { onAlbumClick(album) }, modifier = Modifier.width(CoverWidth))
-                            }
-                            rowSection(
-                                key = "singles_tab", title = "Singles", items = state.singles,
-                                onMoreClick = seeAll(ArtistListKind.SINGLES, state.singlesMore),
-                                itemKey = { it.id },
-                            ) { single ->
-                                CoverCard(title = single.title, subtitle = "Single", imageUrl = single.thumbnailUrl, onClick = { onAlbumClick(single) }, modifier = Modifier.width(CoverWidth))
+                        } else {
+                            if (state.channelPlaylists.isNotEmpty()) {
+                                itemsIndexed(state.channelPlaylists, key = { _, pl -> "cp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
+                            } else {
+                                item(key = "channel_playlists_empty") { Text(text = "Nenhuma playlist ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
                             }
                         }
-                        "playlists" -> {
-                            itemsIndexed(allPlaylists, key = { _, pl -> "pl_${pl.id}" }) { _, playlist ->
-                                ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist })
+                        item(key = "channel_space") { Spacer(Modifier.height(SectionGap)) }
+                        item(key = "description") { ArtistDescription(description = state.description) }
+                    } else {
+                        // ---------- ARTISTA: so Home, sem abas ----------
+                        // 1) Musicas populares: slide de 4 por pagina + Tocar tudo + >
+                        if (state.topSongs.isNotEmpty()) {
+                            item(key = "songs_header") {
+                                SectionHeaderArrow(title = "Músicas populares", onPlayAllClick = onPlayAllClick, onArrowClick = seeAll(ArtistListKind.SONGS, state.songsMore))
                             }
-                            item(key = "playlists_tab_space") { Spacer(Modifier.height(SectionGap)) }
-                        }
-                        "videos" -> {
-                            itemsIndexed(state.videos, key = { _, v -> "cv_${v.id}" }) { _, video ->
-                                ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) })
+                            item(key = "songs_slide") {
+                                SongsSlide(tracks = state.topSongs, onSongClick = onSongClick, onTrackInfoClick = onTrackInfoClick)
                             }
-                            item(key = "videos_tab_space") { Spacer(Modifier.height(SectionGap)) }
+                            item(key = "songs_space") { Spacer(Modifier.height(SectionGap)) }
                         }
-                        "shorts" -> {
-                            if (state.shorts.isNotEmpty()) {
-                                item(key = "shorts_tab") { ShortsGridRows(tracks = state.shorts, onClick = { onShortClick(it) }, onMoreClick = { shortMenuTrack = it }) }
+                        // 2) Singles e EPs: fileira + > (se nao tem singles, mostra albuns pra nao perder os albuns)
+                        val singlesEps = if (state.singles.isNotEmpty()) state.singles else state.albums
+                        val singlesEpsMore = if (state.singles.isNotEmpty()) state.singlesMore else state.albumsMore
+                        val singlesEpsKind = if (state.singles.isNotEmpty()) ArtistListKind.SINGLES else ArtistListKind.ALBUMS
+                        if (singlesEps.isNotEmpty()) {
+                            item(key = "singles_header") {
+                                SectionHeaderArrow(title = "Singles e EPs", onArrowClick = seeAll(singlesEpsKind, singlesEpsMore))
                             }
-                            item(key = "shorts_tab_space") { Spacer(Modifier.height(SectionGap)) }
-                        }
-                        else -> {
-                            // ---------- Início (Tudo): igual era antes, sem separar canal/artista ----------
-                            if (state.topSongs.isNotEmpty()) {
-                                item(key = "songs_header") {
-                                    SectionHeader(title = "Músicas populares", onActionClick = seeAll(ArtistListKind.SONGS, state.songsMore))
+                            item(key = "singles_row") {
+                                LazyRow(contentPadding = RowPadding, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    items(singlesEps, key = { it.id }) { album ->
+                                        val sub = if (state.singles.isNotEmpty()) "Single" else "Álbum"
+                                        CoverCard(title = album.title, subtitle = sub, imageUrl = album.thumbnailUrl, onClick = { onAlbumClick(album) }, modifier = Modifier.width(CoverWidth))
+                                    }
                                 }
-                                itemsIndexed(state.topSongs.take(5), key = { _, t -> "song_${t.id}" }) { index, track ->
-                                    TrackListRow(track = track, number = index + 1, onClick = { onSongClick(track) }, onMoreClick = { onTrackInfoClick(track) })
-                                }
-                                item(key = "songs_space") { Spacer(Modifier.height(SectionGap)) }
                             }
-                            rowSection(
-                                key = "albums", title = "Álbuns", items = state.albums,
-                                onMoreClick = seeAll(ArtistListKind.ALBUMS, state.albumsMore),
-                                itemKey = { it.id },
-                            ) { album ->
-                                CoverCard(title = album.title, subtitle = "Álbum", imageUrl = album.thumbnailUrl, onClick = { onAlbumClick(album) }, modifier = Modifier.width(CoverWidth))
-                            }
-                            rowSection(
-                                key = "singles", title = "Singles", items = state.singles,
-                                onMoreClick = seeAll(ArtistListKind.SINGLES, state.singlesMore),
-                                itemKey = { it.id },
-                            ) { single ->
-                                CoverCard(title = single.title, subtitle = "Single", imageUrl = single.thumbnailUrl, onClick = { onAlbumClick(single) }, modifier = Modifier.width(CoverWidth))
-                            }
-                            rowSection(
-                                key = "videos", title = "Vídeos", items = state.videos,
-                                onMoreClick = seeAll(ArtistListKind.VIDEOS, state.videosMore),
-                                itemKey = { it.id },
-                            ) { video ->
-                                val playback = nowPlaying.playbackOf(video)
-                                MediaListVideoCard(track = video, isPlaying = playback.isPlaying, isPaused = playback.isPaused, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }, modifier = Modifier.width(VideoWidth), horizontalPadding = 0.dp)
-                            }
-                            rowSection(
-                                key = "shorts", title = "Shorts", items = state.shorts,
-                                onMoreClick = null,
-                                itemKey = { it.id },
-                            ) { short ->
-                                val playback = nowPlaying.playbackOf(short)
-                                MediaListVideoCard(track = short, isPlaying = playback.isPlaying, isPaused = playback.isPaused, onClick = { onVideoClick(short) }, onMoreClick = { onTrackInfoClick(short) }, modifier = Modifier.width(160.dp), horizontalPadding = 0.dp)
-                            }
-                            rowSection(
-                                key = "channelPlaylists", title = "Playlists", items = state.channelPlaylists,
-                                onMoreClick = null,
-                                itemKey = { it.id },
-                            ) { playlist ->
-                                CoverCard(title = playlist.title, subtitle = playlist.owner, imageUrl = playlist.thumbnailUrl, onClick = { onPlaylistClick(playlist) }, modifier = Modifier.width(CoverWidth))
-                            }
-                            rowSection(
-                                key = "featured", title = "Destacado", items = state.featured,
-                                onMoreClick = seeAll(ArtistListKind.FEATURED, state.featuredMore),
-                                itemKey = { it.id },
-                            ) { playlist ->
-                                CoverCard(title = playlist.title, subtitle = playlist.owner, imageUrl = playlist.thumbnailUrl, onClick = { onPlaylistClick(playlist) }, modifier = Modifier.width(CoverWidth))
-                            }
-                            rowSection(
-                                key = "related", title = "Artistas relacionados", items = state.relatedArtists,
-                                onMoreClick = null, spacing = 16.dp,
-                                itemKey = { it.id },
-                            ) { artist ->
-                                ArtistCircleCard(name = artist.name, imageUrl = artist.thumbnailUrl, onClick = { onArtistClick(artist) }, size = RelatedArtistSize)
-                            }
-                            item(key = "description") { ArtistDescription(description = state.description) }
+                            item(key = "singles_space") { Spacer(Modifier.height(SectionGap)) }
                         }
+                        // 3) Playlists: fileira + > (artista usa featured do YT Music)
+                        val artistPlaylists = state.featured
+                        if (artistPlaylists.isNotEmpty()) {
+                            item(key = "playlists_header") {
+                                SectionHeaderArrow(title = "Playlists", onArrowClick = seeAll(ArtistListKind.FEATURED, state.featuredMore))
+                            }
+                            item(key = "playlists_row") {
+                                LazyRow(contentPadding = RowPadding, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    items(artistPlaylists, key = { it.id }) { playlist ->
+                                        CoverCard(title = playlist.title, subtitle = playlist.owner, imageUrl = playlist.thumbnailUrl, onClick = { onPlaylistClick(playlist) }, modifier = Modifier.width(CoverWidth))
+                                    }
+                                }
+                            }
+                            item(key = "playlists_space") { Spacer(Modifier.height(SectionGap)) }
+                        }
+                        // 4) Videos: fileira 16:9 + > (so videos do artista, do InnerTube)
+                        if (state.videos.isNotEmpty()) {
+                            item(key = "videos_header") {
+                                SectionHeaderArrow(title = "Vídeos", onArrowClick = seeAll(ArtistListKind.VIDEOS, state.videosMore))
+                            }
+                            item(key = "videos_row") {
+                                LazyRow(contentPadding = RowPadding, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    items(state.videos, key = { it.id }) { video ->
+                                        val playback = nowPlaying.playbackOf(video)
+                                        MediaListVideoCard(track = video, isPlaying = playback.isPlaying, isPaused = playback.isPaused, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }, modifier = Modifier.width(VideoWidth), horizontalPadding = 0.dp)
+                                    }
+                                }
+                            }
+                            item(key = "videos_space") { Spacer(Modifier.height(SectionGap)) }
+                        }
+                        item(key = "description") { ArtistDescription(description = state.description) }
                     }
                 }
             }
@@ -407,6 +348,68 @@ private fun ArtistDescription(description: String?) {
                 color = Color.White.copy(alpha = 0.6f),
                 fontWeight = FontWeight.SemiBold,
             )
+        }
+    }
+}
+
+
+/** Header de secao com balao "Tocar tudo" (so em Musicas) + icone > pra ver tudo. Substitui o "Mais". */
+@Composable
+private fun SectionHeaderArrow(
+    title: String,
+    onPlayAllClick: (() -> Unit)? = null,
+    onArrowClick: (() -> Unit)? = null,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = title, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        if (onPlayAllClick != null) {
+            Box(
+                Modifier.clip(RoundedCornerShape(50)).background(Color.White).clickable { onPlayAllClick() }.padding(horizontal = 12.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(VzIcons.Play, contentDescription = "Tocar tudo", tint = Color.Black, modifier = Modifier.size(16.dp))
+                    Text(text = "Tocar tudo", style = MaterialTheme.typography.labelLarge, color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+        }
+        if (onArrowClick != null) {
+            Box(
+                Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).clickable { onArrowClick() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(VzIcons.ArrowForward, contentDescription = "Ver tudo", tint = Color.White, modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+
+/** Slide de Musicas populares: 4 faixas por pagina, arrasta da direita pra esquerda pra proxima fileira de 4. */
+@Composable
+private fun SongsSlide(
+    tracks: List<Track>,
+    onSongClick: (Track) -> Unit,
+    onTrackInfoClick: (Track) -> Unit,
+) {
+    val pages = tracks.chunked(4)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val pageWidth = maxWidth - 32.dp
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            itemsIndexed(pages, key = { _, page -> page.first().id }) { pageIndex, page ->
+                Column(Modifier.width(pageWidth)) {
+                    page.forEachIndexed { idx, track ->
+                        val number = pageIndex * 4 + idx + 1
+                        TrackListRow(track = track, number = number, onClick = { onSongClick(track) }, onMoreClick = { onTrackInfoClick(track) })
+                    }
+                }
+            }
         }
     }
 }

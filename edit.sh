@@ -1,124 +1,394 @@
 #!/bin/bash
-# VzTune FIX13 - HOTFIX ArtistScreen: cria vars/imports/cards que faltavam no FIX12
-# Corrige: Unresolved selectedChannelTab, playlistMenu, shortMenuTrack, ChannelVideoCard, ChannelPlaylistCard, ShortsGridRows, onShortClick
-# Rode na raiz: bash VzTune-FIX13-HOTFIX-ARTISTSCREEN.sh
+# VzTune FIX14 - REBUILD Artista/Canal do zero
+# Regra: tem faixa de musica (topSongs/albums/singles) = ARTISTA (so InnerTube, sem abas, so Home)
+#        sem musica = CANAL (NewPipe, abas Videos | Playlists)
+# Home Artista: Musicas (slide 4 por pagina + Tocar tudo + >) | Singles e EPs (fileira + >) | Playlists (fileira + >) | Videos 16:9 (fileira + >)
+# Canal: abas Videos | Playlists, sem Shorts
+# Search: tira aba Shorts (remove SHORTS do SearchFilter + branch do MusicRepository + grid do SearchResultCards)
+# Cria icone ArrowForward (>) que faltava
+# Rode na raiz: bash VzTune-FIX14-REBUILD-ARTISTA-CANAL.sh
 set -e
 python3 - << 'PY'
-import pathlib, base64
-CARDS_B64 = "cGFja2FnZSBjb20udnp0ZWNoY29yZS52enR1bmUudWkuY29tcG9uZW50cy5jYXJkcwoKaW1wb3J0IGFuZHJvaWQuY29udGVudC5JbnRlbnQKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UuZm91bmRhdGlvbi5iYWNrZ3JvdW5kCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLmZvdW5kYXRpb24uY2xpY2thYmxlCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLmZvdW5kYXRpb24ubGF5b3V0LkFycmFuZ2VtZW50CmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLmZvdW5kYXRpb24ubGF5b3V0LkJveAppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5mb3VuZGF0aW9uLmxheW91dC5Db2x1bW4KaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UuZm91bmRhdGlvbi5sYXlvdXQuUm93CmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLmZvdW5kYXRpb24ubGF5b3V0LlNwYWNlcgppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5mb3VuZGF0aW9uLmxheW91dC5hc3BlY3RSYXRpbwppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5mb3VuZGF0aW9uLmxheW91dC5maWxsTWF4U2l6ZQppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5mb3VuZGF0aW9uLmxheW91dC5maWxsTWF4V2lkdGgKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UuZm91bmRhdGlvbi5sYXlvdXQuaGVpZ2h0CmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLmZvdW5kYXRpb24ubGF5b3V0LnBhZGRpbmcKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UuZm91bmRhdGlvbi5sYXlvdXQuc2l6ZQppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5mb3VuZGF0aW9uLmxheW91dC53aWR0aAppbXBvcnQgYW5kcm9pZHguY29tcG9zZS5mb3VuZGF0aW9uLnNoYXBlLkNpcmNsZVNoYXBlCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLmZvdW5kYXRpb24uc2hhcGUuUm91bmRlZENvcm5lclNoYXBlCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLm1hdGVyaWFsMy5FeHBlcmltZW50YWxNYXRlcmlhbDNBcGkKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UubWF0ZXJpYWwzLkljb24KaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UubWF0ZXJpYWwzLkljb25CdXR0b24KaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UubWF0ZXJpYWwzLk1hdGVyaWFsVGhlbWUKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UubWF0ZXJpYWwzLk1vZGFsQm90dG9tU2hlZXQKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UubWF0ZXJpYWwzLlRleHQKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UubWF0ZXJpYWwzLnJlbWVtYmVyTW9kYWxCb3R0b21TaGVldFN0YXRlCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLnJ1bnRpbWUuQ29tcG9zYWJsZQppbXBvcnQgYW5kcm9pZHguY29tcG9zZS51aS5BbGlnbm1lbnQKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UudWkuTW9kaWZpZXIKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UudWkuZHJhdy5jbGlwCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLnVpLmdyYXBoaWNzLkJydXNoCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLnVpLmdyYXBoaWNzLkNvbG9yCmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLnVpLmxheW91dC5Db250ZW50U2NhbGUKaW1wb3J0IGFuZHJvaWR4LmNvbXBvc2UudWkucGxhdGZvcm0uTG9jYWxDb250ZXh0CmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLnVpLnRleHQuZm9udC5Gb250V2VpZ2h0CmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLnVpLnRleHQuc3R5bGUuVGV4dE92ZXJmbG93CmltcG9ydCBhbmRyb2lkeC5jb21wb3NlLnVpLnVuaXQuZHAKaW1wb3J0IGNvaWwuY29tcG9zZS5Bc3luY0ltYWdlCmltcG9ydCBjb20udnp0ZWNoY29yZS52enR1bmUuY29yZS5kb21haW4ubXVzaWMuUGxheWxpc3QKaW1wb3J0IGNvbS52enRlY2hjb3JlLnZ6dHVuZS5jb3JlLmRvbWFpbi5tdXNpYy5Tb3VyY2UKaW1wb3J0IGNvbS52enRlY2hjb3JlLnZ6dHVuZS5jb3JlLmRvbWFpbi5tdXNpYy5UcmFjawppbXBvcnQgY29tLnZ6dGVjaGNvcmUudnp0dW5lLnVpLmNvbXBvbmVudHMucGxheWVyLkxvY2FsTm93UGxheWluZwppbXBvcnQgY29tLnZ6dGVjaGNvcmUudnp0dW5lLnVpLmNvbXBvbmVudHMucGxheWVyLnBsYXliYWNrT2YKaW1wb3J0IGNvbS52enRlY2hjb3JlLnZ6dHVuZS51aS5pY29ucy5Wekljb25zCmltcG9ydCBjb20udnp0ZWNoY29yZS52enR1bmUudWkuaWNvbnMuYWN0aW9ucy5GYXZvcml0ZUZpbGxlZAppbXBvcnQgY29tLnZ6dGVjaGNvcmUudnp0dW5lLnVpLmljb25zLmFjdGlvbnMuRmF2b3JpdGVPdXRsaW5lCmltcG9ydCBjb20udnp0ZWNoY29yZS52enR1bmUudWkuaWNvbnMuYWN0aW9ucy5Nb3JlVmVydAppbXBvcnQgY29tLnZ6dGVjaGNvcmUudnp0dW5lLnVpLmljb25zLmFjdGlvbnMuU2hhcmUKaW1wb3J0IGNvbS52enRlY2hjb3JlLnZ6dHVuZS51aS5pY29ucy5tZWRpYS5MaXN0cwppbXBvcnQgY29tLnZ6dGVjaGNvcmUudnp0dW5lLnVpLmljb25zLm1lZGlhLlBsYXlsaXN0QWRkCmltcG9ydCBjb20udnp0ZWNoY29yZS52enR1bmUudWkuaWNvbnMubWVkaWEuUXVldWVNdXNpYwppbXBvcnQgY29tLnZ6dGVjaGNvcmUudnp0dW5lLnVpLmljb25zLnBsYXllci5QbGF5Q2lyY2xlRmlsbGVkCgpmdW4gZm9ybWF0Vmlld0NvdW50KGNvdW50OiBMb25nPyk6IFN0cmluZz8gewogICAgaWYgKGNvdW50ID09IG51bGwgfHwgY291bnQgPD0gMCkgcmV0dXJuIG51bGwKICAgIGlmIChjb3VudCA9PSAxTCkgcmV0dXJuICIxIHZpc3VhbGl6YWNhbyIKICAgIHJldHVybiB3aGVuIHsKICAgICAgICBjb3VudCA8IDFfMDAwIC0+ICIkY291bnQgdmlzdWFsaXphY29lcyIKICAgICAgICBjb3VudCA8IDFfMDAwXzAwMCAtPiBmb3JtYXRPbmVEZWNpbWFsKGNvdW50IC8gMV8wMDAuMCkgKyAiIG1pbCB2aXN1YWxpemFjb2VzIgogICAgICAgIGNvdW50IDwgMV8wMDBfMDAwXzAwMCAtPiB7CiAgICAgICAgICAgIHZhbCB2ID0gY291bnQgLyAxXzAwMF8wMDAuMAogICAgICAgICAgICB2YWwgYmFzZSA9IGZvcm1hdE9uZURlY2ltYWwodikKICAgICAgICAgICAgaWYgKHYgPCAxLjA1KSBiYXNlICsgIiBtaWxoYW8gdmlzdWFsaXphY29lcyIgZWxzZSBiYXNlICsgIiBtaWxob2VzIHZpc3VhbGl6YWNvZXMiCiAgICAgICAgfQogICAgICAgIGVsc2UgLT4gZm9ybWF0T25lRGVjaW1hbChjb3VudCAvIDFfMDAwXzAwMF8wMDAuMCkgKyAiIGJpbGhvZXMgdmlzdWFsaXphY29lcyIKICAgIH0KfQpwcml2YXRlIGZ1biBmb3JtYXRPbmVEZWNpbWFsKHY6IERvdWJsZSk6IFN0cmluZyB7CiAgICB2YWwgcyA9ICIlLjFmIi5mb3JtYXQodikucmVwbGFjZSgiLiIsICIsIikKICAgIHJldHVybiBpZiAocy5lbmRzV2l0aCgiLDAiKSkgcy5kcm9wTGFzdCgyKSBlbHNlIHMKfQpmdW4gdmlkZW9NZXRhTGluZSh0cmFjazogVHJhY2spOiBTdHJpbmc/IHsKICAgIHZhbCB2aWV3cyA9IGZvcm1hdFZpZXdDb3VudCh0cmFjay52aWV3Q291bnQpCiAgICByZXR1cm4gbGlzdE9mTm90TnVsbCh2aWV3cywgdHJhY2sucHVibGlzaGVkVGV4dD8udGFrZUlmIHsgaXQuaXNOb3RCbGFuaygpIH0pLmpvaW5Ub1N0cmluZygiIC0gIikudGFrZUlmIHsgaXQuaXNOb3RCbGFuaygpIH0KfQpAQ29tcG9zYWJsZQpmdW4gQ2hhbm5lbFZpZGVvQ2FyZCh0cmFjazogVHJhY2ssIG9uQ2xpY2s6ICgpIC0+IFVuaXQsIG9uTW9yZUNsaWNrOiAoKSAtPiBVbml0LCBtb2RpZmllcjogTW9kaWZpZXIgPSBNb2RpZmllcikgewogICAgdmFsIG5vd1BsYXlpbmcgPSBMb2NhbE5vd1BsYXlpbmcuY3VycmVudAogICAgdmFsIHBsYXliYWNrID0gbm93UGxheWluZy5wbGF5YmFja09mKHRyYWNrKQogICAgdmFsIGlzQ3VycmVudCA9IHBsYXliYWNrLmlzUGxheWluZyB8fCBwbGF5YmFjay5pc1BhdXNlZAogICAgUm93KG1vZGlmaWVyLmZpbGxNYXhXaWR0aCgpLmNsaWNrYWJsZSB7IG9uQ2xpY2soKSB9LnBhZGRpbmcoaG9yaXpvbnRhbCA9IDE2LmRwLCB2ZXJ0aWNhbCA9IDguZHApLCB2ZXJ0aWNhbEFsaWdubWVudCA9IEFsaWdubWVudC5Ub3ApIHsKICAgICAgICBCb3goTW9kaWZpZXIud2lkdGgoMTYwLmRwKS5hc3BlY3RSYXRpbygxNmYgLyA5ZikuY2xpcChSb3VuZGVkQ29ybmVyU2hhcGUoMTAuZHApKS5iYWNrZ3JvdW5kKENvbG9yLldoaXRlLmNvcHkoYWxwaGEgPSAwLjA4ZikpKSB7CiAgICAgICAgICAgIGlmICh0cmFjay50aHVtYm5haWxVcmwgIT0gbnVsbCkgQXN5bmNJbWFnZShtb2RlbCA9IHRyYWNrLnRodW1ibmFpbFVybCwgY29udGVudERlc2NyaXB0aW9uID0gbnVsbCwgY29udGVudFNjYWxlID0gQ29udGVudFNjYWxlLkNyb3AsIG1vZGlmaWVyID0gTW9kaWZpZXIuZmlsbE1heFNpemUoKSkKICAgICAgICAgICAgaWYgKGlzQ3VycmVudCkgQm94KE1vZGlmaWVyLmZpbGxNYXhTaXplKCkuYmFja2dyb3VuZChDb2xvci5CbGFjay5jb3B5KGFscGhhID0gMC40NWYpKSwgY29udGVudEFsaWdubWVudCA9IEFsaWdubWVudC5DZW50ZXIpIHsKICAgICAgICAgICAgICAgIFRleHQodGV4dCA9IGlmIChwbGF5YmFjay5pc1BsYXlpbmcpICJUb2NhbmRvIiBlbHNlICJQYXVzYWRvIiwgc3R5bGUgPSBNYXRlcmlhbFRoZW1lLnR5cG9ncmFwaHkubGFiZWxTbWFsbCwgY29sb3IgPSBDb2xvci5XaGl0ZSwgZm9udFdlaWdodCA9IEZvbnRXZWlnaHQuQm9sZCkKICAgICAgICAgICAgfQogICAgICAgIH0KICAgICAgICBTcGFjZXIoTW9kaWZpZXIud2lkdGgoMTIuZHApKQogICAgICAgIENvbHVtbihNb2RpZmllci53ZWlnaHQoMWYpKSB7CiAgICAgICAgICAgIFRleHQodGV4dCA9IHRyYWNrLnRpdGxlLCBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlwb2dyYXBoeS50aXRsZVNtYWxsLCBjb2xvciA9IENvbG9yLldoaXRlLCBmb250V2VpZ2h0ID0gRm9udFdlaWdodC5TZW1pQm9sZCwgbWF4TGluZXMgPSAyLCBvdmVyZmxvdyA9IFRleHRPdmVyZmxvdy5FbGxpcHNpcykKICAgICAgICAgICAgU3BhY2VyKE1vZGlmaWVyLmhlaWdodCg0LmRwKSkKICAgICAgICAgICAgdmFsIG1ldGEgPSB2aWRlb01ldGFMaW5lKHRyYWNrKQogICAgICAgICAgICBpZiAoIW1ldGEuaXNOdWxsT3JCbGFuaygpKSBUZXh0KHRleHQgPSBtZXRhLCBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlwb2dyYXBoeS5ib2R5U21hbGwsIGNvbG9yID0gQ29sb3IuV2hpdGUuY29weShhbHBoYSA9IDAuNmYpLCBtYXhMaW5lcyA9IDIsIG92ZXJmbG93ID0gVGV4dE92ZXJmbG93LkVsbGlwc2lzKQogICAgICAgIH0KICAgICAgICBJY29uQnV0dG9uKG9uQ2xpY2sgPSBvbk1vcmVDbGljaywgbW9kaWZpZXIgPSBNb2RpZmllci5zaXplKDM2LmRwKSkgewogICAgICAgICAgICBJY29uKGltYWdlVmVjdG9yID0gVnpJY29ucy5Nb3JlVmVydCwgY29udGVudERlc2NyaXB0aW9uID0gIk1haXMiLCB0aW50ID0gQ29sb3IuV2hpdGUuY29weShhbHBoYSA9IDAuNzVmKSkKICAgICAgICB9CiAgICB9Cn0KQENvbXBvc2FibGUKZnVuIENoYW5uZWxQbGF5bGlzdENhcmQocGxheWxpc3Q6IFBsYXlsaXN0LCBvbkNsaWNrOiAoKSAtPiBVbml0LCBvbk1vcmVDbGljazogKCkgLT4gVW5pdCwgbW9kaWZpZXI6IE1vZGlmaWVyID0gTW9kaWZpZXIpIHsKICAgIFJvdyhtb2RpZmllci5maWxsTWF4V2lkdGgoKS5jbGlja2FibGUgeyBvbkNsaWNrKCkgfS5wYWRkaW5nKGhvcml6b250YWwgPSAxNi5kcCwgdmVydGljYWwgPSA4LmRwKSwgdmVydGljYWxBbGlnbm1lbnQgPSBBbGlnbm1lbnQuVG9wKSB7CiAgICAgICAgQm94KE1vZGlmaWVyLndpZHRoKDE2MC5kcCkuYXNwZWN0UmF0aW8oMTZmIC8gOWYpLmNsaXAoUm91bmRlZENvcm5lclNoYXBlKDEwLmRwKSkuYmFja2dyb3VuZChDb2xvci5XaGl0ZS5jb3B5KGFscGhhID0gMC4wOGYpKSkgewogICAgICAgICAgICB2YWwgdGh1bWIgPSBwbGF5bGlzdC50aHVtYm5haWxVcmwgPzogcGxheWxpc3QubW9zYWljVGh1bWJuYWlscy5maXJzdE9yTnVsbCgpCiAgICAgICAgICAgIGlmICh0aHVtYiAhPSBudWxsKSBBc3luY0ltYWdlKG1vZGVsID0gdGh1bWIsIGNvbnRlbnREZXNjcmlwdGlvbiA9IG51bGwsIGNvbnRlbnRTY2FsZSA9IENvbnRlbnRTY2FsZS5Dcm9wLCBtb2RpZmllciA9IE1vZGlmaWVyLmZpbGxNYXhTaXplKCkpCiAgICAgICAgICAgIEJveChNb2RpZmllci5hbGlnbihBbGlnbm1lbnQuQm90dG9tRW5kKS5wYWRkaW5nKDYuZHApLmNsaXAoUm91bmRlZENvcm5lclNoYXBlKDUwKSkuYmFja2dyb3VuZChDb2xvci5CbGFjay5jb3B5KGFscGhhID0gMC43OGYpKS5wYWRkaW5nKGhvcml6b250YWwgPSA4LmRwLCB2ZXJ0aWNhbCA9IDQuZHApKSB7CiAgICAgICAgICAgICAgICBSb3codmVydGljYWxBbGlnbm1lbnQgPSBBbGlnbm1lbnQuQ2VudGVyVmVydGljYWxseSwgaG9yaXpvbnRhbEFycmFuZ2VtZW50ID0gQXJyYW5nZW1lbnQuc3BhY2VkQnkoNC5kcCkpIHsKICAgICAgICAgICAgICAgICAgICBJY29uKGltYWdlVmVjdG9yID0gVnpJY29ucy5MaXN0cywgY29udGVudERlc2NyaXB0aW9uID0gbnVsbCwgdGludCA9IENvbG9yLldoaXRlLCBtb2RpZmllciA9IE1vZGlmaWVyLnNpemUoMTQuZHApKQogICAgICAgICAgICAgICAgICAgIFRleHQodGV4dCA9IGlmICgocGxheWxpc3QudHJhY2tDb3VudCA/OiAwKSA+IDApIHBsYXlsaXN0LnRyYWNrQ291bnQudG9TdHJpbmcoKSArICIgZmFpeGFzIiBlbHNlICJQbGF5bGlzdCIsIHN0eWxlID0gTWF0ZXJpYWxUaGVtZS50eXBvZ3JhcGh5LmxhYmVsU21hbGwsIGNvbG9yID0gQ29sb3IuV2hpdGUsIGZvbnRXZWlnaHQgPSBGb250V2VpZ2h0LlNlbWlCb2xkKQogICAgICAgICAgICAgICAgfQogICAgICAgICAgICB9CiAgICAgICAgfQogICAgICAgIFNwYWNlcihNb2RpZmllci53aWR0aCgxMi5kcCkpCiAgICAgICAgQ29sdW1uKE1vZGlmaWVyLndlaWdodCgxZikpIHsKICAgICAgICAgICAgVGV4dCh0ZXh0ID0gcGxheWxpc3QudGl0bGUsIHN0eWxlID0gTWF0ZXJpYWxUaGVtZS50eXBvZ3JhcGh5LnRpdGxlU21hbGwsIGNvbG9yID0gQ29sb3IuV2hpdGUsIGZvbnRXZWlnaHQgPSBGb250V2VpZ2h0LlNlbWlCb2xkLCBtYXhMaW5lcyA9IDIsIG92ZXJmbG93ID0gVGV4dE92ZXJmbG93LkVsbGlwc2lzKQogICAgICAgICAgICBTcGFjZXIoTW9kaWZpZXIuaGVpZ2h0KDQuZHApKQogICAgICAgICAgICB2YWwgb3duZXIgPSBwbGF5bGlzdC5vd25lcj8udGFrZUlmIHsgaXQuaXNOb3RCbGFuaygpIH0KICAgICAgICAgICAgdmFsIHN1YiA9IGxpc3RPZk5vdE51bGwob3duZXIsICJQbGF5bGlzdCIpLmpvaW5Ub1N0cmluZygiIC0gIikKICAgICAgICAgICAgVGV4dCh0ZXh0ID0gc3ViLCBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlwb2dyYXBoeS5ib2R5U21hbGwsIGNvbG9yID0gQ29sb3IuV2hpdGUuY29weShhbHBoYSA9IDAuNmYpLCBtYXhMaW5lcyA9IDEsIG92ZXJmbG93ID0gVGV4dE92ZXJmbG93LkVsbGlwc2lzKQogICAgICAgIH0KICAgICAgICBJY29uQnV0dG9uKG9uQ2xpY2sgPSBvbk1vcmVDbGljaywgbW9kaWZpZXIgPSBNb2RpZmllci5zaXplKDM2LmRwKSkgewogICAgICAgICAgICBJY29uKGltYWdlVmVjdG9yID0gVnpJY29ucy5Nb3JlVmVydCwgY29udGVudERlc2NyaXB0aW9uID0gIk1haXMiLCB0aW50ID0gQ29sb3IuV2hpdGUuY29weShhbHBoYSA9IDAuNzVmKSkKICAgICAgICB9CiAgICB9Cn0KQENvbXBvc2FibGUKZnVuIFNob3J0Q2FyZCh0cmFjazogVHJhY2ssIG9uQ2xpY2s6ICgpIC0+IFVuaXQsIG9uTW9yZUNsaWNrOiAoKSAtPiBVbml0LCBtb2RpZmllcjogTW9kaWZpZXIgPSBNb2RpZmllcikgewogICAgdmFsIG5vd1BsYXlpbmcgPSBMb2NhbE5vd1BsYXlpbmcuY3VycmVudAogICAgdmFsIHBsYXliYWNrID0gbm93UGxheWluZy5wbGF5YmFja09mKHRyYWNrKQogICAgdmFsIGlzQ3VycmVudCA9IHBsYXliYWNrLmlzUGxheWluZyB8fCBwbGF5YmFjay5pc1BhdXNlZAogICAgQ29sdW1uKG1vZGlmaWVyLmZpbGxNYXhXaWR0aCgpLmNsaXAoUm91bmRlZENvcm5lclNoYXBlKDEyLmRwKSkuY2xpY2thYmxlIHsgb25DbGljaygpIH0pIHsKICAgICAgICBCb3goTW9kaWZpZXIuZmlsbE1heFdpZHRoKCkuYXNwZWN0UmF0aW8oOWYgLyAxNmYpLmNsaXAoUm91bmRlZENvcm5lclNoYXBlKDEyLmRwKSkuYmFja2dyb3VuZChDb2xvci5XaGl0ZS5jb3B5KGFscGhhID0gMC4wOGYpKSkgewogICAgICAgICAgICBpZiAodHJhY2sudGh1bWJuYWlsVXJsICE9IG51bGwpIEFzeW5jSW1hZ2UobW9kZWwgPSB0cmFjay50aHVtYm5haWxVcmwsIGNvbnRlbnREZXNjcmlwdGlvbiA9IG51bGwsIGNvbnRlbnRTY2FsZSA9IENvbnRlbnRTY2FsZS5Dcm9wLCBtb2RpZmllciA9IE1vZGlmaWVyLmZpbGxNYXhTaXplKCkpCiAgICAgICAgICAgIEJveChNb2RpZmllci5maWxsTWF4V2lkdGgoKS5oZWlnaHQoNjQuZHApLmFsaWduKEFsaWdubWVudC5Cb3R0b21DZW50ZXIpLmJhY2tncm91bmQoQnJ1c2gudmVydGljYWxHcmFkaWVudChsaXN0T2YoQ29sb3IuVHJhbnNwYXJlbnQsIENvbG9yLkJsYWNrLmNvcHkoYWxwaGEgPSAwLjc4ZikpKSkpCiAgICAgICAgICAgIEJveChNb2RpZmllci5hbGlnbihBbGlnbm1lbnQuVG9wRW5kKS5wYWRkaW5nKDYuZHApLmNsaXAoQ2lyY2xlU2hhcGUpLmJhY2tncm91bmQoQ29sb3IuQmxhY2suY29weShhbHBoYSA9IDAuNTVmKSkuY2xpY2thYmxlIHsgb25Nb3JlQ2xpY2soKSB9LnBhZGRpbmcoNi5kcCkpIHsKICAgICAgICAgICAgICAgIEljb24oaW1hZ2VWZWN0b3IgPSBWekljb25zLk1vcmVWZXJ0LCBjb250ZW50RGVzY3JpcHRpb24gPSAiTWFpcyIsIHRpbnQgPSBDb2xvci5XaGl0ZSwgbW9kaWZpZXIgPSBNb2RpZmllci5zaXplKDE4LmRwKSkKICAgICAgICAgICAgfQogICAgICAgICAgICB2YWwgdmlld3MgPSBmb3JtYXRWaWV3Q291bnQodHJhY2sudmlld0NvdW50KQogICAgICAgICAgICBpZiAoIXZpZXdzLmlzTnVsbE9yQmxhbmsoKSkgewogICAgICAgICAgICAgICAgVGV4dCh0ZXh0ID0gdmlld3MsIHN0eWxlID0gTWF0ZXJpYWxUaGVtZS50eXBvZ3JhcGh5LmxhYmVsU21hbGwsIGNvbG9yID0gQ29sb3IuV2hpdGUsIGZvbnRXZWlnaHQgPSBGb250V2VpZ2h0LlNlbWlCb2xkLCBtYXhMaW5lcyA9IDEsIG92ZXJmbG93ID0gVGV4dE92ZXJmbG93LkVsbGlwc2lzLCBtb2RpZmllciA9IE1vZGlmaWVyLmFsaWduKEFsaWdubWVudC5Cb3R0b21TdGFydCkucGFkZGluZyhob3Jpem9udGFsID0gOC5kcCwgdmVydGljYWwgPSA4LmRwKSkKICAgICAgICAgICAgfQogICAgICAgICAgICBpZiAoaXNDdXJyZW50KSBCb3goTW9kaWZpZXIuZmlsbE1heFNpemUoKS5iYWNrZ3JvdW5kKENvbG9yLkJsYWNrLmNvcHkoYWxwaGEgPSAwLjM1ZikpLCBjb250ZW50QWxpZ25tZW50ID0gQWxpZ25tZW50LkNlbnRlcikgewogICAgICAgICAgICAgICAgVGV4dCh0ZXh0ID0gaWYgKHBsYXliYWNrLmlzUGxheWluZykgIlRvY2FuZG8iIGVsc2UgIlBhdXNhZG8iLCBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlwb2dyYXBoeS5sYWJlbFNtYWxsLCBjb2xvciA9IENvbG9yLldoaXRlLCBmb250V2VpZ2h0ID0gRm9udFdlaWdodC5Cb2xkKQogICAgICAgICAgICB9CiAgICAgICAgfQogICAgfQp9CkBDb21wb3NhYmxlCmZ1biBTaG9ydHNHcmlkUm93cyh0cmFja3M6IExpc3Q8VHJhY2s+LCBvbkNsaWNrOiAoVHJhY2spIC0+IFVuaXQsIG9uTW9yZUNsaWNrOiAoVHJhY2spIC0+IFVuaXQsIG1vZGlmaWVyOiBNb2RpZmllciA9IE1vZGlmaWVyKSB7CiAgICBDb2x1bW4obW9kaWZpZXIuZmlsbE1heFdpZHRoKCkucGFkZGluZyhob3Jpem9udGFsID0gMTIuZHApLCB2ZXJ0aWNhbEFycmFuZ2VtZW50ID0gQXJyYW5nZW1lbnQuc3BhY2VkQnkoMTAuZHApKSB7CiAgICAgICAgdHJhY2tzLmNodW5rZWQoMykuZm9yRWFjaCB7IHJvdyAtPgogICAgICAgICAgICBSb3coTW9kaWZpZXIuZmlsbE1heFdpZHRoKCksIGhvcml6b250YWxBcnJhbmdlbWVudCA9IEFycmFuZ2VtZW50LnNwYWNlZEJ5KDEwLmRwKSkgewogICAgICAgICAgICAgICAgcm93LmZvckVhY2ggeyB0cmFjayAtPgogICAgICAgICAgICAgICAgICAgIEJveChNb2RpZmllci53ZWlnaHQoMWYpKSB7IFNob3J0Q2FyZCh0cmFjayA9IHRyYWNrLCBvbkNsaWNrID0geyBvbkNsaWNrKHRyYWNrKSB9LCBvbk1vcmVDbGljayA9IHsgb25Nb3JlQ2xpY2sodHJhY2spIH0pIH0KICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIHJlcGVhdCgzIC0gcm93LnNpemUpIHsgU3BhY2VyKE1vZGlmaWVyLndlaWdodCgxZikpIH0KICAgICAgICAgICAgfQogICAgICAgIH0KICAgIH0KfQpAT3B0SW4oRXhwZXJpbWVudGFsTWF0ZXJpYWwzQXBpOjpjbGFzcykKQENvbXBvc2FibGUKZnVuIFNob3J0c09wdGlvbnNTaGVldCh0cmFjazogVHJhY2ssIGlzRmF2b3JpdGU6IEJvb2xlYW4sIG9uVG9nZ2xlRmF2b3JpdGU6IChUcmFjaykgLT4gVW5pdCwgb25EaXNtaXNzOiAoKSAtPiBVbml0KSB7CiAgICB2YWwgY29udGV4dCA9IExvY2FsQ29udGV4dC5jdXJyZW50CiAgICB2YWwgc2hlZXRTdGF0ZSA9IHJlbWVtYmVyTW9kYWxCb3R0b21TaGVldFN0YXRlKHNraXBQYXJ0aWFsbHlFeHBhbmRlZCA9IHRydWUpCiAgICBNb2RhbEJvdHRvbVNoZWV0KG9uRGlzbWlzc1JlcXVlc3QgPSBvbkRpc21pc3MsIHNoZWV0U3RhdGUgPSBzaGVldFN0YXRlLCBjb250YWluZXJDb2xvciA9IENvbG9yKDB4RkYxMjE4MjkpLCBjb250ZW50Q29sb3IgPSBDb2xvci5XaGl0ZSkgewogICAgICAgIENvbHVtbihNb2RpZmllci5maWxsTWF4V2lkdGgoKS5wYWRkaW5nKGJvdHRvbSA9IDI0LmRwKSkgewogICAgICAgICAgICBSb3coTW9kaWZpZXIuZmlsbE1heFdpZHRoKCkucGFkZGluZyhob3Jpem9udGFsID0gMjAuZHAsIHZlcnRpY2FsID0gOC5kcCksIHZlcnRpY2FsQWxpZ25tZW50ID0gQWxpZ25tZW50LkNlbnRlclZlcnRpY2FsbHkpIHsKICAgICAgICAgICAgICAgIEJveChNb2RpZmllci5zaXplKDQ4LmRwKS5jbGlwKFJvdW5kZWRDb3JuZXJTaGFwZSgxMC5kcCkpLmJhY2tncm91bmQoQ29sb3IuV2hpdGUuY29weShhbHBoYSA9IDAuMDhmKSkpIHsKICAgICAgICAgICAgICAgICAgICBpZiAodHJhY2sudGh1bWJuYWlsVXJsICE9IG51bGwpIEFzeW5jSW1hZ2UobW9kZWwgPSB0cmFjay50aHVtYm5haWxVcmwsIGNvbnRlbnREZXNjcmlwdGlvbiA9IG51bGwsIGNvbnRlbnRTY2FsZSA9IENvbnRlbnRTY2FsZS5Dcm9wLCBtb2RpZmllciA9IE1vZGlmaWVyLmZpbGxNYXhTaXplKCkpCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICBTcGFjZXIoTW9kaWZpZXIud2lkdGgoMTIuZHApKQogICAgICAgICAgICAgICAgQ29sdW1uKE1vZGlmaWVyLndlaWdodCgxZikpIHsKICAgICAgICAgICAgICAgICAgICBUZXh0KHRleHQgPSB0cmFjay50aXRsZSwgc3R5bGUgPSBNYXRlcmlhbFRoZW1lLnR5cG9ncmFwaHkudGl0bGVTbWFsbCwgY29sb3IgPSBDb2xvci5XaGl0ZSwgZm9udFdlaWdodCA9IEZvbnRXZWlnaHQuQm9sZCwgbWF4TGluZXMgPSAxLCBvdmVyZmxvdyA9IFRleHRPdmVyZmxvdy5FbGxpcHNpcykKICAgICAgICAgICAgICAgICAgICBUZXh0KHRleHQgPSB0cmFjay5hcnRpc3QsIHN0eWxlID0gTWF0ZXJpYWxUaGVtZS50eXBvZ3JhcGh5LmJvZHlTbWFsbCwgY29sb3IgPSBDb2xvci5XaGl0ZS5jb3B5KGFscGhhID0gMC42ZiksIG1heExpbmVzID0gMSwgb3ZlcmZsb3cgPSBUZXh0T3ZlcmZsb3cuRWxsaXBzaXMpCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIH0KICAgICAgICAgICAgUm93KE1vZGlmaWVyLmZpbGxNYXhXaWR0aCgpLmNsaWNrYWJsZSB7IG9uVG9nZ2xlRmF2b3JpdGUodHJhY2spOyBvbkRpc21pc3MoKSB9LnBhZGRpbmcoaG9yaXpvbnRhbCA9IDIwLmRwLCB2ZXJ0aWNhbCA9IDE0LmRwKSwgdmVydGljYWxBbGlnbm1lbnQgPSBBbGlnbm1lbnQuQ2VudGVyVmVydGljYWxseSkgewogICAgICAgICAgICAgICAgSWNvbihpbWFnZVZlY3RvciA9IGlmIChpc0Zhdm9yaXRlKSBWekljb25zLkZhdm9yaXRlRmlsbGVkIGVsc2UgVnpJY29ucy5GYXZvcml0ZU91dGxpbmUsIGNvbnRlbnREZXNjcmlwdGlvbiA9IG51bGwsIHRpbnQgPSBpZiAoaXNGYXZvcml0ZSkgQ29sb3IoMHhGRkVDNDg5OSkgZWxzZSBDb2xvci5XaGl0ZSwgbW9kaWZpZXIgPSBNb2RpZmllci5zaXplKDI0LmRwKSkKICAgICAgICAgICAgICAgIFNwYWNlcihNb2RpZmllci53aWR0aCgxNi5kcCkpCiAgICAgICAgICAgICAgICBUZXh0KHRleHQgPSBpZiAoaXNGYXZvcml0ZSkgIlJlbW92ZXIgZG9zIGZhdm9yaXRvcyIgZWxzZSAiQWRpY2lvbmFyIGFvcyBmYXZvcml0b3MiLCBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlwb2dyYXBoeS5ib2R5TGFyZ2UsIGNvbG9yID0gQ29sb3IuV2hpdGUsIGZvbnRXZWlnaHQgPSBGb250V2VpZ2h0Lk1lZGl1bSkKICAgICAgICAgICAgfQogICAgICAgICAgICBSb3coTW9kaWZpZXIuZmlsbE1heFdpZHRoKCkuY2xpY2thYmxlIHsKICAgICAgICAgICAgICAgIHZhbCB1cmwgPSBpZiAodHJhY2suc291cmNlID09IFNvdXJjZS5ZT1VUVUJFKSAiaHR0cHM6Ly93d3cueW91dHViZS5jb20vc2hvcnRzLyIgKyB0cmFjay5pZCBlbHNlICJodHRwczovL211c2ljLnlvdXR1YmUuY29tL3dhdGNoP3Y9IiArIHRyYWNrLmlkCiAgICAgICAgICAgICAgICB2YWwgc2VuZCA9IEludGVudChJbnRlbnQuQUNUSU9OX1NFTkQpLmFwcGx5IHsgdHlwZSA9ICJ0ZXh0L3BsYWluIjsgcHV0RXh0cmEoSW50ZW50LkVYVFJBX1RFWFQsICJBc3Npc3RlIGVzc2UgU2hvcnQgbm8gVnpUdW5lXG4iICsgdHJhY2sudGl0bGUgKyAiXG4iICsgdXJsKSB9CiAgICAgICAgICAgICAgICBjb250ZXh0LnN0YXJ0QWN0aXZpdHkoSW50ZW50LmNyZWF0ZUNob29zZXIoc2VuZCwgIkNvbXBhcnRpbGhhciBTaG9ydCIpKQogICAgICAgICAgICAgICAgb25EaXNtaXNzKCkKICAgICAgICAgICAgfS5wYWRkaW5nKGhvcml6b250YWwgPSAyMC5kcCwgdmVydGljYWwgPSAxNC5kcCksIHZlcnRpY2FsQWxpZ25tZW50ID0gQWxpZ25tZW50LkNlbnRlclZlcnRpY2FsbHkpIHsKICAgICAgICAgICAgICAgIEljb24oaW1hZ2VWZWN0b3IgPSBWekljb25zLlNoYXJlLCBjb250ZW50RGVzY3JpcHRpb24gPSBudWxsLCB0aW50ID0gQ29sb3IuV2hpdGUsIG1vZGlmaWVyID0gTW9kaWZpZXIuc2l6ZSgyNC5kcCkpCiAgICAgICAgICAgICAgICBTcGFjZXIoTW9kaWZpZXIud2lkdGgoMTYuZHApKQogICAgICAgICAgICAgICAgVGV4dCh0ZXh0ID0gIkNvbXBhcnRpbGhhciIsIHN0eWxlID0gTWF0ZXJpYWxUaGVtZS50eXBvZ3JhcGh5LmJvZHlMYXJnZSwgY29sb3IgPSBDb2xvci5XaGl0ZSwgZm9udFdlaWdodCA9IEZvbnRXZWlnaHQuTWVkaXVtKQogICAgICAgICAgICB9CiAgICAgICAgfQogICAgfQp9CkBPcHRJbihFeHBlcmltZW50YWxNYXRlcmlhbDNBcGk6OmNsYXNzKQpAQ29tcG9zYWJsZQpmdW4gUGxheWxpc3RPcHRpb25zU2hlZXQocGxheWxpc3Q6IFBsYXlsaXN0LCBvbkRpc21pc3M6ICgpIC0+IFVuaXQsIG9uUGxheU5leHQ6IChQbGF5bGlzdCkgLT4gVW5pdCwgb25BZGRUb1F1ZXVlOiAoUGxheWxpc3QpIC0+IFVuaXQsIG9uU2F2ZVRvTGlicmFyeTogKFBsYXlsaXN0KSAtPiBVbml0LCBvblNoYXJlOiAoUGxheWxpc3QpIC0+IFVuaXQgPSB7fSkgewogICAgdmFsIGNvbnRleHQgPSBMb2NhbENvbnRleHQuY3VycmVudAogICAgdmFsIHNoZWV0U3RhdGUgPSByZW1lbWJlck1vZGFsQm90dG9tU2hlZXRTdGF0ZShza2lwUGFydGlhbGx5RXhwYW5kZWQgPSB0cnVlKQogICAgTW9kYWxCb3R0b21TaGVldChvbkRpc21pc3NSZXF1ZXN0ID0gb25EaXNtaXNzLCBzaGVldFN0YXRlID0gc2hlZXRTdGF0ZSwgY29udGFpbmVyQ29sb3IgPSBDb2xvcigweEZGMTIxODI5KSwgY29udGVudENvbG9yID0gQ29sb3IuV2hpdGUpIHsKICAgICAgICBDb2x1bW4oTW9kaWZpZXIuZmlsbE1heFdpZHRoKCkucGFkZGluZyhib3R0b20gPSAyNC5kcCkpIHsKICAgICAgICAgICAgUm93KE1vZGlmaWVyLmZpbGxNYXhXaWR0aCgpLnBhZGRpbmcoaG9yaXpvbnRhbCA9IDIwLmRwLCB2ZXJ0aWNhbCA9IDguZHApLCB2ZXJ0aWNhbEFsaWdubWVudCA9IEFsaWdubWVudC5DZW50ZXJWZXJ0aWNhbGx5KSB7CiAgICAgICAgICAgICAgICBCb3goTW9kaWZpZXIuc2l6ZSg0OC5kcCkuY2xpcChSb3VuZGVkQ29ybmVyU2hhcGUoMTAuZHApKS5iYWNrZ3JvdW5kKENvbG9yLldoaXRlLmNvcHkoYWxwaGEgPSAwLjA4ZikpKSB7CiAgICAgICAgICAgICAgICAgICAgdmFsIHRodW1iID0gcGxheWxpc3QudGh1bWJuYWlsVXJsID86IHBsYXlsaXN0Lm1vc2FpY1RodW1ibmFpbHMuZmlyc3RPck51bGwoKQogICAgICAgICAgICAgICAgICAgIGlmICh0aHVtYiAhPSBudWxsKSBBc3luY0ltYWdlKG1vZGVsID0gdGh1bWIsIGNvbnRlbnREZXNjcmlwdGlvbiA9IG51bGwsIGNvbnRlbnRTY2FsZSA9IENvbnRlbnRTY2FsZS5Dcm9wLCBtb2RpZmllciA9IE1vZGlmaWVyLmZpbGxNYXhTaXplKCkpCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICBTcGFjZXIoTW9kaWZpZXIud2lkdGgoMTIuZHApKQogICAgICAgICAgICAgICAgQ29sdW1uKE1vZGlmaWVyLndlaWdodCgxZikpIHsKICAgICAgICAgICAgICAgICAgICBUZXh0KHRleHQgPSBwbGF5bGlzdC50aXRsZSwgc3R5bGUgPSBNYXRlcmlhbFRoZW1lLnR5cG9ncmFwaHkudGl0bGVTbWFsbCwgY29sb3IgPSBDb2xvci5XaGl0ZSwgZm9udFdlaWdodCA9IEZvbnRXZWlnaHQuQm9sZCwgbWF4TGluZXMgPSAxLCBvdmVyZmxvdyA9IFRleHRPdmVyZmxvdy5FbGxpcHNpcykKICAgICAgICAgICAgICAgICAgICBUZXh0KHRleHQgPSBsaXN0T2ZOb3ROdWxsKHBsYXlsaXN0Lm93bmVyLCAiUGxheWxpc3QiKS5qb2luVG9TdHJpbmcoIiAtICIpLCBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlwb2dyYXBoeS5ib2R5U21hbGwsIGNvbG9yID0gQ29sb3IuV2hpdGUuY29weShhbHBoYSA9IDAuNmYpLCBtYXhMaW5lcyA9IDEsIG92ZXJmbG93ID0gVGV4dE92ZXJmbG93LkVsbGlwc2lzKQogICAgICAgICAgICAgICAgfQogICAgICAgICAgICB9CiAgICAgICAgICAgIFJvdyhNb2RpZmllci5maWxsTWF4V2lkdGgoKS5jbGlja2FibGUgeyBvblBsYXlOZXh0KHBsYXlsaXN0KTsgb25EaXNtaXNzKCkgfS5wYWRkaW5nKGhvcml6b250YWwgPSAyMC5kcCwgdmVydGljYWwgPSAxNC5kcCksIHZlcnRpY2FsQWxpZ25tZW50ID0gQWxpZ25tZW50LkNlbnRlclZlcnRpY2FsbHkpIHsKICAgICAgICAgICAgICAgIEljb24oaW1hZ2VWZWN0b3IgPSBWekljb25zLlBsYXlDaXJjbGVGaWxsZWQsIGNvbnRlbnREZXNjcmlwdGlvbiA9IG51bGwsIHRpbnQgPSBDb2xvci5XaGl0ZSwgbW9kaWZpZXIgPSBNb2RpZmllci5zaXplKDI0LmRwKSkKICAgICAgICAgICAgICAgIFNwYWNlcihNb2RpZmllci53aWR0aCgxNi5kcCkpCiAgICAgICAgICAgICAgICBUZXh0KHRleHQgPSAiQWRpY2lvbmFyIGNvbW8gcHJveGltYSBkYSBmaWxhIiwgc3R5bGUgPSBNYXRlcmlhbFRoZW1lLnR5cG9ncmFwaHkuYm9keUxhcmdlLCBjb2xvciA9IENvbG9yLldoaXRlLCBmb250V2VpZ2h0ID0gRm9udFdlaWdodC5NZWRpdW0pCiAgICAgICAgICAgIH0KICAgICAgICAgICAgUm93KE1vZGlmaWVyLmZpbGxNYXhXaWR0aCgpLmNsaWNrYWJsZSB7IG9uQWRkVG9RdWV1ZShwbGF5bGlzdCk7IG9uRGlzbWlzcygpIH0ucGFkZGluZyhob3Jpem9udGFsID0gMjAuZHAsIHZlcnRpY2FsID0gMTQuZHApLCB2ZXJ0aWNhbEFsaWdubWVudCA9IEFsaWdubWVudC5DZW50ZXJWZXJ0aWNhbGx5KSB7CiAgICAgICAgICAgICAgICBJY29uKGltYWdlVmVjdG9yID0gVnpJY29ucy5RdWV1ZU11c2ljLCBjb250ZW50RGVzY3JpcHRpb24gPSBudWxsLCB0aW50ID0gQ29sb3IuV2hpdGUsIG1vZGlmaWVyID0gTW9kaWZpZXIuc2l6ZSgyNC5kcCkpCiAgICAgICAgICAgICAgICBTcGFjZXIoTW9kaWZpZXIud2lkdGgoMTYuZHApKQogICAgICAgICAgICAgICAgVGV4dCh0ZXh0ID0gIkFkaWNpb25hciBhbyBmaW5hbCBkYSBmaWxhIiwgc3R5bGUgPSBNYXRlcmlhbFRoZW1lLnR5cG9ncmFwaHkuYm9keUxhcmdlLCBjb2xvciA9IENvbG9yLldoaXRlLCBmb250V2VpZ2h0ID0gRm9udFdlaWdodC5NZWRpdW0pCiAgICAgICAgICAgIH0KICAgICAgICAgICAgUm93KE1vZGlmaWVyLmZpbGxNYXhXaWR0aCgpLmNsaWNrYWJsZSB7IG9uU2F2ZVRvTGlicmFyeShwbGF5bGlzdCk7IG9uRGlzbWlzcygpIH0ucGFkZGluZyhob3Jpem9udGFsID0gMjAuZHAsIHZlcnRpY2FsID0gMTQuZHApLCB2ZXJ0aWNhbEFsaWdubWVudCA9IEFsaWdubWVudC5DZW50ZXJWZXJ0aWNhbGx5KSB7CiAgICAgICAgICAgICAgICBJY29uKGltYWdlVmVjdG9yID0gVnpJY29ucy5QbGF5bGlzdEFkZCwgY29udGVudERlc2NyaXB0aW9uID0gbnVsbCwgdGludCA9IENvbG9yLldoaXRlLCBtb2RpZmllciA9IE1vZGlmaWVyLnNpemUoMjQuZHApKQogICAgICAgICAgICAgICAgU3BhY2VyKE1vZGlmaWVyLndpZHRoKDE2LmRwKSkKICAgICAgICAgICAgICAgIFRleHQodGV4dCA9ICJTYWx2YXIgbmEgYmlibGlvdGVjYSIsIHN0eWxlID0gTWF0ZXJpYWxUaGVtZS50eXBvZ3JhcGh5LmJvZHlMYXJnZSwgY29sb3IgPSBDb2xvci5XaGl0ZSwgZm9udFdlaWdodCA9IEZvbnRXZWlnaHQuTWVkaXVtKQogICAgICAgICAgICB9CiAgICAgICAgICAgIFJvdyhNb2RpZmllci5maWxsTWF4V2lkdGgoKS5jbGlja2FibGUgewogICAgICAgICAgICAgICAgdmFsIHVybCA9IGlmIChwbGF5bGlzdC5zb3VyY2UgPT0gU291cmNlLllPVVRVQkUpICJodHRwczovL3d3dy55b3V0dWJlLmNvbS9wbGF5bGlzdD9saXN0PSIgKyBwbGF5bGlzdC5pZCBlbHNlICJodHRwczovL211c2ljLnlvdXR1YmUuY29tL3BsYXlsaXN0P2xpc3Q9IiArIHBsYXlsaXN0LmlkCiAgICAgICAgICAgICAgICB2YWwgc2VuZCA9IEludGVudChJbnRlbnQuQUNUSU9OX1NFTkQpLmFwcGx5IHsgdHlwZSA9ICJ0ZXh0L3BsYWluIjsgcHV0RXh0cmEoSW50ZW50LkVYVFJBX1RFWFQsICJDb25mZXJlIGVzc2EgcGxheWxpc3Qgbm8gVnpUdW5lXG4iICsgcGxheWxpc3QudGl0bGUgKyAiXG4iICsgdXJsKSB9CiAgICAgICAgICAgICAgICBjb250ZXh0LnN0YXJ0QWN0aXZpdHkoSW50ZW50LmNyZWF0ZUNob29zZXIoc2VuZCwgIkNvbXBhcnRpbGhhciBwbGF5bGlzdCIpKQogICAgICAgICAgICAgICAgb25TaGFyZShwbGF5bGlzdCkKICAgICAgICAgICAgICAgIG9uRGlzbWlzcygpCiAgICAgICAgICAgIH0ucGFkZGluZyhob3Jpem9udGFsID0gMjAuZHAsIHZlcnRpY2FsID0gMTQuZHApLCB2ZXJ0aWNhbEFsaWdubWVudCA9IEFsaWdubWVudC5DZW50ZXJWZXJ0aWNhbGx5KSB7CiAgICAgICAgICAgICAgICBJY29uKGltYWdlVmVjdG9yID0gVnpJY29ucy5TaGFyZSwgY29udGVudERlc2NyaXB0aW9uID0gbnVsbCwgdGludCA9IENvbG9yLldoaXRlLCBtb2RpZmllciA9IE1vZGlmaWVyLnNpemUoMjQuZHApKQogICAgICAgICAgICAgICAgU3BhY2VyKE1vZGlmaWVyLndpZHRoKDE2LmRwKSkKICAgICAgICAgICAgICAgIFRleHQodGV4dCA9ICJDb21wYXJ0aWxoYXIiLCBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlwb2dyYXBoeS5ib2R5TGFyZ2UsIGNvbG9yID0gQ29sb3IuV2hpdGUsIGZvbnRXZWlnaHQgPSBGb250V2VpZ2h0Lk1lZGl1bSkKICAgICAgICAgICAgfQogICAgICAgIH0KICAgIH0KfQo="
+import pathlib, re
 
-# 1) Garante ChannelCards.kt
-cards_path = pathlib.Path("app/src/main/kotlin/com/vztechcore/vztune/ui/components/cards/ChannelCards.kt")
-need_cards = True
-if cards_path.exists():
-    txt = cards_path.read_text(encoding="utf-8", errors="ignore")
-    if "fun ChannelVideoCard" in txt and "fun ChannelPlaylistCard" in txt and "fun ShortsGridRows" in txt and "fun ShortsOptionsSheet" in txt and "fun PlaylistOptionsSheet" in txt:
-        need_cards = False
-        print("ChannelCards.kt ja OK")
-if need_cards:
-    cards_path.parent.mkdir(parents=True, exist_ok=True)
-    cards_path.write_bytes(base64.b64decode(CARDS_B64))
-    print("ChannelCards.kt criado/restaurado")
+# ---------- 0) Cria icone ArrowForward (>) ----------
+arrow_path = pathlib.Path("app/src/main/kotlin/com/vztechcore/vztune/ui/icons/actions/ArrowForward.kt")
+if not arrow_path.exists():
+    arrow_path.parent.mkdir(parents=True, exist_ok=True)
+    arrow_path.write_text('''package com.vztechcore.vztune.ui.icons.actions
 
-# 2) ArtistScreen.kt - imports, params, vars, sheets
-p = pathlib.Path("app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistScreen.kt")
-t = p.read_text(encoding="utf-8")
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.vztechcore.vztune.ui.icons.VzIcons
 
-# 2a) Imports que faltavam
-imports_needed = [
-    "import com.vztechcore.vztune.ui.components.cards.ChannelPlaylistCard",
-    "import com.vztechcore.vztune.ui.components.cards.ChannelVideoCard",
-    "import com.vztechcore.vztune.ui.components.cards.PlaylistOptionsSheet",
-    "import com.vztechcore.vztune.ui.components.cards.ShortsGridRows",
-    "import com.vztechcore.vztune.ui.components.cards.ShortsOptionsSheet",
-    "import com.vztechcore.vztune.data.prefs.models.StoredTrack",
-]
-for imp in imports_needed:
+val VzIcons.ArrowForward: ImageVector
+    get() = VzIcons.icon(
+        name = "ArrowForward",
+        pathData = "M16.18,13H4q-0.43,0 -0.71-0.29T3,12t0.29-0.71T4,11h8.18l-4.9-4.9q-0.28-0.28 -0.28-0.7t0.28-0.7q0.28-0.28 0.71-0.28t0.71,0.28l6.59,6.6q0.3,0.3 0.3,0.7t-0.3,0.7l-6.6,6.6q-0.28,0.28 -0.7,0.28t-0.7-0.28q-0.28-0.28 -0.28-0.7t0.28-0.7l4.9-4.9L16.18,13Z"
+    )
+''', encoding="utf-8")
+    print("OK ArrowForward criado")
+else:
+    print("ArrowForward ja existe")
+
+# ---------- 1) ArtistViewModel: regra tem-musica = artista (so InnerTube) ----------
+vm_path = pathlib.Path("app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistViewModel.kt")
+vm = vm_path.read_text(encoding="utf-8")
+# Substitui loadContent inteiro: do "private fun loadContent" ate "fun onRandomClick"
+start = vm.find("    private fun loadContent()")
+end = vm.find("    fun onRandomClick()")
+if start == -1 or end == -1:
+    print("AVISO: nao achei loadContent no ViewModel, pulando ViewModel")
+else:
+    new_load = """    // FIX14 REBUILD - Regra: tem faixa de musica = ARTISTA (so InnerTube). Sem musica = CANAL (NewPipe).
+    // Antes: juntava os dois mundos e o artista caia como canal. Agora nao mistura mais.
+    private fun loadContent() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            val isChannelId = route.id.startsWith("UC")
+            val channel = if (isChannelId) runCatching { youTubeRepository.browseChannel(route.id) }.getOrNull() else null
+            val music = runCatching { ytMusicRepository.browseArtist(route.id) }.getOrNull()
+            val hasMusic = music != null && (music.topSongs.isNotEmpty() || music.albums.isNotEmpty() || music.singles.isNotEmpty())
+            if (hasMusic && music != null) {
+                // ARTISTA: somente InnerTube. NewPipe NAO entra, mesmo que tenha canal com mesmo nome.
+                _uiState.update {
+                    it.copy(
+                        isLoading = false, errorMessage = null,
+                        name = music.name.takeUnless { n -> n == "Artista" || n == "Unknown Artist" } ?: it.name,
+                        thumbnailUrl = music.thumbnailUrl ?: it.thumbnailUrl,
+                        subscribers = music.subscribers, views = music.views, description = music.description,
+                        topSongs = music.topSongs, songsMore = music.songsMore,
+                        albums = music.albums, albumsMore = music.albumsMore,
+                        singles = music.singles, singlesMore = music.singlesMore,
+                        videos = music.videos, videosMore = music.videosMore,
+                        featured = music.featured, featuredMore = music.featuredMore,
+                        relatedArtists = music.relatedArtists,
+                        shorts = emptyList(), channelPlaylists = emptyList(), bannerUrl = null, isYouTubeChannel = false,
+                    )
+                }
+                return@launch
+            }
+            if (channel != null) {
+                // CANAL: sem musica -> NewPipe entra (Videos + Playlists).
+                _uiState.update {
+                    it.copy(
+                        isLoading = false, errorMessage = null,
+                        name = channel.channelName ?: it.name,
+                        thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl,
+                        subscribers = channel.subscriberCount ?: it.subscribers,
+                        description = channel.description ?: it.description,
+                        topSongs = emptyList(), songsMore = null,
+                        albums = emptyList(), albumsMore = null,
+                        singles = emptyList(), singlesMore = null,
+                        videos = channel.videos, videosMore = null,
+                        featured = emptyList(), featuredMore = null, relatedArtists = emptyList(),
+                        shorts = emptyList(), channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true,
+                    )
+                }
+                return@launch
+            }
+            _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar este canal.") }
+        }
+    }
+
+    /** Tocar tudo: toca todas as musicas do artista em ordem (nao embaralhado). */
+    fun onPlayAllClick() {
+        val songs = _uiState.value.topSongs
+        if (songs.isEmpty()) return
+        playerController.playQueue(songs, 0)
+    }
+
+"""
+    vm = vm[:start] + new_load + vm[end:]
+    # Remove onShortClick do ViewModel (Shorts removido). Mantem compat se alguem chamar? Remove mesmo.
+    # Se onShortClick existir, remove o bloco dele.
+    m = re.search(r"    fun onShortClick\(track: Track\) \{.*?\n    \}\n", vm, flags=re.DOTALL)
+    if m:
+        vm = vm[:m.start()] + vm[m.end():]
+        print("OK ViewModel: onShortClick removido")
+    vm_path.write_text(vm, encoding="utf-8")
+    print("OK ViewModel regra tem-musica")
+
+# ---------- 2) Search: tira aba Shorts ----------
+# 2a) SearchFilter: remove SHORTS
+sf_path = pathlib.Path("core/src/main/kotlin/com/vztechcore/vztune/core/domain/search/SearchFilter.kt")
+if sf_path.exists():
+    sf = sf_path.read_text(encoding="utf-8")
+    sf = sf.replace('    SHORTS("Shorts", null),\n', '')
+    sf = sf.replace('    SHORTS("Shorts", null)', '')
+    sf_path.write_text(sf, encoding="utf-8")
+    print("OK SearchFilter sem SHORTS")
+# 2b) MusicRepository: remove branch SHORTS -> searchShorts (mantem a funcao searchShorts como codigo morto, nao quebra)
+mr_path = pathlib.Path("data/src/main/kotlin/com/vztechcore/vztune/data/music/MusicRepository.kt")
+if mr_path.exists():
+    mr = mr_path.read_text(encoding="utf-8")
+    mr = mr.replace("            SearchFilter.SHORTS -> searchShorts(query, loadMore, state)\n", "")
+    mr_path.write_text(mr, encoding="utf-8")
+    print("OK MusicRepository sem branch SHORTS")
+# 2c) SearchResultCards: remove o branch isShortsMode que mostrava ShortsGridContent
+src_path = pathlib.Path("app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/components/SearchResultCards.kt")
+if src_path.exists():
+    src = src_path.read_text(encoding="utf-8")
+    # Remove o bloco isShortsMode (de "val isShortsMode" ate o "return" do if)
+    pat = re.compile(r"    val isShortsMode = .*?\n    if \(isShortsMode\) \{.*?\n    \}\n", flags=re.DOTALL)
+    src2, n = pat.subn("", src, count=1)
+    if n > 0:
+        src = src2
+        print("OK SearchResultCards sem ShortsGrid branch")
+    else:
+        print("AVISO: nao achei isShortsMode em SearchResultCards, pulando")
+    src_path.write_text(src, encoding="utf-8")
+
+# ---------- 3) ArtistScreen: rebuild ----------
+as_path = pathlib.Path("app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistScreen.kt")
+t = as_path.read_text(encoding="utf-8")
+
+# 3a) Imports: garante os que o novo layout usa, remove ShortsOptionsSheet/ShortsGridRows se ainda estiverem (vira warning, nao erro, mas limpa)
+for imp in [
+    "import androidx.compose.foundation.layout.BoxWithConstraints",
+    "import androidx.compose.foundation.shape.CircleShape",
+    "import androidx.compose.material3.Icon",
+    "import com.vztechcore.vztune.ui.icons.VzIcons",
+    "import com.vztechcore.vztune.ui.icons.actions.ArrowForward",
+    "import com.vztechcore.vztune.ui.icons.player.Play",
+]:
     if imp not in t:
-        # insere apos o ultimo import de cards, ou apos o primeiro import
-        if "import com.vztechcore.vztune.ui.components.cards." in t:
-            # insere apos a ultima linha de cards
-            lines = t.splitlines()
-            last = -1
-            for idx, ln in enumerate(lines):
-                if ln.startswith("import com.vztechcore.vztune.ui.components.cards."):
-                    last = idx
-            lines.insert(last + 1, imp)
-            t = "\n".join(lines) + "\n"
-        else:
-            # insere apos package + primeira linha de import
-            t = t.replace("import androidx.compose", imp + "\nimport androidx.compose", 1)
+        # insere apos o ultimo import
+        lines = t.splitlines()
+        last = -1
+        for idx, ln in enumerate(lines):
+            if ln.startswith("import "):
+                last = idx
+        lines.insert(last + 1, imp)
+        t = "\n".join(lines) + "\n"
         print("Add import", imp)
 
-# 2b) Params que faltavam (onShortClick, onToggleFavorite, etc + favoriteKeys)
-# Procura a assinatura da funcao ArtistScreen. Adiciona apos onSeeAllClick se nao existir.
-if "onShortClick:" not in t:
-    # tenta achar a linha onSeeAllClick
-    if "onSeeAllClick:" in t:
-        t = t.replace("    onSeeAllClick: (ArtistListKind, BrowseRef) -> Unit,", "    onSeeAllClick: (ArtistListKind, BrowseRef) -> Unit,\n    onShortClick: (Track) -> Unit = onVideoClick,", 1)
-        print("Add param onShortClick")
-    else:
-        print("AVISO: nao achei onSeeAllClick para inserir onShortClick")
-if "favoriteKeys:" not in t:
-    if "onSeeAllClick:" in t:
-        t = t.replace("    onSeeAllClick: (ArtistListKind, BrowseRef) -> Unit,", "    onSeeAllClick: (ArtistListKind, BrowseRef) -> Unit,\n    favoriteKeys: Set<String> = emptySet(),", 1)
-        print("Add param favoriteKeys")
-if "onToggleFavorite:" not in t:
-    if "onShortClick:" in t:
-        t = t.replace("    onShortClick: (Track) -> Unit = onVideoClick,", "    onShortClick: (Track) -> Unit = onVideoClick,\n    onToggleFavorite: (Track) -> Unit = {},", 1)
-        print("Add param onToggleFavorite")
-if "onPlaylistPlayNext:" not in t:
-    anchor = "    onToggleFavorite: (Track) -> Unit = {},"
-    if anchor in t:
-        t = t.replace(anchor, anchor + "\n    onPlaylistPlayNext: (Playlist) -> Unit = {},\n    onPlaylistAddToQueue: (Playlist) -> Unit = {},\n    onSavePlaylistToLibrary: (Playlist) -> Unit = {},", 1)
-        print("Add params playlist")
-else:
-    # se ja tem PlayNext mas falta os outros, completa
-    if "onPlaylistAddToQueue:" not in t and "onPlaylistPlayNext:" in t:
-        t = t.replace("    onPlaylistPlayNext: (Playlist) -> Unit = {},", "    onPlaylistPlayNext: (Playlist) -> Unit = {},\n    onPlaylistAddToQueue: (Playlist) -> Unit = {},\n    onSavePlaylistToLibrary: (Playlist) -> Unit = {},", 1)
-        print("Add params playlist (parcial)")
+# 3b) Param onPlayAllClick (com default = onRandomClick, pra nao quebrar chamadores antigos)
+if "onPlayAllClick:" not in t:
+    if "onRandomClick: () -> Unit," in t:
+        t = t.replace("    onRandomClick: () -> Unit,", "    onRandomClick: () -> Unit,\n    onPlayAllClick: () -> Unit = onRandomClick,", 1)
+        print("Add param onPlayAllClick")
 
-# 2c) Vars que faltavam dentro do composable
-if "var selectedChannelTab" not in t:
-    if "val nowPlaying = LocalNowPlaying.current" in t:
-        t = t.replace("    val nowPlaying = LocalNowPlaying.current", "    val nowPlaying = LocalNowPlaying.current\n    var selectedChannelTab by remember { mutableStateOf(0) }\n    var shortMenuTrack by remember { mutableStateOf<Track?>(null) }\n    var playlistMenu by remember { mutableStateOf<Playlist?>(null) }", 1)
-        print("Add vars selectedChannelTab/shortMenuTrack/playlistMenu")
-    else:
-        print("AVISO: nao achei nowPlaying para inserir vars")
-else:
-    if "var shortMenuTrack" not in t:
-        t = t.replace("    var selectedChannelTab by remember { mutableStateOf(0) }", "    var selectedChannelTab by remember { mutableStateOf(0) }\n    var shortMenuTrack by remember { mutableStateOf<Track?>(null) }", 1)
-        print("Add var shortMenuTrack")
-    if "var playlistMenu" not in t:
-        # insere apos shortMenuTrack
-        if "var shortMenuTrack" in t:
-            t = t.replace("    var shortMenuTrack by remember { mutableStateOf<Track?>(null) }", "    var shortMenuTrack by remember { mutableStateOf<Track?>(null) }\n    var playlistMenu by remember { mutableStateOf<Playlist?>(null) }", 1)
-            print("Add var playlistMenu")
+# 3c) Remove Shorts do ArtistScreen: var shortMenuTrack + sheet ShortsOptionsSheet
+# Remove a linha da var
+t = t.replace("    var shortMenuTrack by remember { mutableStateOf<Track?>(null) }\n", "")
+# Remove o bloco do sheet de Shorts (shortMenuTrack?.let ... ShortsOptionsSheet ...)
+pat_sheet = re.compile(r"    shortMenuTrack\?\.let \{.*?\n    \}\n", flags=re.DOTALL)
+t2, n2 = pat_sheet.subn("", t, count=1)
+if n2 > 0:
+    t = t2
+    print("OK ArtistScreen: sheet Shorts removido")
+# Remove onShortClick da assinatura? Mantem o param pra compat com AppNavHost antigo, mas nao usa. Se quiser, mantem.
 
-# 2d) Sheets que faltavam (ShortsOptionsSheet + PlaylistOptionsSheet)
-if "shortMenuTrack?.let" not in t:
-    sheets = """    shortMenuTrack?.let { st ->
-        val sk = StoredTrack.from(st).key
-        ShortsOptionsSheet(track = st, isFavorite = sk in favoriteKeys, onToggleFavorite = onToggleFavorite, onDismiss = { shortMenuTrack = null })
-    }
-    playlistMenu?.let { pl ->
-        PlaylistOptionsSheet(playlist = pl, onDismiss = { playlistMenu = null }, onPlayNext = { onPlaylistPlayNext(it); playlistMenu = null }, onAddToQueue = { onPlaylistAddToQueue(it); playlistMenu = null }, onSaveToLibrary = { onSavePlaylistToLibrary(it); playlistMenu = null }, onShare = { p -> val url = "https://www.youtube.com/playlist?list=" + p.id; val si = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, p.title + "\\n" + url) }; context.startActivity(Intent.createChooser(si, "Compartilhar playlist")); playlistMenu = null })
-    }
+# 3d) Substitui o bloco else -> { ... } inteiro (Home + abas) pelo novo
+new_else = """                else -> {
+                    // FIX14 REBUILD - Regra: tem musica = ARTISTA (so Home, sem abas). Sem musica = CANAL (abas Videos | Playlists).
+                    val hasMusic = state.topSongs.isNotEmpty() || state.albums.isNotEmpty() || state.singles.isNotEmpty()
+                    val isChannel = !hasMusic
+
+                    if (isChannel) {
+                        // ---------- CANAL: abas Videos | Playlists (sem Shorts) ----------
+                        item(key = "channel_tabs") {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                listOf("Vídeos", "Playlists").forEachIndexed { idx, label ->
+                                    val sel = selectedChannelTab == idx
+                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (sel) Color.White else Color.Transparent).clickable { selectedChannelTab = idx }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                        Text(text = label, style = MaterialTheme.typography.labelLarge, color = if (sel) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                        item(key = "channel_tabs_space") { Spacer(Modifier.height(16.dp)) }
+                        if (selectedChannelTab == 0) {
+                            if (state.videos.isNotEmpty()) {
+                                itemsIndexed(state.videos, key = { _, v -> "cv_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
+                            } else {
+                                item(key = "channel_videos_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                            }
+                        } else {
+                            if (state.channelPlaylists.isNotEmpty()) {
+                                itemsIndexed(state.channelPlaylists, key = { _, pl -> "cp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
+                            } else {
+                                item(key = "channel_playlists_empty") { Text(text = "Nenhuma playlist ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                            }
+                        }
+                        item(key = "channel_space") { Spacer(Modifier.height(SectionGap)) }
+                        item(key = "description") { ArtistDescription(description = state.description) }
+                    } else {
+                        // ---------- ARTISTA: so Home, sem abas ----------
+                        // 1) Musicas populares: slide de 4 por pagina + Tocar tudo + >
+                        if (state.topSongs.isNotEmpty()) {
+                            item(key = "songs_header") {
+                                SectionHeaderArrow(title = "Músicas populares", onPlayAllClick = onPlayAllClick, onArrowClick = seeAll(ArtistListKind.SONGS, state.songsMore))
+                            }
+                            item(key = "songs_slide") {
+                                SongsSlide(tracks = state.topSongs, onSongClick = onSongClick, onTrackInfoClick = onTrackInfoClick)
+                            }
+                            item(key = "songs_space") { Spacer(Modifier.height(SectionGap)) }
+                        }
+                        // 2) Singles e EPs: fileira + > (se nao tem singles, mostra albuns pra nao perder os albuns)
+                        val singlesEps = if (state.singles.isNotEmpty()) state.singles else state.albums
+                        val singlesEpsMore = if (state.singles.isNotEmpty()) state.singlesMore else state.albumsMore
+                        val singlesEpsKind = if (state.singles.isNotEmpty()) ArtistListKind.SINGLES else ArtistListKind.ALBUMS
+                        if (singlesEps.isNotEmpty()) {
+                            item(key = "singles_header") {
+                                SectionHeaderArrow(title = "Singles e EPs", onArrowClick = seeAll(singlesEpsKind, singlesEpsMore))
+                            }
+                            item(key = "singles_row") {
+                                LazyRow(contentPadding = RowPadding, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    items(singlesEps, key = { it.id }) { album ->
+                                        val sub = if (state.singles.isNotEmpty()) "Single" else "Álbum"
+                                        CoverCard(title = album.title, subtitle = sub, imageUrl = album.thumbnailUrl, onClick = { onAlbumClick(album) }, modifier = Modifier.width(CoverWidth))
+                                    }
+                                }
+                            }
+                            item(key = "singles_space") { Spacer(Modifier.height(SectionGap)) }
+                        }
+                        // 3) Playlists: fileira + > (artista usa featured do YT Music)
+                        val artistPlaylists = state.featured
+                        if (artistPlaylists.isNotEmpty()) {
+                            item(key = "playlists_header") {
+                                SectionHeaderArrow(title = "Playlists", onArrowClick = seeAll(ArtistListKind.FEATURED, state.featuredMore))
+                            }
+                            item(key = "playlists_row") {
+                                LazyRow(contentPadding = RowPadding, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    items(artistPlaylists, key = { it.id }) { playlist ->
+                                        CoverCard(title = playlist.title, subtitle = playlist.owner, imageUrl = playlist.thumbnailUrl, onClick = { onPlaylistClick(playlist) }, modifier = Modifier.width(CoverWidth))
+                                    }
+                                }
+                            }
+                            item(key = "playlists_space") { Spacer(Modifier.height(SectionGap)) }
+                        }
+                        // 4) Videos: fileira 16:9 + > (so videos do artista, do InnerTube)
+                        if (state.videos.isNotEmpty()) {
+                            item(key = "videos_header") {
+                                SectionHeaderArrow(title = "Vídeos", onArrowClick = seeAll(ArtistListKind.VIDEOS, state.videosMore))
+                            }
+                            item(key = "videos_row") {
+                                LazyRow(contentPadding = RowPadding, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    items(state.videos, key = { it.id }) { video ->
+                                        val playback = nowPlaying.playbackOf(video)
+                                        MediaListVideoCard(track = video, isPlaying = playback.isPlaying, isPaused = playback.isPaused, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }, modifier = Modifier.width(VideoWidth), horizontalPadding = 0.dp)
+                                    }
+                                }
+                            }
+                            item(key = "videos_space") { Spacer(Modifier.height(SectionGap)) }
+                        }
+                        item(key = "description") { ArtistDescription(description = state.description) }
+                    }
+                }
+            }
 """
-    # Insere antes do Box que contem o LazyColumn (o Box externo). Procura o primeiro Box apos onShareClick.
-    # Estrategia segura: insere antes de "    Box(\\n        modifier" que vem depois de onShareClick
-    idx_share = t.find("onShareClick")
-    idx_box = t.find("    Box(", idx_share)
-    if idx_box != -1:
-        t = t[:idx_box] + sheets + t[idx_box:]
-        print("Add sheets antes do Box")
-    else:
-        print("AVISO: nao achei Box para inserir sheets")
+
+# Acha o else do when (loading/error/else). O else comeca com "                else -> {"
+start_marker = "                else -> {"
+start = t.find(start_marker)
+if start == -1:
+    print("ERRO: nao achei else da ArtistScreen")
+    raise SystemExit(1)
+end_marker = '            item(key = "credits")'
+end = t.find(end_marker, start)
+if end == -1:
+    print("ERRO: nao achei credits")
+    raise SystemExit(1)
+t = t[:start] + new_else + "\n" + t[end:]
+
+# 3e) Adiciona os novos composables no fim do arquivo (SectionHeaderArrow + SongsSlide) se ainda nao existirem
+if "fun SectionHeaderArrow" not in t:
+    t += """
+
+/** Header de secao com balao "Tocar tudo" (so em Musicas) + icone > pra ver tudo. Substitui o "Mais". */
+@Composable
+private fun SectionHeaderArrow(
+    title: String,
+    onPlayAllClick: (() -> Unit)? = null,
+    onArrowClick: (() -> Unit)? = null,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = title, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        if (onPlayAllClick != null) {
+            Box(
+                Modifier.clip(RoundedCornerShape(50)).background(Color.White).clickable { onPlayAllClick() }.padding(horizontal = 12.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(VzIcons.Play, contentDescription = "Tocar tudo", tint = Color.Black, modifier = Modifier.size(16.dp))
+                    Text(text = "Tocar tudo", style = MaterialTheme.typography.labelLarge, color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+        }
+        if (onArrowClick != null) {
+            Box(
+                Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).clickable { onArrowClick() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(VzIcons.ArrowForward, contentDescription = "Ver tudo", tint = Color.White, modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+
+/** Slide de Musicas populares: 4 faixas por pagina, arrasta da direita pra esquerda pra proxima fileira de 4. */
+@Composable
+private fun SongsSlide(
+    tracks: List<Track>,
+    onSongClick: (Track) -> Unit,
+    onTrackInfoClick: (Track) -> Unit,
+) {
+    val pages = tracks.chunked(4)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val pageWidth = maxWidth - 32.dp
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            itemsIndexed(pages, key = { _, page -> page.first().id }) { pageIndex, page ->
+                Column(Modifier.width(pageWidth)) {
+                    page.forEachIndexed { idx, track ->
+                        val number = pageIndex * 4 + idx + 1
+                        TrackListRow(track = track, number = number, onClick = { onSongClick(track) }, onMoreClick = { onTrackInfoClick(track) })
+                    }
+                }
+            }
+        }
+    }
+}
+"""
+    print("OK ArtistScreen: SectionHeaderArrow + SongsSlide adicionados")
 
 if t.count("{") != t.count("}"):
-    print("AVISO braces apos FIX13:", t.count("{"), t.count("}"))
+    print("AVISO braces ArtistScreen:", t.count("{"), t.count("}"))
 else:
-    print("Braces OK:", t.count("{"))
-p.write_text(t, encoding="utf-8")
-print("FIX13 OK - ArtistScreen agora tem imports/params/vars/sheets")
+    print("Braces ArtistScreen OK:", t.count("{"))
+as_path.write_text(t, encoding="utf-8")
+print("OK ArtistScreen rebuild")
+
+# ---------- 4) AppNavHost: passa onPlayAllClick + remove onShortClick (ViewModel nao tem mais) ----------
+nav_path = pathlib.Path("app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt")
+if nav_path.exists():
+    nav = nav_path.read_text(encoding="utf-8")
+    # Remove a linha onShortClick do ArtistScreen (o ViewModel nao tem mais esse metodo)
+    if "onShortClick = vm::onShortClick" in nav:
+        nav = nav.replace("                        onShortClick = vm::onShortClick,\n", "")
+        print("OK AppNavHost onShortClick removido (ViewModel sem Shorts)")
+    # Adiciona onPlayAllClick so no bloco do ArtistScreen (nao no primeiro onRandomClick do arquivo)
+    idx_artist = nav.find("ArtistScreen(")
+    if idx_artist != -1:
+        # Procura o onRandomClick dentro do bloco ArtistScreen (ate 2000 chars depois)
+        sub = nav[idx_artist:idx_artist+2500]
+        if "onPlayAllClick = vm::onPlayAllClick" not in sub:
+            if "onRandomClick = vm::onRandomClick," in sub:
+                sub2 = sub.replace("onRandomClick = vm::onRandomClick,", "onRandomClick = vm::onRandomClick,\n                        onPlayAllClick = vm::onPlayAllClick,", 1)
+                nav = nav[:idx_artist] + sub2 + nav[idx_artist+2500:]
+                print("OK AppNavHost onPlayAllClick no ArtistScreen")
+            else:
+                print("AVISO AppNavHost: nao achei onRandomClick no ArtistScreen")
+        else:
+            print("AppNavHost ja tem onPlayAllClick no ArtistScreen")
+    nav_path.write_text(nav, encoding="utf-8")
+
+print("FIX14 OK")
 PY

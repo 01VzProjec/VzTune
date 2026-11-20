@@ -56,54 +56,17 @@ class ArtistViewModel @Inject constructor(
 
     // FIX8_ARTIST - Se UC tem canal real, o canal e a verdade. Se YT Music devolver nome totalmente diferente, ignora YT Music.
     // Antes: se YT Music devolvesse qualquer artista nao-vazio (ex: Moldrin para JazzGhost), mostrava o errado e nunca tentava o canal.
+    // FIX14 REBUILD - Regra: tem faixa de musica = ARTISTA (so InnerTube). Sem musica = CANAL (NewPipe).
+    // Antes: juntava os dois mundos e o artista caia como canal. Agora nao mistura mais.
     private fun loadContent() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             val isChannelId = route.id.startsWith("UC")
             val channel = if (isChannelId) runCatching { youTubeRepository.browseChannel(route.id) }.getOrNull() else null
             val music = runCatching { ytMusicRepository.browseArtist(route.id) }.getOrNull()
-            val musicEmpty = music == null || (music.topSongs.isEmpty() && music.albums.isEmpty() && music.singles.isEmpty() && music.videos.isEmpty() && music.featured.isEmpty() && music.relatedArtists.isEmpty())
-            val chName = channel?.channelName
-            if (channel != null && chName != null) {
-                val channelNameNorm = chName.lowercase().trim()
-                val musicNameNorm = (music?.name ?: "").lowercase().trim()
-                val namesMatch = !musicEmpty && (musicNameNorm.isNotBlank() && (channelNameNorm.contains(musicNameNorm) || musicNameNorm.contains(channelNameNorm) || channelNameNorm.split(" ").firstOrNull() == musicNameNorm.split(" ").firstOrNull()))
-                if (!musicEmpty && namesMatch) {
-                    // Mesmo artista nos dois mundos: mostra YT Music + videos do canal
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false, errorMessage = null,
-                            name = music.name.takeUnless { n -> n == "Artista" || n == "Unknown Artist" } ?: it.name,
-                            thumbnailUrl = music.thumbnailUrl ?: channel.avatarUrl ?: it.thumbnailUrl,
-                            subscribers = music.subscribers ?: channel.subscriberCount ?: it.subscribers,
-                            views = music.views, description = music.description,
-                            topSongs = music.topSongs, songsMore = music.songsMore,
-                            albums = music.albums, albumsMore = music.albumsMore,
-                            singles = music.singles, singlesMore = music.singlesMore,
-                            videos = if (channel.videos.isNotEmpty()) channel.videos else music.videos,
-                            shorts = channel.shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true,
-                            videosMore = music.videosMore, featured = music.featured, featuredMore = music.featuredMore,
-                            relatedArtists = music.relatedArtists,
-                        )
-                    }
-                    return@launch
-                }
-                if (channel.videos.isNotEmpty() || channel.shorts.isNotEmpty() || chName != null) {
-                    // Canal real existe: mostra ele, mesmo que YT Music tenha devolvido artista diferente ou vazio.
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false, errorMessage = null,
-                            name = chName ?: it.name,
-                            thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl,
-                            subscribers = channel.subscriberCount ?: it.subscribers,
-                            description = channel.description ?: it.description,
-                            videos = channel.videos, shorts = channel.shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true,
-                        )
-                    }
-                    return@launch
-                }
-            }
-            if (!musicEmpty && music != null) {
+            val hasMusic = music != null && (music.topSongs.isNotEmpty() || music.albums.isNotEmpty() || music.singles.isNotEmpty())
+            if (hasMusic && music != null) {
+                // ARTISTA: somente InnerTube. NewPipe NAO entra, mesmo que tenha canal com mesmo nome.
                 _uiState.update {
                     it.copy(
                         isLoading = false, errorMessage = null,
@@ -116,13 +79,27 @@ class ArtistViewModel @Inject constructor(
                         videos = music.videos, videosMore = music.videosMore,
                         featured = music.featured, featuredMore = music.featuredMore,
                         relatedArtists = music.relatedArtists,
+                        shorts = emptyList(), channelPlaylists = emptyList(), bannerUrl = null, isYouTubeChannel = false,
                     )
                 }
                 return@launch
             }
             if (channel != null) {
+                // CANAL: sem musica -> NewPipe entra (Videos + Playlists).
                 _uiState.update {
-                    it.copy(isLoading = false, errorMessage = null, name = chName ?: it.name, thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl, subscribers = channel.subscriberCount ?: it.subscribers, videos = channel.videos, shorts = channel.shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true, description = channel.description ?: it.description)
+                    it.copy(
+                        isLoading = false, errorMessage = null,
+                        name = channel.channelName ?: it.name,
+                        thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl,
+                        subscribers = channel.subscriberCount ?: it.subscribers,
+                        description = channel.description ?: it.description,
+                        topSongs = emptyList(), songsMore = null,
+                        albums = emptyList(), albumsMore = null,
+                        singles = emptyList(), singlesMore = null,
+                        videos = channel.videos, videosMore = null,
+                        featured = emptyList(), featuredMore = null, relatedArtists = emptyList(),
+                        shorts = emptyList(), channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true,
+                    )
                 }
                 return@launch
             }
@@ -130,8 +107,13 @@ class ArtistViewModel @Inject constructor(
         }
     }
 
+    /** Tocar tudo: toca todas as musicas do artista em ordem (nao embaralhado). */
+    fun onPlayAllClick() {
+        val songs = _uiState.value.topSongs
+        if (songs.isEmpty()) return
+        playerController.playQueue(songs, 0)
+    }
 
-    /** Plays a random track of the artist (popular songs first, videos as fallback). */
     fun onRandomClick() {
         val state = _uiState.value
         val pool = state.topSongs.ifEmpty { state.videos }
@@ -158,11 +140,6 @@ class ArtistViewModel @Inject constructor(
         if (idx >= 0) playerController.playQueue(videos, idx) else playerController.playQueue(listOf(track), 0)
     }
 
-    fun onShortClick(track: Track) {
-        val shorts = _uiState.value.shorts
-        val idx = shorts.indexOfFirst { it.id == track.id }
-        if (idx >= 0) playerController.playQueue(shorts, idx) else playerController.playQueue(listOf(track), 0)
-    }
 
     private suspend fun loadChannelPlaylistTracks(playlist: Playlist): List<Track> {
         return runCatching { ytMusicRepository.browsePlaylist(playlist.id).tracks }.getOrDefault(emptyList())

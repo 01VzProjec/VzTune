@@ -56,20 +56,6 @@ fun SearchResultsContent(
     modifier: Modifier = Modifier,
 ) {
     val isVideoMode = hits.all { it is SearchHit.VideoHit } && hits.isNotEmpty()
-    val isShortsMode = hits.all { it is SearchHit.ShortHit } && hits.isNotEmpty()
-    if (isShortsMode) {
-        ShortsGridContent(
-            hits = hits.filterIsInstance<SearchHit.ShortHit>(),
-            isLoadingMore = isLoadingMore,
-            isRefreshing = isRefreshing,
-            onRefresh = onRefresh,
-            onLoadMore = onLoadMore,
-            onHitClick = onHitClick,
-            onTrackMoreClick = onTrackMoreClick,
-            modifier = modifier,
-        )
-        return
-    }
     val lazyListState = rememberLazyListState()
 
     LaunchedEffect(lazyListState) {

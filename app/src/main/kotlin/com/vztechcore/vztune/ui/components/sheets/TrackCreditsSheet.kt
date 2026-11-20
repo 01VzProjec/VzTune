@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -99,11 +100,12 @@ fun TrackCreditsSheet(track: Track, onDismiss: () -> Unit, viewModel: TrackCredi
                 CreditRow(label = "Compositores", value = c.composers.joinToString(", ").takeIf { it.isNotBlank() })
                 CreditRow(label = "Produtores", value = c.producers.joinToString(", ").takeIf { it.isNotBlank() })
                 CreditRow(label = "Letra", value = c.lyricists.joinToString(", ").takeIf { it.isNotBlank() })
-                if (!c.description.isNullOrBlank()) {
+                val desc = c.description
+                if (!desc.isNullOrBlank()) {
                     Spacer(Modifier.height(12.dp))
                     Text(text = "Sobre", style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(6.dp))
-                    Text(text = c.description, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.75f))
+                    Text(text = desc, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.75f))
                 }
             }
             Spacer(Modifier.height(32.dp))

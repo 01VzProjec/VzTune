@@ -42,9 +42,8 @@ import com.vztechcore.vztune.ui.icons.actions.Share
 import com.vztechcore.vztune.ui.icons.media.Album
 import com.vztechcore.vztune.ui.icons.media.Artist
 import com.vztechcore.vztune.ui.icons.media.Download
+import com.vztechcore.vztune.ui.icons.media.DownloadDone
 import com.vztechcore.vztune.ui.icons.media.MusicNote
-import com.vztechcore.vztune.ui.icons.media.Download
-import com.vztechcore.vztune.ui.icons.media.MusicNoteDone
 import com.vztechcore.vztune.ui.icons.media.Groups
 import com.vztechcore.vztune.ui.icons.media.PlaylistAdd
 import com.vztechcore.vztune.ui.icons.media.QueueMusic
@@ -602,7 +601,7 @@ private fun shareTrack(context: Context, track: Track) {
 }
 
 @Composable
-private fun TopActionCard(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, iconTint: Color = Color.White, onClick: () -> Unit) {
+private fun RowScope.TopActionCard(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, iconTint: Color = Color.White, onClick: () -> Unit) {
     Column(Modifier.weight(1f).clickable { onClick() }, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
             Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(26.dp))

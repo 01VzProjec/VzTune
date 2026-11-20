@@ -49,6 +49,12 @@ import com.vztechcore.vztune.ui.components.AppCredits
 import com.vztechcore.vztune.ui.components.cards.ArtistCircleCard
 import com.vztechcore.vztune.ui.components.cards.CoverCard
 import com.vztechcore.vztune.ui.components.cards.TrackListRow
+import com.vztechcore.vztune.ui.components.cards.ChannelPlaylistCard
+import com.vztechcore.vztune.ui.components.cards.ChannelVideoCard
+import com.vztechcore.vztune.ui.components.cards.PlaylistOptionsSheet
+import com.vztechcore.vztune.ui.components.cards.ShortsGridRows
+import com.vztechcore.vztune.ui.components.cards.ShortsOptionsSheet
+import com.vztechcore.vztune.data.prefs.models.StoredTrack
 import com.vztechcore.vztune.ui.components.feedback.VzLoading
 import com.vztechcore.vztune.ui.components.layout.SectionHeader
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
@@ -83,11 +89,20 @@ fun ArtistScreen(
     onPlaylistClick: (Playlist) -> Unit,
     onArtistClick: (Artist) -> Unit,
     onSeeAllClick: (ArtistListKind, BrowseRef) -> Unit,
+    favoriteKeys: Set<String> = emptySet(),
+    onShortClick: (Track) -> Unit = onVideoClick,
+    onToggleFavorite: (Track) -> Unit = {},
+    onPlaylistPlayNext: (Playlist) -> Unit = {},
+    onPlaylistAddToQueue: (Playlist) -> Unit = {},
+    onSavePlaylistToLibrary: (Playlist) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
     val isCollapsed by rememberHeaderCollapsed(listState)
     val nowPlaying = LocalNowPlaying.current
+    var selectedChannelTab by remember { mutableStateOf(0) }
+    var shortMenuTrack by remember { mutableStateOf<Track?>(null) }
+    var playlistMenu by remember { mutableStateOf<Playlist?>(null) }
 
     // Fundo sempre preto AMOLED - camaleao desativado por enquanto
 
@@ -107,6 +122,13 @@ fun ArtistScreen(
         context.startActivity(Intent.createChooser(sendIntent, "Compartilhar artista"))
     }
 
+    shortMenuTrack?.let { st ->
+        val sk = StoredTrack.from(st).key
+        ShortsOptionsSheet(track = st, isFavorite = sk in favoriteKeys, onToggleFavorite = onToggleFavorite, onDismiss = { shortMenuTrack = null })
+    }
+    playlistMenu?.let { pl ->
+        PlaylistOptionsSheet(playlist = pl, onDismiss = { playlistMenu = null }, onPlayNext = { onPlaylistPlayNext(it); playlistMenu = null }, onAddToQueue = { onPlaylistAddToQueue(it); playlistMenu = null }, onSaveToLibrary = { onSavePlaylistToLibrary(it); playlistMenu = null }, onShare = { p -> val url = "https://www.youtube.com/playlist?list=" + p.id; val si = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, p.title + "\n" + url) }; context.startActivity(Intent.createChooser(si, "Compartilhar playlist")); playlistMenu = null })
+    }
     Box(
         modifier
             .fillMaxSize()

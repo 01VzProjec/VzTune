@@ -16,6 +16,7 @@ import org.schabi.newpipe.extractor.search.SearchExtractor
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import java.time.OffsetDateTime
+import org.schabi.newpipe.extractor.localization.DateWrapper
 import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -906,10 +907,10 @@ class YouTubeRepository @Inject constructor(
 
 
     /** "hoje", "ha 1 dia", "ha 3 semanas", "ha 5 meses", "ha 2 anos" a partir do uploadDate do NewPipe. */
-    fun formatPublished(uploadDate: OffsetDateTime?): String? {
-        if (uploadDate == null) return null
+    fun formatPublished(uploadDate: DateWrapper?): String? {
+        val odt = runCatching { uploadDate?.offsetDateTime() }.getOrNull() ?: return null
         val now = OffsetDateTime.now()
-        val days = ChronoUnit.DAYS.between(uploadDate, now)
+        val days = ChronoUnit.DAYS.between(odt, now)
         if (days < 0) return null
         return when {
             days == 0L -> "hoje"

@@ -1,96 +1,61 @@
 #!/bin/bash
-# VzTune FIX18-HOTFIX-NAV - Liga o Buscar mais na navegacao
-# Corrige o AVISO do FIX18: AppNavHost nao tinha onSavePlaylistToLibrary,
-# entao o FIX18 nao achou onde inserir onLoadMoreChannelVideos.
-# Roda na raiz do projeto: bash VzTune-FIX18-HOTFIX-NAV.sh
+# VzTune HOTFIX ArtistScreen 537 - Falta um ')' no Text do nome do canal
+# Erro: ArtistScreen.kt:537:35 Expecting ')'
+# Causa: o FIX18, ao remover o check de verificado, usou um regex que
+# parou no primeiro ')' dentro de Modifier.weight(1f, fill = false)
+# e cortou o ')' final do Text(text = state.name, ...).
+# Resultado: Text ficou aberto, o compilador esperava ')' e achou o proximo comando.
+# Roda na raiz: bash VzTune-HOTFIX-ARTISTSCREEN-537.sh
 set -e
 python3 << 'PYEOF'
-import pathlib
+import pathlib, re
 ROOT = pathlib.Path(".")
-def read(p):
-    return pathlib.Path(p).read_text(encoding="utf-8", errors="ignore") if pathlib.Path(p).exists() else None
-def write(p, t):
-    pp = pathlib.Path(p); pp.parent.mkdir(parents=True, exist_ok=True); pp.write_text(t, encoding="utf-8")
-    print(f"OK {p}")
+p = ROOT / "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistScreen.kt"
+if not p.exists():
+    # Fallback: procura qualquer ArtistScreen.kt
+    cands = list(ROOT.rglob("ArtistScreen.kt"))
+    if not cands:
+        print("ERRO ArtistScreen.kt nao achado")
+        raise SystemExit(1)
+    p = cands[0]
+    print(f"Usando {p}")
 
-def insert_load_more(text):
-    # Ja ligado?
-    if "onLoadMoreChannelVideos" in text:
-        return text, False
-    idx = text.find("ArtistScreen(")
-    if idx == -1:
-        return text, False
-    start = idx + len("ArtistScreen(")
-    depth = 1
-    j = start
-    # Conta parenteses ate fechar o ArtistScreen( ... )
-    # Ignora parenteses dentro de strings "..." pra nao confundir
-    in_str = False
-    esc = False
-    while j < len(text) and depth > 0:
-        c = text[j]
-        if in_str:
-            if esc:
-                esc = False
-            elif c == "\\":
-                esc = True
-            elif c == '"':
-                in_str = False
-        else:
-            if c == '"':
-                in_str = True
-            elif c == '(':
-                depth += 1
-            elif c == ')':
-                depth -= 1
-                if depth == 0:
-                    break
-        j += 1
-    if depth != 0:
-        return text, False
-    # j = indice do ')' que fecha ArtistScreen(
-    prefix = text[:j].rstrip()
-    if not prefix.endswith(","):
-        prefix += ","
-    insertion = "\n                            onLoadMoreChannelVideos = vm::loadMoreChannelVideos,"
-    new = prefix + insertion + "\n                        " + text[j:]
-    return new, True
+t = p.read_text(encoding="utf-8", errors="ignore")
+orig = t
 
-fixed = False
-# 1) Tenta o AppNavHost direto (caso mais comum)
-candidates = []
-nav = ROOT / "app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt"
-if nav.exists():
-    candidates.append(nav)
-# 2) Fallback: qualquer .kt que tenha ArtistScreen( + ArtistViewModel (navegacao)
-for pp in ROOT.rglob("*.kt"):
-    if pp == nav:
-        continue
-    try:
-        txt = pp.read_text(encoding="utf-8", errors="ignore")
-    except:
-        continue
-    if "ArtistScreen(" in txt and "ArtistViewModel" in txt:
-        candidates.append(pp)
-
-for pp in candidates:
-    t = read(str(pp))
-    if t is None:
-        continue
-    nt, changed = insert_load_more(t)
-    if changed:
-        write(str(pp), nt)
-        print(f"OK navegacao {pp} : onLoadMoreChannelVideos ligado (vm::loadMoreChannelVideos)")
-        fixed = True
-    else:
-        if "onLoadMoreChannelVideos" in t:
-            print(f"OK navegacao {pp} : ja tinha onLoadMoreChannelVideos")
-            fixed = True
-        else:
-            print(f"AVISO navegacao {pp} : ArtistScreen( nao achado ou parenteses nao fecharam")
-
-if not fixed:
-    print("ERRO Nenhum arquivo de navegacao com ArtistScreen( achado. Me manda o AppNavHost.kt")
+# 1) Caso principal (FIX17 + FIX18): Text do nome numa linha so,
+#    terminando em Modifier.weight(1f, fill = false) com 1 ')' so.
+#    Tem que terminar com 2 ')': 1 fecha o weight, 1 fecha o Text.
+pat = re.compile(r"(Text\(text = state\.name[^\n]*?Modifier\.weight\(1f, fill = false\))(?!\))")
+t2, n = pat.subn(r"\1)", t)
+if n > 0:
+    t = t2
+    print(f"OK ArtistScreen: Text do nome do canal corrigido (+1 ')' ) - {n} ocorrencia(s)")
 else:
-    print("FIX18-HOTFIX-NAV OK - Buscar mais ligado")
+    print("AVISO padrao de 1 linha nao achado, tentando varredura por parenteses...")
+
+# 2) Varredura generica: acha Text(text = state.name e conta parenteses
+#    ate o fim da linha. Se a linha termina aberta, fecha.
+if t == orig:
+    lines = t.splitlines()
+    fixed2 = 0
+    for i, line in enumerate(lines):
+        if "Text(text = state.name" in line and "Modifier.weight(1f" in line:
+            # Conta ( e ) na linha (ignora strings simples, aqui nao tem)
+            opens = line.count("(")
+            closes = line.count(")")
+            if opens > closes:
+                # Falta (opens - closes) fechamentos
+                lines[i] = line.rstrip() + ")" * (opens - closes)
+                fixed2 += 1
+                print(f"OK linha {i+1}: faltavam {opens - closes} ')' -> {lines[i].strip()[:120]}")
+    if fixed2:
+        t = "\n".join(lines) + ("\n" if orig.endswith("\n") else "")
+
+if t != orig:
+    p.write_text(t, encoding="utf-8")
+    print("HOTFIX-537 OK - pode dar Rebuild")
+    print("Obs: nao confere ( / ) no arquivo todo porque tem ( ) dentro de textos/strings, isso confundiria a conta.")
+else:
+    print("OK ja estava corrigido - nada a mudar.")
 PYEOF

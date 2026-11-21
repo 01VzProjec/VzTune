@@ -119,7 +119,7 @@ class YouTubeRepository @Inject constructor(
             val collected = mutableListOf<Track>()
             var pages = 0
             while (collected.size < pageSize && page != null && pages < 5) {
-                val next = session.extractor.getPage(page ?: break)
+                val next = session.extractor.getPage(page!!)
                 collected += parseChannelStreamItems(next.items, session.channelName)
                 page = next.nextPage
                 session.nextPage = page
@@ -177,7 +177,7 @@ class YouTubeRepository @Inject constructor(
                     ?: return@runCatching VideoPage(emptyList(), false)
                 val page = session.nextPage
                     ?: return@runCatching VideoPage(emptyList(), false)
-                val next = session.extractor.getPage(page ?: break)
+                val next = session.extractor.getPage(page!!)
                 session.nextPage = next.nextPage
                 VideoPage(parseVideoItems(next.items).take(pageSize), session.nextPage != null)
             }
@@ -211,7 +211,7 @@ class YouTubeRepository @Inject constructor(
                     ?: return@runCatching emptyList<SearchHit.PlaylistHit>()
                 val page = session.nextPage
                     ?: return@runCatching emptyList<SearchHit.PlaylistHit>()
-                val next = session.extractor.getPage(page ?: break)
+                val next = session.extractor.getPage(page!!)
                 session.nextPage = next.nextPage
                 parsePlaylistItems(next.items).take(pageSize)
             }
@@ -247,7 +247,7 @@ class YouTubeRepository @Inject constructor(
             val session = shortSearches[searchId] ?: return@withContext ShortPage(emptyList(), false)
             val page = session.nextPage ?: return@withContext ShortPage(emptyList(), false)
             return@withContext runCatching {
-                val next = session.extractor.getPage(page ?: break)
+                val next = session.extractor.getPage(page!!)
                 session.nextPage = next.nextPage
                 ShortPage(parseShortItemsLoose(next.items).take(pageSize), session.nextPage != null)
             }.getOrElse { e ->
@@ -891,7 +891,7 @@ class YouTubeRepository @Inject constructor(
             val collected = mutableListOf<Playlist>()
             var pages = 0
             while (collected.size < pageSize && page != null && pages < 2) {
-                val next = session.extractor.getPage(page ?: break)
+                val next = session.extractor.getPage(page!!)
                 collected += parseChannelPlaylistItems(next.items, session.channelName)
                 page = next.nextPage
                 session.nextPage = page
@@ -924,7 +924,7 @@ class YouTubeRepository @Inject constructor(
             var nextPage: Page? = pl.initialPage.nextPage
             var pages = 0
             while (collected.size < 500 && nextPage != null && pages < 5) {
-                val next = pl.getPage(nextPage ?: break)
+                val next = pl.getPage(nextPage!!)
                 collected += parseChannelStreamItems(next.items, ownerName.orEmpty())
                 nextPage = next.nextPage
                 pages++
@@ -976,7 +976,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 val collected = parseChannelStreamItems(pl.initialPage.items, channelName).toMutableList()
                 var nextPage: Page? = pl.initialPage.nextPage
                 while (collected.size < 300 && nextPage != null) {
-                    val next = pl.getPage(nextPage ?: break)
+                    val next = pl.getPage(nextPage!!)
                     collected += parseChannelStreamItems(next.items, channelName)
                     nextPage = next.nextPage
                 }
@@ -1020,7 +1020,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 var nextPage: Page? = pl.initialPage.nextPage
                 var pages = 0
                 while (collected.size < 300 && nextPage != null && pages < 3) {
-                    val next = pl.getPage(nextPage ?: break)
+                    val next = pl.getPage(nextPage!!)
                     collected += parseChannelPlaylistItems(next.items, channelName)
                     nextPage = next.nextPage
                     pages++

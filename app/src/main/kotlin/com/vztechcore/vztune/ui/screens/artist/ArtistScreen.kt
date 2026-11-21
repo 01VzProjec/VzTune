@@ -473,9 +473,6 @@ private fun SectionHeaderArrow(
     }
 }
 
-/** Slide de Musicas populares: 4 faixas por pagina, arrasta da direita pra esquerda pra proxima fileira de 4. */
-@Composable
-private 
 /**
  * Cabecalho do canal igual a foto do YouTube, mas no tema VzTune (preto AMOLED).
  * Banner 16:9 arredondado, avatar redondo, nome + selo, @handle, inscritos • videos,
@@ -612,7 +609,9 @@ private fun ChannelHeader(
     }
 }
 
-fun SongsSlide(
+/** Slide de Musicas populares: 4 faixas por pagina, arrasta da direita pra esquerda pra proxima fileira de 4. */
+@Composable
+private fun SongsSlide(
     tracks: List<Track>,
     onSongClick: (Track) -> Unit,
     onTrackInfoClick: (Track) -> Unit,

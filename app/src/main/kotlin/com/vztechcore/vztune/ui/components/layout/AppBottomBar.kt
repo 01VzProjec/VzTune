@@ -1,59 +1,162 @@
 package com.vztechcore.vztune.ui.components.layout
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.vztechcore.vztune.ui.navigation.AppTab
 
-// Rodape estilo YouTube: barra cheia preta, sem pilula flutuante de vidro, sem label.
-// Tema VzTune: fundo preto AMOLED, linha fina branca em cima, icone branco = selecionado, cinza = resto.
-// As 4 abas continuam as mesmas (Home, Analytics, Library, Search), so mudou o visual.
+private val BarFill = Color.Black.copy(alpha = 0.75f) // Same as MiniPlayerBar
+private val BarBorder = Color.White.copy(alpha = 0.15f) // Same as MiniPlayerBar
+private val SelectedFill = Color.White.copy(alpha = 0.15f)
+
+// FIX17: voltou como era antes do FIX16, a pilula de vidro do mesmo jeitinho, so um pouco menor
+// (altura 72 -> 64, horizontal 28 -> 24, bottom 24 -> 16). Nao mexe mais aqui.
 @Composable
 fun AppBottomBar(
     selected: AppTab,
     onSelect: (AppTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val glassShape = RoundedCornerShape(50)
+    val tabs = AppTab.entries
+    val currentOnSelect by rememberUpdatedState(onSelect)
+
+    var hoveredTab by remember { mutableStateOf<AppTab?>(null) }
+    var isPressed by remember { mutableStateOf(false) }
+
     Box(
         modifier = modifier
-            .fillMaxWidth()
-            .background(Color.Black)
-            .border(0.5.dp, Color.White.copy(alpha = 0.12f))
+            .padding(horizontal = 24.dp)
+            .padding(top = 4.dp, bottom = 16.dp)
+            .height(64.dp),
     ) {
+        // Glass background — stays fixed, never overflows
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clip(glassShape)
+                .background(BarFill)
+                .border(BorderStroke(1.dp, BarBorder), glassShape),
+        )
+
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp)
-                .padding(horizontal = 8.dp),
+                .fillMaxSize()
+                .pointerInput(tabs) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        isPressed = true
+
+                        val tabWidth = size.width.toFloat() / tabs.size
+                        fun tabAt(x: Float) =
+                            tabs[(x / tabWidth).toInt().coerceIn(0, tabs.size - 1)]
+
+                        var finalTab = tabAt(down.position.x)
+                        hoveredTab = finalTab
+                        down.consume()
+
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (change.changedToUpIgnoreConsumed()) break
+                            finalTab = tabAt(change.position.x)
+                            hoveredTab = finalTab
+                            change.consume()
+                        }
+
+                        isPressed = false
+                        hoveredTab = null
+                        currentOnSelect(finalTab)
+                    }
+                }
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppTab.entries.forEach { tab ->
-                val isSelected = tab == selected
+            tabs.forEach { tab ->
+                val isHighlighted = if (hoveredTab != null) hoveredTab == tab else tab == selected
+                val isBeingPressed = hoveredTab == tab && isPressed
+
+                // Only the icon scales — no marker growth, no overflow
+                val iconScale by animateFloatAsState(
+                    targetValue = if (isBeingPressed) 1.22f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMediumLow,
+                    ),
+                    label = "iconScale-${tab.name}",
+                )
+
+                val contentColor =
+                    if (isHighlighted) Color.White else Color.White.copy(alpha = 0.55f)
+
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(60.dp)
-                        .clickable { onSelect(tab) },
+                        .fillMaxHeight(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
-                        contentDescription = tab.label,
-                        tint = if (isSelected) Color.White else Color.White.copy(alpha = 0.55f),
-                        modifier = Modifier.size(28.dp),
-                    )
+                    // Static marker — never grows
+                    if (isHighlighted) {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clip(glassShape)
+                                .background(SelectedFill),
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = if (isHighlighted) tab.selectedIcon else tab.unselectedIcon,
+                            contentDescription = tab.label,
+                            tint = contentColor,
+                            modifier = Modifier
+                                .size(24.dp)
+                                .graphicsLayer {
+                                    scaleX = iconScale
+                                    scaleY = iconScale
+                                },
+                        )
+                        Text(
+                            text = tab.label,
+                            fontSize = 10.sp,
+                            color = contentColor,
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }

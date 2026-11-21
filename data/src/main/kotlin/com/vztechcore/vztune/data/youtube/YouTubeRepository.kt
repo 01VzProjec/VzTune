@@ -78,33 +78,6 @@ class YouTubeRepository @Inject constructor(
 
     // Sessao de paginacao do canal: guarda o extractor + a proxima pagina.
     // Sem guardar o extractor nao da pra chamar getPage() depois.
-    private data class ChannelListSession(
-        val extractor: org.schabi.newpipe.extractor.ListExtractor,
-        var nextPage: Page?,
-        val channelName: String,
-    )
-    private val channelVideoSessions = mutableMapOf<String, ChannelListSession>()
-    private val channelPlaylistSessions = mutableMapOf<String, ChannelListSession>()
-
-    private val videoSearches = mutableMapOf<String, VideoSearchSession>()
-    private val playlistSearches = mutableMapOf<String, PlaylistSearchSession>()
-    private val shortSearches = mutableMapOf<String, VideoSearchSession>()
-
-    // FIX18 - Sessao de videos do canal (playlist UU). Guarda o extractor + nextPage pra Buscar mais nao recomecar do zero.
-    private data class ChannelVideosSession(
-        val extractor: PlaylistExtractor,
-        var nextPage: Page?,
-        val channelName: String,
-    )
-    private val channelVideoSessions = mutableMapOf<String, ChannelVideosSession>()
-
-    // FIX18 - Shorts de verdade: veio da aba /shorts (resolucao vertical 9:16) E tem hashtag no titulo.
-    private fun isRealShort(track: Track): Boolean {
-        if (!track.title.contains("#")) return false
-        if (track.durationSeconds > 0L && track.durationSeconds > 180L) return false
-        return true
-    }
-
     private fun parseChannelStreamItems(items: List<InfoItem>, channelName: String): List<Track> {
         return items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
             val vid = extractVideoId(stream.url) ?: return@mapNotNull null
@@ -844,13 +817,13 @@ class YouTubeRepository @Inject constructor(
      * FIX 6 HOTFIX: vídeos do CANAL REAL, pelo UC... dele.
      *
      * Por que NÃO ChannelExtractor.initialPage: na NewPipeExtractor v0.26.5 o
-     * ChannelExtractor NÃO estende ListExtractor — não tem initialPage/getPage.
+     * ChannelExtractor NÃO estende ListExtractor<InfoItem> — não tem initialPage/getPage.
      * Foi exatamente isso que quebrou o build (linha 596). Ele só expõe
      * cabeçalho (nome, avatar, inscritos), que continua sendo usado aqui.
      *
      * Os vídeos vêm da playlist "Uploads" do canal: todo canal do YouTube tem
      * uma playlist de sistema com id UU + resto do UC... (ex.: UCabc -> UUabc).
-     * PlaylistExtractor SIM estende ListExtractor — mesma API do SearchExtractor
+     * PlaylistExtractor SIM estende ListExtractor<InfoItem> — mesma API do SearchExtractor
      * que este arquivo já usa (initialPage/getPage) — então lista os vídeos do
      * canal pelo ID, nunca por nome. O comportamento é o mesmo do FIX 6,
      * só muda a fonte da lista.
@@ -1083,43 +1056,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
     }
 
     /** Carrega mais videos do canal: avanca ate 5 paginas da UU por chamada. Retorna SO os novos. */
-    suspend fun loadMoreChannelVideos(channelId: String, pages: Int = 5): List<Track> = withContext(Dispatchers.IO) {
-        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext emptyList()
-        val uc = resolveUc(channelId) ?: return@withContext emptyList()
-        val session = channelVideoSessions[uc] ?: return@withContext emptyList()
-        val page0 = session.nextPage ?: return@withContext emptyList()
-        val out = mutableListOf<Track>()
-        var next: Page? = page0
-        var left = pages
-        while (next != null && left > 0) {
-            val page = runCatching { session.extractor.getPage(next) }.getOrNull() ?: break
-            out += parseChannelStreams(page.items, session.channelName)
-            next = page.nextPage
-            left--
-        }
-        session.nextPage = next
-        out.distinctBy { it.id }
-    }
-
     /** Carrega mais playlists do canal: avanca ate 3 paginas por chamada. Retorna SO as novas. */
-    suspend fun loadMoreChannelPlaylists(channelId: String, pages: Int = 3): List<Playlist> = withContext(Dispatchers.IO) {
-        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext emptyList()
-        val uc = resolveUc(channelId) ?: return@withContext emptyList()
-        val session = channelPlaylistSessions[uc] ?: return@withContext emptyList()
-        val page0 = session.nextPage ?: return@withContext emptyList()
-        val out = mutableListOf<Playlist>()
-        var next: Page? = page0
-        var left = pages
-        while (next != null && left > 0) {
-            val page = runCatching { session.extractor.getPage(next) }.getOrNull() ?: break
-            out += parseChannelPlaylists(page.items, session.channelName)
-            next = page.nextPage
-            left--
-        }
-        session.nextPage = next
-        out.distinctBy { it.id }
-    }
-
     /** "hoje", "ha 1 dia", "ha 3 semanas", "ha 5 meses", "ha 2 anos" a partir do uploadDate do NewPipe. */
     fun formatPublished(uploadDate: DateWrapper?): String? {
         val odt = runCatching { uploadDate?.offsetDateTime() }.getOrNull() ?: return null

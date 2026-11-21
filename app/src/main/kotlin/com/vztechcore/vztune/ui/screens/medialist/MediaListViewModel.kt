@@ -64,6 +64,10 @@ class MediaListViewModel @Inject constructor(
 
     private val route = savedStateHandle.toRoute<Routes.MediaList>()
 
+    // Origem real da playlist: YOUTUBE = veio do NewPipe -> dono e canal do YouTube.
+    // YOUTUBE_MUSIC = veio do InnerTube -> dono e artista do YT Music. Null = antigo/sem info -> cai no fallback.
+    private val playlistSource = runCatching { com.vztechcore.vztune.core.domain.music.Source.valueOf(route.sourceName ?: "") }.getOrNull()
+
     private val _uiState = MutableStateFlow(
         MediaListUiState(
             listId = route.id,
@@ -188,6 +192,27 @@ private fun loadContent() {
                         _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar esta playlist.") }
                     }
                 } else {
+                    // Playlist do YouTube: NewPipe primeiro (faixas + canal real). Se vier vazia, cai pro InnerTube abaixo.
+                    var loadedViaYouTube = false
+                    if (playlistSource == Source.YOUTUBE) {
+                        val ytChannel = runCatching { youTubeRepository.getChannelForPlaylist(route.id) }.getOrNull()
+                        val ytTracks = runCatching { youTubeRepository.getYouTubePlaylistTracks(route.id) }.getOrDefault(emptyList())
+                        if (ytTracks.isNotEmpty()) {
+                            loadedViaYouTube = true
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    title = _uiState.value.title,
+                                    subtitle = ytChannel?.channelName?.takeIf { n -> n.isNotBlank() } ?: it.subtitle,
+                                    owner = ytChannel?.channelName?.takeIf { n -> n.isNotBlank() } ?: it.owner,
+                                    artistId = ytChannel?.channelId ?: it.artistId,
+                                    ownerAvatarUrl = ytChannel?.avatarUrl ?: it.ownerAvatarUrl,
+                                    allTracks = ytTracks.distinctBy { "${it.source}_${it.id}" },
+                                )
+                            }
+                        }
+                    }
+                    if (!loadedViaYouTube) {
                     var playlist = ytMusicRepository.browsePlaylist(route.id)
                     if (playlist.tracks.isEmpty()) {
                         delay(1000)
@@ -249,6 +274,7 @@ private fun loadContent() {
                         }
                     }
                 }
+                    }
             }.onFailure { e ->
                 _uiState.update { it.copy(isLoading = false, errorMessage = "Erro: ${e.message}") }
             }
@@ -433,12 +459,13 @@ private fun loadContent() {
 
     private fun isYouTubePlaylist(state: MediaListUiState): Boolean {
         if (state.isAlbum || state.isLocal) return false
+        if (playlistSource == Source.YOUTUBE) return true
         return state.allTracks.isNotEmpty() && state.allTracks.all { it.source == Source.YOUTUBE }
     }
 
     fun onOpenArtistByName(artistName: String) {
         // Playlist do YouTube: o "artista" é o canal. Sem UC, não chuta YT Music.
-        if (isYouTubePlaylist(_uiState.value)) return
+        if (isYouTubePlaylist(_uiState.value) || playlistSource == Source.YOUTUBE) return
         viewModelScope.launch {
             // Álbum: passa o título do álbum como contexto, pra resolver só aceitar
             // o artista que tem ESSE álbum no catálogo. Playlist: sem contexto, cai pro mais parecido.

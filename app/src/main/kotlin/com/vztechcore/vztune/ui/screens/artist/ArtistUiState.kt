@@ -37,8 +37,21 @@ data class ArtistUiState(
     val featuredMore: BrowseRef? = null,
     val relatedArtists: List<Artist> = emptyList(),
     val isFollowing: Boolean = false,
+    // Canal: ainda tem video/playlist la no YouTube que nao foi carregado.
+    val hasMoreVideos: Boolean = false,
+    val hasMorePlaylists: Boolean = false,
+    val isLoadingMoreVideos: Boolean = false,
+    val isLoadingMorePlaylists: Boolean = false,
 ) {
     /** "1,13 mi de inscritos • 512.669.634 visualizações" (parts are skipped when unknown). */
     val statsLabel: String
         get() = listOfNotNull(subscribers, views).filter { it.isNotBlank() }.joinToString(" • ")
 }
+
+/** Video mais famoso do canal (maior viewCount). Null quando nao tem viewCount em nenhum video. */
+val ArtistUiState.mostViewedVideo: com.vztechcore.vztune.core.domain.music.Track?
+    get() = videos.maxByOrNull { it.viewCount ?: -1L }?.takeIf { (it.viewCount ?: 0L) > 0 }
+        ?: videos.firstOrNull()
+/** Videos do canal ordenados do mais visto para o menos visto. */
+val ArtistUiState.videosByViews: List<com.vztechcore.vztune.core.domain.music.Track>
+    get() = videos.sortedByDescending { it.viewCount ?: -1L }

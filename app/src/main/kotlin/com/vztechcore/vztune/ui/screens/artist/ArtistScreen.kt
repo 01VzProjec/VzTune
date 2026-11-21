@@ -130,6 +130,7 @@ fun ArtistScreen(
     val isCollapsed by rememberHeaderCollapsed(listState)
     val nowPlaying = LocalNowPlaying.current
     var selectedChannelTab by remember { mutableStateOf(0) }
+    var channelVideosSort by remember { mutableStateOf(0) } // 0 = Recentes, 1 = Em alta (mais vistos)
     var channelSort by remember { mutableStateOf(0) } // 0 = Mais recentes, 1 = Em alta, 2 = Mais antigos
     var channelDescExpanded by remember { mutableStateOf(false) }
     var playlistMenu by remember { mutableStateOf<Playlist?>(null) }
@@ -723,6 +724,101 @@ private fun RelatedArtistCard(
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
             )
+        }
+    }
+}
+
+
+/** Botao "Buscar mais" do canal: busca a proxima leva de videos/playlists no YouTube. */
+@Composable
+private fun ChannelLoadMoreButton(label: String, onClick: () -> Unit) {
+    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable { onClick() }.padding(horizontal = 20.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
+            Text(text = label, style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+/** Botao redondo com a seta para baixo (ExpandMore): mostra +4 itens da secao. */
+@Composable
+private fun ChannelShowMoreButton(onClick: () -> Unit) {
+    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).clickable { onClick() }, contentAlignment = Alignment.Center) {
+            Icon(VzIcons.ExpandMore, contentDescription = "Mostrar mais", tint = Color.White, modifier = Modifier.size(24.dp))
+        }
+    }
+}
+
+/** INICIO do canal: video mais famoso em destaque + Para voce + Videos + Mais acessados + Playlists. */
+@Composable
+private fun ChannelHome(
+    state: ArtistUiState,
+    onVideoClick: (Track) -> Unit,
+    onTrackInfoClick: (Track) -> Unit,
+    onPlaylistClick: (Playlist) -> Unit,
+    onPlaylistMoreClick: (Playlist) -> Unit,
+    onGoVideos: () -> Unit,
+    onGoVideosTop: () -> Unit,
+    onGoPlaylists: () -> Unit,
+) {
+    var videosShown by remember { mutableStateOf(4) }
+    var topShown by remember { mutableStateOf(4) }
+    var playlistsShown by remember { mutableStateOf(4) }
+    val nowPlaying = LocalNowPlaying.current
+    Column(Modifier.fillMaxWidth()) {
+        // 1) Video mais famoso: card 16:9 grande preenchido, igual ao da aba Videos do Search.
+        val top = state.mostViewedVideo
+        if (top != null) {
+            val playback = nowPlaying.playbackOf(top)
+            MediaListVideoCard(track = top, isPlaying = playback.isPlaying, isPaused = playback.isPaused, onClick = { onVideoClick(top) }, onMoreClick = { onTrackInfoClick(top) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalPadding = 0.dp)
+            Spacer(Modifier.height(SectionGap))
+        }
+        // 2) Para voce: fileira 16:9 que arrasta pro lado, ate 50 videos do canal.
+        if (state.videos.isNotEmpty()) {
+            Text(text = "Para você", style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            LazyRow(contentPadding = RowPadding, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(state.videos.take(50), key = { it.id }) { video ->
+                    val playback = nowPlaying.playbackOf(video)
+                    MediaListVideoCard(track = video, isPlaying = playback.isPlaying, isPaused = playback.isPaused, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }, modifier = Modifier.width(300.dp), horizontalPadding = 0.dp)
+                }
+            }
+            Spacer(Modifier.height(SectionGap))
+        }
+        // 3) Videos: 4 em lista + seta pra mostrar +4, infinitamente.
+        if (state.videos.isNotEmpty()) {
+            SectionHeaderArrow(title = "Vídeos", onArrowClick = onGoVideos)
+            state.videos.take(videosShown).forEach { video ->
+                ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) })
+            }
+            if (videosShown < state.videos.size || state.hasMoreVideos) {
+                ChannelShowMoreButton(onClick = {
+                    videosShown += 4
+                    if (videosShown > state.videos.size && state.hasMoreVideos) { /* proxima leva vem pelo Buscar mais da aba Videos */ }
+                })
+            }
+            Spacer(Modifier.height(SectionGap))
+        }
+        // 4) Videos mais acessados: os mais vistos em ordem, mesmo sistema 4 + 4.
+        val byViews = state.videosByViews
+        if (byViews.isNotEmpty()) {
+            SectionHeaderArrow(title = "Vídeos mais acessados", onArrowClick = onGoVideosTop)
+            byViews.take(topShown).forEach { video ->
+                ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) })
+            }
+            if (topShown < byViews.size) ChannelShowMoreButton(onClick = { topShown += 4 })
+            Spacer(Modifier.height(SectionGap))
+        }
+        // 5) Playlists: 4 em lista + seta pra mostrar +4.
+        if (state.channelPlaylists.isNotEmpty()) {
+            SectionHeaderArrow(title = "Playlists", onArrowClick = onGoPlaylists)
+            state.channelPlaylists.take(playlistsShown).forEach { playlist ->
+                ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { onPlaylistMoreClick(playlist) })
+            }
+            if (playlistsShown < state.channelPlaylists.size) ChannelShowMoreButton(onClick = { playlistsShown += 4 })
+            Spacer(Modifier.height(SectionGap))
+        }
+        if (state.videos.isEmpty() && state.channelPlaylists.isEmpty()) {
+            Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp))
         }
     }
 }

@@ -193,6 +193,7 @@ class ArtistViewModel @Inject constructor(
         if (playlist.source == Source.YOUTUBE) {
             return runCatching { youTubeRepository.getYouTubePlaylistTracks(playlist.id) }.getOrDefault(emptyList())
         }
+        if (_uiState.value.isYouTubeChannel) return runCatching { youTubeRepository.getYouTubePlaylistTracks(playlist.id) }.getOrDefault(emptyList())
         return runCatching { ytMusicRepository.browsePlaylist(playlist.id).tracks }.getOrDefault(emptyList())
     }
 

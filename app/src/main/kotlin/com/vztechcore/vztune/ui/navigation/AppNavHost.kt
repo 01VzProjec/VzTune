@@ -295,6 +295,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                                             title = event.title,
                                             subtitle = event.owner,
                                             thumbnailUrl = event.thumbnailUrl,
+                                            sourceName = event.sourceName,
                                         )
                                     )
                                     is SearchViewModel.NavigationEvent.OpenArtist -> navController.navigate(

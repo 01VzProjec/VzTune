@@ -3,7 +3,7 @@ package com.vztechcore.vztune.ui.icons.actions
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.vztechcore.vztune.ui.icons.VzIcons
 
-// Seta pra baixo do Inicio (expandir +4). SVG que voce mandou.
+// Seta para baixo (expand_more) - usada no "mostrar mais 4" do Inicio do canal.
 val VzIcons.ExpandMore: ImageVector
     get() = VzIcons.icon(
         name = "ExpandMore",

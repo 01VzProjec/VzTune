@@ -76,6 +76,16 @@ class YouTubeRepository @Inject constructor(
         var nextPage: Page?,
     )
 
+    // Sessao de paginacao do canal: guarda o extractor + a proxima pagina.
+    // Sem guardar o extractor nao da pra chamar getPage() depois.
+    private data class ChannelListSession(
+        val extractor: org.schabi.newpipe.extractor.ListExtractor,
+        var nextPage: Page?,
+        val channelName: String,
+    )
+    private val channelVideoSessions = mutableMapOf<String, ChannelListSession>()
+    private val channelPlaylistSessions = mutableMapOf<String, ChannelListSession>()
+
     private val videoSearches = mutableMapOf<String, VideoSearchSession>()
     private val playlistSearches = mutableMapOf<String, PlaylistSearchSession>()
     private val shortSearches = mutableMapOf<String, VideoSearchSession>()
@@ -130,6 +140,8 @@ class YouTubeRepository @Inject constructor(
     }
 
     fun resetSession() {
+        channelVideoSessions.clear()
+        channelPlaylistSessions.clear()
         videoSearches.clear()
         playlistSearches.clear()
         shortSearches.clear()
@@ -145,6 +157,8 @@ class YouTubeRepository @Inject constructor(
         val bannerUrl: String? = null,
         val description: String? = null,
         val subscriberCount: String?,
+        val hasMoreVideos: Boolean = false,
+        val hasMorePlaylists: Boolean = false,
     )
 
     data class VideoPage(
@@ -1044,9 +1058,67 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
             bannerUrl = header?.banner,
             description = header?.description?.takeIf { it.isNotBlank() },
             subscriberCount = header?.subs,
+            hasMoreVideos = hasMoreVideos,
+            hasMorePlaylists = hasMorePlaylists,
         )
     }
 
+
+    private fun parseChannelStreams(items: List<*>, channelName: String): List<Track> {
+        return items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
+            val vid = extractVideoId(stream.url) ?: return@mapNotNull null
+            Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate))
+        }
+    }
+    private fun parseChannelPlaylists(items: List<*>, channelName: String): List<Playlist> {
+        return items.filterIsInstance<PlaylistInfoItem>().mapNotNull { item ->
+            val pid = Regex("list=([^&]+)").find(item.url ?: "")?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            Playlist(id = pid, title = item.name ?: "Playlist", owner = channelName, thumbnailUrl = item.thumbnails.lastOrNull()?.url, trackCount = item.streamCount.takeIf { it > 0 }?.toInt(), source = Source.YOUTUBE)
+        }
+    }
+    private fun resolveUc(input: String): String? {
+        val raw = input.trim()
+        if (raw.startsWith("UU") && raw.length >= 24) return "UC" + raw.drop(2)
+        return Regex("UC[\\w-]{22}").find(raw)?.value
+    }
+
+    /** Carrega mais videos do canal: avanca ate 5 paginas da UU por chamada. Retorna SO os novos. */
+    suspend fun loadMoreChannelVideos(channelId: String, pages: Int = 5): List<Track> = withContext(Dispatchers.IO) {
+        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext emptyList()
+        val uc = resolveUc(channelId) ?: return@withContext emptyList()
+        val session = channelVideoSessions[uc] ?: return@withContext emptyList()
+        val page0 = session.nextPage ?: return@withContext emptyList()
+        val out = mutableListOf<Track>()
+        var next: Page? = page0
+        var left = pages
+        while (next != null && left > 0) {
+            val page = runCatching { session.extractor.getPage(next) }.getOrNull() ?: break
+            out += parseChannelStreams(page.items, session.channelName)
+            next = page.nextPage
+            left--
+        }
+        session.nextPage = next
+        out.distinctBy { it.id }
+    }
+
+    /** Carrega mais playlists do canal: avanca ate 3 paginas por chamada. Retorna SO as novas. */
+    suspend fun loadMoreChannelPlaylists(channelId: String, pages: Int = 3): List<Playlist> = withContext(Dispatchers.IO) {
+        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext emptyList()
+        val uc = resolveUc(channelId) ?: return@withContext emptyList()
+        val session = channelPlaylistSessions[uc] ?: return@withContext emptyList()
+        val page0 = session.nextPage ?: return@withContext emptyList()
+        val out = mutableListOf<Playlist>()
+        var next: Page? = page0
+        var left = pages
+        while (next != null && left > 0) {
+            val page = runCatching { session.extractor.getPage(next) }.getOrNull() ?: break
+            out += parseChannelPlaylists(page.items, session.channelName)
+            next = page.nextPage
+            left--
+        }
+        session.nextPage = next
+        out.distinctBy { it.id }
+    }
 
     /** "hoje", "ha 1 dia", "ha 3 semanas", "ha 5 meses", "ha 2 anos" a partir do uploadDate do NewPipe. */
     fun formatPublished(uploadDate: DateWrapper?): String? {
@@ -1071,10 +1143,22 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
         runCatching {
             val pl = ServiceList.YouTube.getPlaylistExtractor(url)
             pl.fetchPage()
-            pl.initialPage.items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
+            val all = pl.initialPage.items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
                 val vid = extractVideoId(stream.url) ?: return@mapNotNull null
                 Track(id = vid, title = stream.name ?: "Untitled", artist = stream.uploaderName ?: "", durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate))
+            }.toMutableList()
+            var nextPl = pl.initialPage.nextPage
+            var pagesPl = 1
+            while (nextPl != null && pagesPl < 10) {
+                val page = runCatching { pl.getPage(nextPl) }.getOrNull() ?: break
+                all += page.items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
+                    val vid = extractVideoId(stream.url) ?: return@mapNotNull null
+                    Track(id = vid, title = stream.name ?: "Untitled", artist = stream.uploaderName ?: "", durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate))
+                }
+                nextPl = page.nextPage
+                pagesPl++
             }
+            all.distinctBy { it.id }
         }.getOrDefault(emptyList())
     }
 

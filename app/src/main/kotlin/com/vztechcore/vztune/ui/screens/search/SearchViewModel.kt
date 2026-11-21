@@ -56,6 +56,7 @@ class SearchViewModel @Inject constructor(
         data class OpenPlaylist(
             val id: String, val title: String, val owner: String?,
             val thumbnailUrl: String?, val mosaic: List<String>,
+            val sourceName: String,
         ) : NavigationEvent
         data class OpenAlbum(
             val id: String, val title: String, val artist: String,
@@ -266,6 +267,7 @@ class SearchViewModel @Inject constructor(
                             hit.playlist.owner,
                             hit.playlist.thumbnailUrl,
                             hit.playlist.mosaicThumbnails,
+                            hit.playlist.source.name,
                         )
                     )
                 }

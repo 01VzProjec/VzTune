@@ -438,6 +438,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                                     )
                                 )
                             },
+                            onLoadMoreChannelVideos = vm::loadMoreChannelVideos,
                         )
                     }
                 }

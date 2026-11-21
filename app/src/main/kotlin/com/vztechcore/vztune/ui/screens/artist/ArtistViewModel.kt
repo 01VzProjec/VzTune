@@ -98,7 +98,7 @@ class ArtistViewModel @Inject constructor(
                         singles = emptyList(), singlesMore = null,
                         videos = channel.videos, videosMore = null,
                         featured = emptyList(), featuredMore = null, relatedArtists = emptyList(),
-                        shorts = channel.shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true,
+                        shorts = channel.shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true, channelVideosHasMore = youTubeRepository.hasMoreChannelVideos(route.id), isLoadingMoreChannelVideos = false,
                     )
                 }
                 return@launch
@@ -132,6 +132,26 @@ class ArtistViewModel @Inject constructor(
         val songs = _uiState.value.topSongs
         val idx = songs.indexOfFirst { it.id == track.id }
         if (idx >= 0) playerController.playQueue(songs, idx) else playerController.playQueue(listOf(track), 0)
+    }
+
+    // FIX18 - Buscar mais: busca proxima pagina do UU e soma na mesma lista. Mais recentes / Em alta ganham mais itens. Mais antigos se atualiza sozinho porque ele e a mesma lista invertida, sem botao proprio.
+    fun loadMoreChannelVideos() {
+        val state = _uiState.value
+        if (state.isLoadingMoreChannelVideos) return
+        if (!state.channelVideosHasMore) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingMoreChannelVideos = true) }
+            val more = runCatching { youTubeRepository.loadMoreChannelVideos(route.id) }.getOrDefault(emptyList())
+            val current = _uiState.value.videos
+            val merged = (current + more).distinctBy { it.id }
+            _uiState.update {
+                it.copy(
+                    videos = merged,
+                    channelVideosHasMore = youTubeRepository.hasMoreChannelVideos(route.id),
+                    isLoadingMoreChannelVideos = false,
+                )
+            }
+        }
     }
 
     fun onVideoClick(track: Track) {

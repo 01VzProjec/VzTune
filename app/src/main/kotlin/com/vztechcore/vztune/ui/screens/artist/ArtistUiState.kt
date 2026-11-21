@@ -26,6 +26,9 @@ data class ArtistUiState(
     val shorts: List<Track> = emptyList(),
     val channelPlaylists: List<Playlist> = emptyList(),
     val bannerUrl: String? = null,
+    // FIX18 - Canal: tem mais videos no UU? + carregando Buscar mais?
+    val channelVideosHasMore: Boolean = false,
+    val isLoadingMoreChannelVideos: Boolean = false,
     val isYouTubeChannel: Boolean = false,
     val videosMore: BrowseRef? = null,
     val featured: List<Playlist> = emptyList(),

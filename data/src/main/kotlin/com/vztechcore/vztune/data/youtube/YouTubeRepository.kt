@@ -11,6 +11,7 @@ import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.InfoItem
 import org.schabi.newpipe.extractor.Page
 import org.schabi.newpipe.extractor.ServiceList
+import org.schabi.newpipe.extractor.playlist.PlaylistExtractor
 import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.search.SearchExtractor
 import org.schabi.newpipe.extractor.stream.AudioStream
@@ -78,6 +79,47 @@ class YouTubeRepository @Inject constructor(
     private val videoSearches = mutableMapOf<String, VideoSearchSession>()
     private val playlistSearches = mutableMapOf<String, PlaylistSearchSession>()
     private val shortSearches = mutableMapOf<String, VideoSearchSession>()
+
+    // FIX18 - Sessao de videos do canal (playlist UU). Guarda o extractor + nextPage pra Buscar mais nao recomecar do zero.
+    private data class ChannelVideosSession(
+        val extractor: PlaylistExtractor,
+        var nextPage: Page?,
+        val channelName: String,
+    )
+    private val channelVideoSessions = mutableMapOf<String, ChannelVideosSession>()
+
+    // FIX18 - Shorts de verdade: veio da aba /shorts (resolucao vertical 9:16) E tem hashtag no titulo.
+    private fun isRealShort(track: Track): Boolean {
+        if (!track.title.contains("#")) return false
+        if (track.durationSeconds > 0L && track.durationSeconds > 180L) return false
+        return true
+    }
+
+    private fun parseChannelStreamItems(items: List<InfoItem>, channelName: String): List<Track> {
+        return items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
+            val vid = extractVideoId(stream.url) ?: return@mapNotNull null
+            Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate))
+        }
+    }
+
+    // FIX18 - Tem mais videos no UU? Usado pra mostrar/esconder o botao Buscar mais.
+    fun hasMoreChannelVideos(channelId: String): Boolean {
+        if (channelVideoSessions[channelId]?.nextPage != null) return true
+        return channelVideoSessions.entries.any { (k, v) -> v.nextPage != null && (k == channelId || channelId.contains(k) || k.contains(channelId)) }
+    }
+
+    // FIX18 - Buscar mais: proxima pagina do UU (mais ~100). Retorna vazio se acabou.
+    suspend fun loadMoreChannelVideos(channelId: String, pageSize: Int = 100): List<Track> = withContext(Dispatchers.IO) {
+        val session = channelVideoSessions[channelId]
+            ?: channelVideoSessions.entries.firstOrNull { (k, v) -> v.nextPage != null && (channelId.contains(k) || k.contains(channelId)) }?.value
+            ?: return@withContext emptyList()
+        val page = session.nextPage ?: return@withContext emptyList()
+        runCatching {
+            val next = session.extractor.getPage(page)
+            session.nextPage = next.nextPage
+            parseChannelStreamItems(next.items, session.channelName).take(pageSize)
+        }.getOrDefault(emptyList())
+    }
 
     fun resetSession() {
         videoSearches.clear()
@@ -835,15 +877,24 @@ class YouTubeRepository @Inject constructor(
         val uc = resolvedUc ?: "UC"
         // Videos: fonte 1 = UU, fonte 2 = /videos como playlist, fonte 3 = busca por nome do canal
         var videos: List<Track> = emptyList()
+        // FIX18 - Videos: de comeco 300 (paginando o UU, ~100 por pagina). Guarda sessao pra Buscar mais.
         if (uc.startsWith("UC") && uc.length >= 24) {
             videos = runCatching {
                 val uploadsId = "UU" + uc.drop(2)
                 val pl = ServiceList.YouTube.getPlaylistExtractor("https://www.youtube.com/playlist?list=$uploadsId")
                 pl.fetchPage()
-                pl.initialPage.items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
-                    val vid = extractVideoId(stream.url) ?: return@mapNotNull null
-                    Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate))
+                val collected = parseChannelStreamItems(pl.initialPage.items, channelName).toMutableList()
+                var nextPage = pl.initialPage.nextPage
+                while (collected.size < 300 && nextPage != null) {
+                    val next = pl.getPage(nextPage)
+                    collected += parseChannelStreamItems(next.items, channelName)
+                    nextPage = next.nextPage
                 }
+                val session = ChannelVideosSession(pl, nextPage, channelName)
+                channelVideoSessions[uc] = session
+                channelVideoSessions[input] = session
+                channelVideoSessions[channelUrl] = session
+                collected.distinctBy { it.id }.take(300)
             }.getOrDefault(emptyList())
         }
         if (videos.isEmpty() && uc.startsWith("UC")) {
@@ -865,18 +916,25 @@ class YouTubeRepository @Inject constructor(
         }
         // Shorts do canal: tenta /shorts como playlist, se falhar busca Shorts pelo nome
         var shorts: List<Track> = emptyList()
+        // FIX18 - Shorts: so da aba /shorts (resolucao de Shorts) E com hashtag no titulo.
         if (uc.startsWith("UC")) {
             shorts = runCatching {
                 val pl = ServiceList.YouTube.getPlaylistExtractor("https://www.youtube.com/channel/$uc/shorts")
                 pl.fetchPage()
-                pl.initialPage.items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
-                    val vid = extractVideoId(stream.url) ?: return@mapNotNull null
-                    Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate))
+                val collected = parseChannelStreamItems(pl.initialPage.items, channelName).toMutableList()
+                var nextPage = pl.initialPage.nextPage
+                var pages = 0
+                while (collected.count { isRealShort(it) } < 60 && nextPage != null && pages < 5) {
+                    val next = pl.getPage(nextPage)
+                    collected += parseChannelStreamItems(next.items, channelName)
+                    nextPage = next.nextPage
+                    pages++
                 }
+                collected.distinctBy { it.id }.filter { isRealShort(it) }.take(100)
             }.getOrDefault(emptyList())
         }
         if (shorts.isEmpty() && channelName.isNotBlank()) {
-            shorts = runCatching { searchShorts(channelName, loadMore = false, pageSize = 12, searchId = "channel:$uc").items.map { it.track } }.getOrDefault(emptyList())
+            shorts = runCatching { searchShorts(channelName, loadMore = false, pageSize = 30, searchId = "channel:$uc").items.map { it.track }.filter { isRealShort(it) } }.getOrDefault(emptyList())
         }
         // Playlists do canal: tenta /playlists como pagina, fallback busca por nome do canal.
         var channelPlaylists: List<Playlist> = emptyList()

@@ -51,8 +51,9 @@ import com.vztechcore.vztune.ui.icons.actions.MoreVert
 import com.vztechcore.vztune.ui.icons.actions.Share
 import com.vztechcore.vztune.ui.icons.media.Lists
 import com.vztechcore.vztune.ui.icons.media.PlaylistAdd
-import com.vztechcore.vztune.ui.icons.media.QueueMusic
-import com.vztechcore.vztune.ui.icons.player.PlayCircleFilled
+import com.vztechcore.vztune.ui.icons.actions.PlayNext
+import com.vztechcore.vztune.ui.icons.actions.AddToQueue
+
 
 fun formatViewCount(count: Long?): String? {
     if (count == null || count <= 0) return null
@@ -220,12 +221,12 @@ fun PlaylistOptionsSheet(playlist: Playlist, onDismiss: () -> Unit, onPlayNext: 
                 }
             }
             Row(Modifier.fillMaxWidth().clickable { onPlayNext(playlist); onDismiss() }.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = VzIcons.PlayCircleFilled, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                Icon(imageVector = VzIcons.PlayNext, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
                 Spacer(Modifier.width(16.dp))
                 Text(text = "Adicionar como proxima da fila", style = MaterialTheme.typography.bodyLarge, color = Color.White, fontWeight = FontWeight.Medium)
             }
             Row(Modifier.fillMaxWidth().clickable { onAddToQueue(playlist); onDismiss() }.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = VzIcons.QueueMusic, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                Icon(imageVector = VzIcons.AddToQueue, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
                 Spacer(Modifier.width(16.dp))
                 Text(text = "Adicionar ao final da fila", style = MaterialTheme.typography.bodyLarge, color = Color.White, fontWeight = FontWeight.Medium)
             }

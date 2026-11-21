@@ -22,7 +22,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.ui.icons.VzIcons
-import com.vztechcore.vztune.ui.icons.media.QueueMusic
+import com.vztechcore.vztune.ui.icons.actions.PlayNext
 
 /**
  * Single source of truth para "arrastar pra tocar em seguida".
@@ -43,7 +43,7 @@ fun SwipeableRow(
                 Modifier.fillMaxHeight().width(dragOffset.dp.coerceAtMost(80.dp)).padding(start = 16.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                Icon(imageVector = VzIcons.QueueMusic, contentDescription = "Tocar em seguida", tint = Color.White.copy(alpha = iconAlpha), modifier = Modifier.size(24.dp))
+                Icon(imageVector = VzIcons.PlayNext, contentDescription = "Tocar em seguida", tint = Color.White.copy(alpha = iconAlpha), modifier = Modifier.size(24.dp))
             }
         }
         Box(

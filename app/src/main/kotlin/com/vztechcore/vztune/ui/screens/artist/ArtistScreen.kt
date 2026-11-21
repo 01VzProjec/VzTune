@@ -118,6 +118,7 @@ fun ArtistScreen(
     onPlaylistPlayNext: (Playlist) -> Unit = {},
     onPlaylistAddToQueue: (Playlist) -> Unit = {},
     onSavePlaylistToLibrary: (Playlist) -> Unit = {},
+    onLoadMoreChannelVideos: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -204,12 +205,12 @@ fun ArtistScreen(
                 }
 
                 else -> {
-                    // FIX14 REBUILD - Regra: tem musica = ARTISTA (so Home, sem abas). Sem musica = CANAL (abas Videos | Playlists).
+                    // FIX14 REBUILD - Regra: tem musica = ARTISTA (so Home, sem abas). Sem musica = CANAL (abas Videos | Shorts | Playlists).
                     val hasMusic = state.topSongs.isNotEmpty() || state.albums.isNotEmpty() || state.singles.isNotEmpty()
                     val isChannel = !hasMusic
 
                     if (isChannel) {
-                        // ---------- CANAL: so Videos | Playlists ----------
+                        // ---------- CANAL: Videos | Shorts | Playlists ----------
                         val sortedVideos = when (channelSort) {
                             1 -> state.videos.sortedByDescending { it.viewCount ?: 0 }
                             2 -> state.videos.reversed()
@@ -241,6 +242,13 @@ fun ArtistScreen(
                                     item(key = "channel_videos_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
                                 }
                             }
+                            1 -> {
+                                if (state.shorts.isNotEmpty()) {
+                                    item(key = "channel_shorts_grid") { ShortsGridRows(tracks = state.shorts, onClick = { onShortClick(it) }, onMoreClick = { onTrackInfoClick(it) }) }
+                                } else {
+                                    item(key = "channel_shorts_empty") { Text(text = "Nenhum Short ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                                }
+                            }
                             else -> {
                                 if (state.channelPlaylists.isNotEmpty()) {
                                     itemsIndexed(state.channelPlaylists, key = { _, pl -> "cp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
@@ -249,7 +257,23 @@ fun ArtistScreen(
                                 }
                             }
                         }
-                        item(key = "channel_space") { Spacer(Modifier.height(SectionGap)) }
+                                                // FIX18 - Buscar mais: so em Mais recentes e Em alta. Mais antigos nao tem botao, mas se atualiza sozinho porque usa a mesma lista (videos) invertida.
+                        if (selectedChannelTab == 0 && state.channelVideosHasMore && channelSort != 2) {
+                            item(key = "channel_load_more") {
+                                Box(
+                                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.12f)).clickable { onLoadMoreChannelVideos() }.padding(vertical = 14.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = if (state.isLoadingMoreChannelVideos) "Carregando..." else "Buscar mais",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                            }
+                        }
+item(key = "channel_space") { Spacer(Modifier.height(SectionGap)) }
                         item(key = "description") { ArtistDescription(description = state.description) }
                     } else {
                         
@@ -455,7 +479,7 @@ private fun SectionHeaderArrow(
  * Cabecalho do canal igual a foto do YouTube, mas no tema VzTune (preto AMOLED).
  * Banner 16:9 arredondado, avatar redondo, nome + selo, @handle, inscritos • videos,
  * descricao com ...mais, botao Seguir (mesmo sistema do artista),
- * abas Videos | Playlists.
+ * abas Videos | Shorts | Playlists.
  */
 @Composable
 private fun ChannelHeader(
@@ -473,7 +497,7 @@ private fun ChannelHeader(
         state.subscribers?.takeIf { it.isNotBlank() },
         if (state.videos.isNotEmpty()) state.videos.size.toString() + " vídeos" else null,
     ).joinToString(" • ")
-    val tabs = listOf("Vídeos", "Playlists")
+    val tabs = listOf("Vídeos", "Shorts", "Playlists")
     Column(
         Modifier.fillMaxWidth().background(Color.Black)
     ) {
@@ -486,12 +510,12 @@ private fun ChannelHeader(
             MediaListCircleButton(VzIcons.ArrowBackIos, "Voltar", onBackClick)
             MediaListCircleButton(VzIcons.Share, "Compartilhar", onShareClick)
         }
-        // Banner 16:9 arredondado, FillBounds pra nao dar zoom. Sem banner = faixa preta.
-        Box(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.06f))
-        ) {
-            if (!state.bannerUrl.isNullOrBlank()) {
-                AsyncImage(model = state.bannerUrl, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
+        // FIX18 - Banner: so aparece se o criador tem banner. Sem banner = sem card vazio. Tamanho exato do criador: sem aspectRatio fixo, a imagem manda na altura (FillWidth).
+        if (!state.bannerUrl.isNullOrBlank()) {
+            Box(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(12.dp))
+            ) {
+                AsyncImage(model = state.bannerUrl, contentDescription = null, contentScale = ContentScale.FillWidth, modifier = Modifier.fillMaxWidth())
             }
         }
         // Avatar + nome + @ + inscritos
@@ -508,13 +532,7 @@ private fun ChannelHeader(
             }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = state.name, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    Spacer(Modifier.width(6.dp))
-                    Box(Modifier.size(20.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
-                        Icon(imageVector = VzIcons.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
-                    }
-                }
+                Text(text = state.name, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
                 Spacer(Modifier.height(4.dp))
                 Text(text = handle, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (subsVideos.isNotBlank()) {

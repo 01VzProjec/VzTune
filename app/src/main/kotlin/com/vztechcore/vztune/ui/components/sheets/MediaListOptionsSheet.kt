@@ -43,8 +43,9 @@ import com.vztechcore.vztune.ui.icons.media.Artist
 import com.vztechcore.vztune.ui.icons.media.Download
 import com.vztechcore.vztune.ui.icons.media.DownloadDone
 import com.vztechcore.vztune.ui.icons.media.Groups
-import com.vztechcore.vztune.ui.icons.media.QueueMusic
-import com.vztechcore.vztune.ui.icons.player.PlayCircleFilled
+import com.vztechcore.vztune.ui.icons.actions.PlayNext
+import com.vztechcore.vztune.ui.icons.actions.AddToQueue
+
 import com.vztechcore.vztune.ui.screens.medialist.MediaListUiState
 
 private val SheetContainerColor = Color(0xFF121829)
@@ -270,7 +271,7 @@ fun MediaListOptionsSheet(
             // Queue & Batch Download actions
             if (state.allTracks.isNotEmpty()) {
                 ListOptionRow(
-                    icon = VzIcons.PlayCircleFilled,
+                    icon = VzIcons.PlayNext,
                     label = "Reproduzir a seguir",
                     subtitle = "${state.allTracks.size} faixas",
                     onClick = {
@@ -280,7 +281,7 @@ fun MediaListOptionsSheet(
                 )
 
                 ListOptionRow(
-                    icon = VzIcons.QueueMusic,
+                    icon = VzIcons.AddToQueue,
                     label = "Adicionar à fila",
                     onClick = {
                         onAddToQueueAll()

@@ -43,12 +43,15 @@ import com.vztechcore.vztune.ui.icons.media.Album
 import com.vztechcore.vztune.ui.icons.media.Artist
 import com.vztechcore.vztune.ui.icons.media.Download
 import com.vztechcore.vztune.ui.icons.media.DownloadDone
-import com.vztechcore.vztune.ui.icons.media.MusicNote
+import com.vztechcore.vztune.ui.icons.actions.Credits
+import com.vztechcore.vztune.ui.icons.actions.PlayNext
+import com.vztechcore.vztune.ui.icons.actions.AddToQueue
+import com.vztechcore.vztune.ui.icons.actions.RemoveFromPlaylist
 import com.vztechcore.vztune.ui.icons.media.Groups
 import com.vztechcore.vztune.ui.icons.media.PlaylistAdd
-import com.vztechcore.vztune.ui.icons.media.QueueMusic
+
 import com.vztechcore.vztune.ui.icons.media.Radio
-import com.vztechcore.vztune.ui.icons.player.PlayCircleFilled
+
 
 private val SheetContainerColor = Color(0xFF121829)
 private val DangerRed = Color(0xFFF87171)
@@ -192,7 +195,7 @@ fun TrackOptionsSheet(
         val isLocal = menuContext == TrackMenuContext.LOCAL_PLAYLIST
         val isRecent = menuContext == TrackMenuContext.RECENT_HISTORY
         if (isLocal) {
-            TopActionCard(icon = VzIcons.DeleteFilled, label = "Excluir da playlist", iconTint = Color(0xFFFF6B6B), onClick = { onRemoveFromLocalPlaylist(track); onDismiss() })
+            TopActionCard(icon = VzIcons.RemoveFromPlaylist, label = "Excluir da playlist", iconTint = Color(0xFFFF6B6B), onClick = { onRemoveFromLocalPlaylist(track); onDismiss() })
         } else if (isRecent) {
             TopActionCard(icon = VzIcons.DeleteFilled, label = "Apagar", iconTint = Color(0xFFFF6B6B), onClick = { onRemoveFromRecentHistory(track); onDismiss() })
         } else if (isDownloading) {
@@ -223,9 +226,9 @@ fun TrackOptionsSheet(
         onClick = { onToggleFavorite(track); onDismiss() },
     )
     // 3. Reproduzir como proxima faixa
-    SheetOptionRow(icon = VzIcons.PlayCircleFilled, label = "Reproduzir como proxima faixa", subtitle = "Toca logo depois da atual", onClick = { onPlayNext(track); onDismiss() })
+    SheetOptionRow(icon = VzIcons.PlayNext, label = "Reproduzir como proxima faixa", subtitle = "Toca logo depois da atual", onClick = { onPlayNext(track); onDismiss() })
     // 4. Adicionar a fila
-    SheetOptionRow(icon = VzIcons.QueueMusic, label = "Adicionar a fila", subtitle = "Toca no final da fila", onClick = { onAddToQueue(track); onDismiss() })
+    SheetOptionRow(icon = VzIcons.AddToQueue, label = "Adicionar a fila", subtitle = "Toca no final da fila", onClick = { onAddToQueue(track); onDismiss() })
     // 5. Iniciar radio
     SheetOptionRow(icon = VzIcons.Radio, label = "Iniciar radio", subtitle = "Baseada nesta faixa", onClick = { onStartRadio(track); onDismiss() })
     // 6. Ir para o album
@@ -264,7 +267,7 @@ fun TrackOptionsSheet(
     // 8. Mostrar creditos (somente musica ou video clipe da musica)
     val showCreditsOption = track.source == Source.YOUTUBE_MUSIC || (track.source == Source.YOUTUBE && !track.album.isNullOrBlank())
     if (showCreditsOption) {
-        SheetOptionRow(icon = VzIcons.MusicNote, label = "Mostrar creditos da musica", subtitle = "Compositores, produtores e mais", onClick = { showCredits = true })
+        SheetOptionRow(icon = VzIcons.Credits, label = "Mostrar creditos da musica", subtitle = "Compositores, produtores e mais", onClick = { showCredits = true })
     }
     // 9. Track details
             SheetOptionRow(

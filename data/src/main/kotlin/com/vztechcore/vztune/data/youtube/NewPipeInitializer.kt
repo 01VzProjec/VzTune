@@ -2,6 +2,8 @@ package com.vztechcore.vztune.data.youtube
 
 import android.util.Log
 import org.schabi.newpipe.extractor.NewPipe
+import org.schabi.newpipe.extractor.localization.ContentCountry
+import org.schabi.newpipe.extractor.localization.Localization
 import org.schabi.newpipe.extractor.downloader.Downloader
 
 /**
@@ -25,7 +27,9 @@ object NewPipeInitializer {
 
             return runCatching {
                 Log.d(TAG, "Initializing NewPipe with ${downloader::class.simpleName}")
-                NewPipe.init(downloader)
+                // FIX15: NewPipe sem locale usava en-US por padrao -> titulos do canal vinham em ingles mesmo o canal sendo BR.
+                // InnerTube ja era pt-BR, por isso o YT Music estava em portugues e o canal em ingles.
+                NewPipe.init(downloader, Localization("pt", "BR"), ContentCountry("BR"))
                 initialized = true
                 Log.d(TAG, "NewPipe initialized OK")
                 true

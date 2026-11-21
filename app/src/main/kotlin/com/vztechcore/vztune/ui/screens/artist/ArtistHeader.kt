@@ -39,7 +39,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.vztechcore.vztune.ui.components.feedback.fadeOutBottom
 import com.vztechcore.vztune.ui.icons.VzIcons
-import com.vztechcore.vztune.ui.icons.actions.ArrowBack
+import com.vztechcore.vztune.ui.icons.actions.ArrowBackIos
 import com.vztechcore.vztune.ui.icons.actions.PersonAdd
 import com.vztechcore.vztune.ui.icons.actions.PersonCheck
 import com.vztechcore.vztune.ui.icons.actions.Share
@@ -112,7 +112,7 @@ fun ArtistHeader(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                MediaListCircleButton(VzIcons.ArrowBack, "Voltar", onBackClick)
+                MediaListCircleButton(VzIcons.ArrowBackIos, "Voltar", onBackClick)
                 MediaListCircleButton(VzIcons.Share, "Compartilhar artista", onShareClick)
             }
 

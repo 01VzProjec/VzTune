@@ -19,7 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.vztechcore.vztune.ui.icons.VzIcons
-import com.vztechcore.vztune.ui.icons.actions.Close
+import com.vztechcore.vztune.ui.icons.actions.ArrowBackIos
 import com.vztechcore.vztune.ui.screens.medialist.MediaListCircleButton
 
 @Composable
@@ -37,7 +37,7 @@ fun DetailTopBar(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MediaListCircleButton(VzIcons.Close, "Fechar", onBackClick)
+        MediaListCircleButton(VzIcons.ArrowBackIos, "Voltar", onBackClick)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(

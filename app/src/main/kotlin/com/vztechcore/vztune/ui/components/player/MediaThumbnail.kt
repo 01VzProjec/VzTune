@@ -34,7 +34,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import coil.compose.AsyncImage
+import com.vztechcore.vztune.R
 import com.vztechcore.vztune.R
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.player.Pause
@@ -50,6 +53,7 @@ fun MediaThumbnail(
     isPlaying: Boolean = false,
     isPaused: Boolean = false,
     isLoading: Boolean = false,
+    placeholderRes: Int? = null,
     size: Dp = 56.dp,
     cornerRadius: Dp = 8.dp,
 ) {
@@ -82,8 +86,26 @@ fun MediaThumbnail(
         )
 
         if (imageUrl != null) {
-            AsyncImage(
-                model = imageUrl,
+            if (placeholderRes != null) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    placeholder = painterResource(placeholderRes),
+                    error = painterResource(placeholderRes),
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        } else if (placeholderRes != null) {
+            Image(
+                painter = painterResource(placeholderRes),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

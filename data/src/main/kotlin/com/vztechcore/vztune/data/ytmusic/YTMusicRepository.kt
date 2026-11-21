@@ -403,6 +403,8 @@ class YTMusicRepository @Inject constructor(
         artistName: String,
         trackTitle: String? = null,
         albumTitle: String? = null,
+        playlistId: String? = null,
+        playlistTitle: String? = null,
     ): Artist? = withContext(Dispatchers.IO) {
         val cleanQuery = artistName.trim()
         if (cleanQuery.isBlank() || cleanQuery.equals("YouTube Music", ignoreCase = true)) {
@@ -433,21 +435,27 @@ class YTMusicRepository @Inject constructor(
                 .thenBy { it.third }
         )
 
+        // FIX15 th vs TH: 'th' e 'TH' normalizam igual (distancia 0) mas sao contas diferentes.
+        // Se um candidato tem o nome EXATAMENTE igual (case-sensitive), ele ganha - sem gastar browse quando nao tem contexto.
+        val caseSensitiveExact = ranked.firstOrNull { it.first.name == cleanQuery && !ArtistResolver.isTopicName(it.first.name) }
+        if (caseSensitiveExact != null && trackTitle.isNullOrBlank() && albumTitle.isNullOrBlank() && playlistId.isNullOrBlank() && playlistTitle.isNullOrBlank()) {
+            return@withContext caseSensitiveExact.first
+        }
         // Exato não-Topic: é ele, sem gastar browse
         val exactNonTopic = ranked.firstOrNull {
             it.second == 0 && !ArtistResolver.isTopicName(it.first.name)
         }
-        if (exactNonTopic != null && trackTitle.isNullOrBlank() && albumTitle.isNullOrBlank()) {
+        if (exactNonTopic != null && caseSensitiveExact == null && trackTitle.isNullOrBlank() && albumTitle.isNullOrBlank() && playlistId.isNullOrBlank() && playlistTitle.isNullOrBlank()) {
             return@withContext exactNonTopic.first
         }
         // Exato (mesmo que seja Topic) sem contexto: também é ele, sem gastar browse
         val exactAny = ranked.firstOrNull { it.second == 0 }
-        if (exactAny != null && trackTitle.isNullOrBlank() && albumTitle.isNullOrBlank()) {
+        if (exactAny != null && caseSensitiveExact == null && trackTitle.isNullOrBlank() && albumTitle.isNullOrBlank() && playlistId.isNullOrBlank() && playlistTitle.isNullOrBlank()) {
             return@withContext exactAny.first
         }
 
         // 3. Verificação de catálogo: só pros 3 mais parecidos, pra não estourar rede
-        val hasContext = !trackTitle.isNullOrBlank() || !albumTitle.isNullOrBlank()
+        val hasContext = !trackTitle.isNullOrBlank() || !albumTitle.isNullOrBlank() || !playlistId.isNullOrBlank() || !playlistTitle.isNullOrBlank()
         if (hasContext) {
             for ((candidate, _, _) in ranked.take(3)) {
                 val detail = runCatching { browseArtist(candidate.id) }.getOrNull() ?: continue
@@ -459,6 +467,19 @@ class YTMusicRepository @Inject constructor(
                     trackTitle = trackTitle,
                     albumTitle = albumTitle,
                 )
+                val playlistHit = ArtistResolver.playlistContains(
+                    featured = detail.featured,
+                    playlistId = playlistId,
+                    playlistTitle = playlistTitle,
+                )
+                if (playlistHit) {
+                    return@withContext Artist(
+                        id = candidate.id,
+                        name = detail.name.takeUnless { it == "Artista" || it == "Unknown Artist" } ?: candidate.name,
+                        thumbnailUrl = detail.thumbnailUrl ?: candidate.thumbnailUrl,
+                        source = candidate.source,
+                    )
+                }
                 if (contains) {
                     // Devolve com o nome/foto da página verificada (mais confiável que o da busca)
                     return@withContext Artist(
@@ -470,6 +491,8 @@ class YTMusicRepository @Inject constructor(
                     )
                 }
             }
+            // Ninguém verificado: se tem exato case-sensitive (th vs TH), ele ganha do mais parecido. Senão cai pro mais parecido abaixo.
+            if (caseSensitiveExact != null) return@withContext caseSensitiveExact.first
             // Ninguém verificado: cai pro mais parecido abaixo (não retorna null, senão o clique morre)
         }
 

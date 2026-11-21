@@ -39,7 +39,10 @@ import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.music.Playlist
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.R
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
+import com.vztechcore.vztune.ui.components.player.MediaThumbnail
+import com.vztechcore.vztune.ui.components.player.ThumbnailShape
 import com.vztechcore.vztune.ui.components.player.playbackOf
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.FavoriteFilled
@@ -79,11 +82,16 @@ fun ChannelVideoCard(track: Track, onClick: () -> Unit, onMoreClick: () -> Unit,
     val playback = nowPlaying.playbackOf(track)
     val isCurrent = playback.isPlaying || playback.isPaused
     Row(modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.Top) {
-        Box(Modifier.width(160.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.08f))) {
-            if (track.thumbnailUrl != null) AsyncImage(model = track.thumbnailUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            if (isCurrent) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
-                Text(text = if (playback.isPlaying) "Tocando" else "Pausado", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
-            }
+        // FIX15: mesmo sistema dos cards de faixa do Search - MediaThumbnail WIDE: tocando = equalizador animado, pausado = icone pause no meio + equalizador pequeno no canto inferior direito. Sem thumbnail = holder_video.png.
+        Box(Modifier.width(160.dp)) {
+            MediaThumbnail(
+                imageUrl = track.thumbnailUrl,
+                shape = ThumbnailShape.WIDE,
+                cornerRadius = 10.dp,
+                isPlaying = playback.isPlaying,
+                isPaused = playback.isPaused,
+                placeholderRes = R.drawable.holder_video,
+            )
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -106,7 +114,7 @@ fun ChannelPlaylistCard(playlist: Playlist, onClick: () -> Unit, onMoreClick: ()
             Box(Modifier.align(Alignment.BottomEnd).padding(6.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.78f)).padding(horizontal = 8.dp, vertical = 4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(imageVector = VzIcons.Lists, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                    Text(text = if ((playlist.trackCount ?: 0) > 0) playlist.trackCount.toString() + " faixas" else "Playlist", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(text = if ((playlist.trackCount ?: 0) > 0) playlist.trackCount.toString() else "Playlist", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

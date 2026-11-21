@@ -410,7 +410,7 @@ class MediaListViewModel @Inject constructor(
             // o artista que tem ESSE álbum no catálogo. Playlist: sem contexto, cai pro mais parecido.
             val albumTitle = _uiState.value.title.takeIf { _uiState.value.isAlbum }
             val found = runCatching {
-                ytMusicRepository.resolveArtist(artistName, albumTitle = albumTitle)
+                ytMusicRepository.resolveArtist(artistName, albumTitle = albumTitle, playlistId = route.id, playlistTitle = _uiState.value.title)
             }.getOrNull()
             if (found != null) {
                 _navigationEvent.emit(NavigationEvent.OpenArtist(found))

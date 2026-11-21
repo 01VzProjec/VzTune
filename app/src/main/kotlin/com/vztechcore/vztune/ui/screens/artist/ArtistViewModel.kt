@@ -79,7 +79,7 @@ class ArtistViewModel @Inject constructor(
                         videos = music.videos, videosMore = music.videosMore,
                         featured = music.featured, featuredMore = music.featuredMore,
                         relatedArtists = music.relatedArtists,
-                        shorts = emptyList(), channelPlaylists = emptyList(), bannerUrl = null, isYouTubeChannel = false,
+                        shorts = emptyList(), channelPlaylists = channel?.playlists ?: emptyList(), bannerUrl = null, isYouTubeChannel = false,
                     )
                 }
                 return@launch

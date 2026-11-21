@@ -186,6 +186,21 @@ internal object YTMusicArtistParser {
         }
     }
 
+    /** '1,55 mi de inscritos' -> '1,55 mi ouvintes mensais'. 'Artista' generico -> null (esconde a linha). */
+    fun formatRelatedListeners(raw: String?): String? {
+        val s = raw?.trim().orEmpty()
+        if (s.isBlank() || s.equals("Artista", ignoreCase = true) || s.equals("Artist", ignoreCase = true)) return null
+        if (s.contains("ouvintes", ignoreCase = true)) {
+            return if (s.contains("mensais", ignoreCase = true)) s else "$s mensais"
+        }
+        if (s.contains("inscrit", ignoreCase = true)) {
+            return s.replace(Regex("(?i)de inscritos"), "ouvintes mensais").replace(Regex("(?i)inscritos"), "ouvintes mensais").replace(Regex("(?i)inscrito"), "ouvinte mensal")
+        }
+        // So numero: '1,55 mi' -> '1,55 mi ouvintes mensais'
+        if (s.any { it.isDigit() }) return "$s ouvintes mensais"
+        return s
+    }
+
     fun extractHeaderTitle(header: JSONObject?): String? {
         if (header == null) return null
         return YTMusicTextUtils.runsText(header.optJSONObject("title"))
@@ -367,7 +382,8 @@ internal object YTMusicArtistParser {
                         id = browseId,
                         name = name,
                         thumbnailUrl = YTMusicThumbnailUtils.thumbnailOf(renderer.optJSONObject("thumbnailRenderer")),
-                        source = Source.YOUTUBE_MUSIC
+                        source = Source.YOUTUBE_MUSIC,
+                        subscribers = formatRelatedListeners(YTMusicTextUtils.runsText(renderer.optJSONObject("subtitle"))),
                     )
                 )
             }

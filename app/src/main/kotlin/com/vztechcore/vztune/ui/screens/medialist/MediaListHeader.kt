@@ -30,7 +30,9 @@ import com.vztechcore.vztune.ui.components.player.DefaultPlaylistCover
 import com.vztechcore.vztune.ui.components.player.PlaylistCoverPalette
 import com.vztechcore.vztune.ui.components.player.PlaylistMosaic
 import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.ArrowBackIos
 import com.vztechcore.vztune.ui.icons.actions.Close
+import com.vztechcore.vztune.ui.icons.actions.Share
 import com.vztechcore.vztune.ui.icons.actions.FavoriteFilled
 import com.vztechcore.vztune.ui.icons.actions.FavoriteOutline
 import com.vztechcore.vztune.ui.icons.actions.MoreVert
@@ -131,7 +133,7 @@ internal fun MediaListExpandedHeader(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                MediaListCircleButton(VzIcons.Close, "Fechar", onBackClick)
+                MediaListCircleButton(VzIcons.ArrowBackIos, "Voltar", onBackClick)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     // Ordem igual as playlists: Lupa, Favoritar, 3 pontinhos
                     MediaListCircleButton(VzIcons.Search, "Pesquisar", onSearchClick)
@@ -345,6 +347,7 @@ internal fun MediaListCollapsedHeader(
     showFavorite: Boolean = false,
     isFavorite: Boolean = false,
     onFavoriteClick: (() -> Unit)? = null,
+    onShareClick: (() -> Unit)? = null,
 ) {
     val barTint = remember(dominantColor) {
         lerp(Color.Black, dominantColor, 0.38f)
@@ -366,7 +369,7 @@ internal fun MediaListCollapsedHeader(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MediaListCircleButton(VzIcons.Close, "Fechar", onBackClick)
+        MediaListCircleButton(VzIcons.ArrowBackIos, "Voltar", onBackClick)
         Spacer(Modifier.width(12.dp))
         if (!thumbnailUrl.isNullOrBlank()) {
             AsyncImage(
@@ -399,6 +402,11 @@ internal fun MediaListCollapsedHeader(
                     contentDescription = if (isFavorite) "Remover dos favoritos" else "Favoritar",
                     tint = if (isFavorite) Color(0xFFEF4444) else Color.White,
                 )
+            }
+        }
+        if (onShareClick != null) {
+            IconButton(onClick = onShareClick) {
+                Icon(VzIcons.Share, contentDescription = "Compartilhar", tint = Color.White)
             }
         }
         if (onMoreClick != null) {

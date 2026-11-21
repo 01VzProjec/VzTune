@@ -5,6 +5,8 @@ data class Artist(
     val name: String,
     val thumbnailUrl: String? = null,
     val source: Source,
+    // Subtitulo do YT Music para relacionados: '1,55 mi ouvintes mensais' / '1,55 mi de inscritos' -> normalizado para ouvintes mensais. Null quando nao vem.
+    val subscribers: String? = null,
 )
 
 /** Pointer to a YouTube Music "more" page (browse endpoint + optional params). */

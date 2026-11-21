@@ -73,6 +73,21 @@ internal object ArtistResolver {
         return levenshtein(a, b) <= maxDist
     }
 
+    /** O candidato tem ESSA playlist no catálogo? featured/destaque contém o id ou o título da playlist. */
+    fun playlistContains(
+        featured: List<com.vztechcore.vztune.core.domain.music.Playlist>,
+        playlistId: String?,
+        playlistTitle: String?,
+    ): Boolean {
+        if (!playlistId.isNullOrBlank()) {
+            if (featured.any { it.id == playlistId }) return true
+        }
+        if (!playlistTitle.isNullOrBlank()) {
+            if (featured.any { titlesMatch(it.title, playlistTitle) }) return true
+        }
+        return false
+    }
+
     /**
      * O candidato tem essa faixa / esse álbum no catálogo?
      * topSongs + videos provam a faixa, albums + singles provam o álbum.

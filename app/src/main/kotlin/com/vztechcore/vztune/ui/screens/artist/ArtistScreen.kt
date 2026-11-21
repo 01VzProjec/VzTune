@@ -56,6 +56,9 @@ import com.vztechcore.vztune.ui.components.cards.ShortsGridRows
 import com.vztechcore.vztune.ui.components.cards.ShortsOptionsSheet
 import com.vztechcore.vztune.data.prefs.models.StoredTrack
 import com.vztechcore.vztune.ui.components.feedback.VzLoading
+import com.vztechcore.vztune.ui.components.player.MediaThumbnail
+import com.vztechcore.vztune.ui.components.player.ThumbnailShape
+import com.vztechcore.vztune.R
 import com.vztechcore.vztune.ui.components.layout.SectionHeader
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.player.playbackOf
@@ -69,6 +72,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.ArrowForward
+import com.vztechcore.vztune.ui.icons.actions.ChevronRight
 import com.vztechcore.vztune.ui.icons.player.Play
 
 private val RowPadding = PaddingValues(horizontal = 16.dp)
@@ -237,11 +241,11 @@ fun ArtistScreen(
                             }
                             item(key = "singles_space") { Spacer(Modifier.height(SectionGap)) }
                         }
-                        // 3) Playlists: fileira + > (artista usa featured do YT Music)
+                        // 3) Destacado: fileira + > (featured do YT Music - playlists onde o artista aparece)
                         val artistPlaylists = state.featured
                         if (artistPlaylists.isNotEmpty()) {
                             item(key = "playlists_header") {
-                                SectionHeaderArrow(title = "Playlists", onArrowClick = seeAll(ArtistListKind.FEATURED, state.featuredMore))
+                                SectionHeaderArrow(title = "Destacado", onArrowClick = seeAll(ArtistListKind.FEATURED, state.featuredMore))
                             }
                             item(key = "playlists_row") {
                                 LazyRow(contentPadding = RowPadding, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -267,6 +271,34 @@ fun ArtistScreen(
                             }
                             item(key = "videos_space") { Spacer(Modifier.height(SectionGap)) }
                         }
+                        // 5) Playlists do canal (YouTube) - separado do Destacado (featured do YT Music)
+                        if (state.channelPlaylists.isNotEmpty()) {
+                            item(key = "channel_playlists_header") {
+                                SectionHeaderArrow(title = "Playlists")
+                            }
+                            item(key = "channel_playlists_row") {
+                                LazyRow(contentPadding = RowPadding, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    items(state.channelPlaylists, key = { it.id }) { playlist ->
+                                        CoverCard(title = playlist.title, subtitle = playlist.owner, imageUrl = playlist.thumbnailUrl, onClick = { onPlaylistClick(playlist) }, modifier = Modifier.width(CoverWidth))
+                                    }
+                                }
+                            }
+                            item(key = "channel_playlists_space") { Spacer(Modifier.height(SectionGap)) }
+                        }
+                        // 6) Artistas relacionados: foto, nome, ouvintes mensais
+                        if (state.relatedArtists.isNotEmpty()) {
+                            item(key = "related_header") {
+                                SectionHeaderArrow(title = "Artistas relacionados")
+                            }
+                            item(key = "related_row") {
+                                LazyRow(contentPadding = RowPadding, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    items(state.relatedArtists, key = { it.id }) { artist ->
+                                        RelatedArtistCard(artist = artist, onClick = { onArtistClick(artist) })
+                                    }
+                                }
+                            }
+                            item(key = "related_space") { Spacer(Modifier.height(SectionGap)) }
+                        }
                         item(key = "description") { ArtistDescription(description = state.description) }
                     }
                 }
@@ -280,6 +312,7 @@ fun ArtistScreen(
                 title = state.name,
                 thumbnailUrl = state.thumbnailUrl,
                 onBackClick = onBackClick,
+                onShareClick = onShareClick,
                 dominantColor = Color.Black,
                 circularThumbnail = true,
             )
@@ -384,7 +417,7 @@ private fun SectionHeaderArrow(
                 Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).clickable { onArrowClick() },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(VzIcons.ArrowForward, contentDescription = "Ver tudo", tint = Color.White, modifier = Modifier.size(20.dp))
+                Icon(VzIcons.ChevronRight, contentDescription = "Ver tudo", tint = Color.White, modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -397,21 +430,65 @@ private fun SongsSlide(
     onSongClick: (Track) -> Unit,
     onTrackInfoClick: (Track) -> Unit,
 ) {
-    val pages = tracks.chunked(4)
+    val pages = tracks.take(16).chunked(4)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val pageWidth = maxWidth - 32.dp
+        val pageWidth = maxWidth - 64.dp // FIX15: peek da próxima fileira (64.dp = 16 padding + ~48 da próxima fileira aparente)
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             itemsIndexed(pages, key = { _, page -> page.first().id }) { pageIndex, page ->
                 Column(Modifier.width(pageWidth)) {
-                    page.forEachIndexed { idx, track ->
-                        val number = pageIndex * 4 + idx + 1
-                        TrackListRow(track = track, number = number, onClick = { onSongClick(track) }, onMoreClick = { onTrackInfoClick(track) })
+                    page.forEach { track ->
+                        TrackListRow(track = track, onClick = { onSongClick(track) }, onMoreClick = { onTrackInfoClick(track) })
                     }
                 }
             }
+        }
+    }
+}
+
+
+/** FIX15: Relacionados - foto circular, nome, ouvintes mensais. Ex: Vtzin x / 1,55 mi ouvintes mensais. */
+@Composable
+private fun RelatedArtistCard(
+    artist: Artist,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier
+            .width(124.dp)
+            .clickable { onClick() },
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        MediaThumbnail(
+            imageUrl = artist.thumbnailUrl,
+            shape = ThumbnailShape.CIRCLE,
+            size = 124.dp,
+            placeholderRes = R.drawable.holder,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = artist.name,
+            style = MaterialTheme.typography.titleSmall,
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+        )
+        val listeners = artist.subscribers?.takeIf { it.isNotBlank() }
+        if (!listeners.isNullOrBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = listeners,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.6f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }

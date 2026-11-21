@@ -360,14 +360,17 @@ class SearchViewModel @Inject constructor(
     /** FIX9: Canal real do video no Search. 1) InnerTube player -> UC. 2) NewPipe StreamExtractor -> UC. Sem nome. */
     fun onOpenChannelForTrack(track: Track) {
         viewModelScope.launch {
+            // FIX15: NewPipe PRIMEIRO (igual TrackMenu FIX7). InnerTube player com cliente YTMUSIC devolve a MUSICA do video,
+            // nao quem postou (video do canal 'th' com musica do artista 'TH' -> devolvia UC do TH). NewPipe uploaderUrl = quem POSTOU.
+            val channel = runCatching { youTubeRepository.getChannelForVideo(track.id) }.getOrNull()
+            if (channel != null) {
+                _navigationEvent.emit(NavigationEvent.OpenArtist(channel.channelId, channel.channelName, channel.avatarUrl))
+                return@launch
+            }
             val fromInnerTube = runCatching { ytMusicRepository.getArtistFromVideo(track.id) }.getOrNull()
             if (fromInnerTube != null) {
                 _navigationEvent.emit(NavigationEvent.OpenArtist(fromInnerTube.id, fromInnerTube.name, fromInnerTube.thumbnailUrl))
                 return@launch
-            }
-            val channel = runCatching { youTubeRepository.getChannelForVideo(track.id) }.getOrNull()
-            if (channel != null) {
-                _navigationEvent.emit(NavigationEvent.OpenArtist(channel.channelId, channel.channelName, channel.avatarUrl))
             }
             // channel == null -> nao navega. Nunca chuta artista por nome.
         }

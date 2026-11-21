@@ -220,72 +220,133 @@ fun ArtistScreen(
                     val isChannel = !hasMusic
 
                     if (isChannel) {
-                        // ---------- CANAL: Videos | Shorts | Playlists ----------
+                        // ---------- CANAL FIX22: Inicio | Videos | Playlists, sem Shorts ----------
                         val sortedVideos = when (channelSort) {
                             1 -> state.videos.sortedByDescending { it.viewCount ?: 0 }
                             2 -> state.videos.reversed()
                             else -> state.videos
                         }
-                        if (selectedChannelTab == 0) {
-                            item(key = "channel_chips") {
-                                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    // Sem forEach: weight() so existe direto dentro do Row.
-                                    val chips = listOf("Mais recentes", "Em alta", "Mais antigos")
-                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (channelSort == 0) Color.White else Color.White.copy(alpha = 0.12f)).clickable { channelSort = 0 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
-                                        Text(text = chips[0], style = MaterialTheme.typography.labelLarge, color = if (channelSort == 0) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                        val topVideos = state.videos.sortedByDescending { it.viewCount ?: 0 }
+                        val heroVideo = topVideos.firstOrNull()
+                        val forYouVideos = state.videos.take(50)
+                        when (selectedChannelTab) {
+                            0 -> {
+                                // --- INICIO: Hero mais famoso ---
+                                if (heroVideo != null) {
+                                    item(key = "home_hero") {
+                                        Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                            val pv = nowPlaying.playbackOf(heroVideo)
+                                            VzVideoCard(track = heroVideo, isPlaying = pv.isPlaying, isPaused = pv.isPaused, onClick = { onVideoClick(heroVideo) }, onMoreClick = { onTrackInfoClick(heroVideo) }, horizontalPadding = 0.dp)
+                                        }
                                     }
-                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (channelSort == 1) Color.White else Color.White.copy(alpha = 0.12f)).clickable { channelSort = 1 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
-                                        Text(text = chips[1], style = MaterialTheme.typography.labelLarge, color = if (channelSort == 1) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                } else if (state.videos.isEmpty() && !state.isLoading) {
+                                    item(key = "home_hero_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                                }
+                                if (forYouVideos.isNotEmpty()) {
+                                    item(key = "home_foryou_title") {
+                                        Text(text = "Para você", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
                                     }
-                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (channelSort == 2) Color.White else Color.White.copy(alpha = 0.12f)).clickable { channelSort = 2 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
-                                        Text(text = chips[2], style = MaterialTheme.typography.labelLarge, color = if (channelSort == 2) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                    item(key = "home_foryou_row") {
+                                        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            items(forYouVideos, key = { "fy_" + it.id }) { video ->
+                                                Box(Modifier.width(300.dp)) {
+                                                    val pv = nowPlaying.playbackOf(video)
+                                                    VzVideoCard(track = video, isPlaying = pv.isPlaying, isPaused = pv.isPaused, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }, horizontalPadding = 0.dp)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                item(key = "home_videos_header") {
+                                    SectionHeaderArrow(title = "Vídeos", onArrowClick = { selectedChannelTab = 1; channelSort = 0 })
+                                }
+                                if (state.videos.isNotEmpty()) {
+                                    itemsIndexed(state.videos.take(homeVideosVisible), key = { _, v -> "hv_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
+                                }
+                                if (homeVideosVisible < state.videos.size || state.channelVideosHasMore) {
+                                    item(key = "home_videos_expand") {
+                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable { if (homeVideosVisible < state.videos.size) homeVideosVisible += 4 else onLoadMoreChannelVideos() }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                            Icon(imageVector = VzIcons.ExpandMore, contentDescription = "Mostrar mais vídeos", tint = Color.White, modifier = Modifier.size(24.dp))
+                                        }
+                                    }
+                                }
+                                item(key = "home_top_header") {
+                                    SectionHeaderArrow(title = "Vídeos mais acessados", onArrowClick = { selectedChannelTab = 1; channelSort = 1 })
+                                }
+                                if (topVideos.isNotEmpty()) {
+                                    itemsIndexed(topVideos.take(homeTopVideosVisible), key = { _, v -> "ht_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
+                                }
+                                if (homeTopVideosVisible < topVideos.size) {
+                                    item(key = "home_top_expand") {
+                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable { homeTopVideosVisible += 4 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                            Icon(imageVector = VzIcons.ExpandMore, contentDescription = "Mostrar mais", tint = Color.White, modifier = Modifier.size(24.dp))
+                                        }
+                                    }
+                                }
+                                item(key = "home_playlists_header") {
+                                    SectionHeaderArrow(title = "Playlists", onArrowClick = { selectedChannelTab = 2 })
+                                }
+                                if (state.channelPlaylists.isNotEmpty()) {
+                                    itemsIndexed(state.channelPlaylists.take(homePlaylistsVisible), key = { _, pl -> "hp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
+                                } else {
+                                    item(key = "home_playlists_empty") { Text(text = "Nenhuma playlist ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
+                                }
+                                if (homePlaylistsVisible < state.channelPlaylists.size || state.channelPlaylistsHasMore) {
+                                    item(key = "home_playlists_expand") {
+                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable { if (homePlaylistsVisible < state.channelPlaylists.size) homePlaylistsVisible += 4 else onLoadMoreChannelPlaylists() }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                            Icon(imageVector = VzIcons.ExpandMore, contentDescription = "Mostrar mais playlists", tint = Color.White, modifier = Modifier.size(24.dp))
+                                        }
                                     }
                                 }
                             }
-                            item(key = "channel_chips_space") { Spacer(Modifier.height(8.dp)) }
-                        }
-                        when (selectedChannelTab) {
-                            0 -> {
+                            1 -> {
+                                // --- VIDEOS ---
+                                item(key = "channel_chips") {
+                                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (channelSort == 0) Color.White else Color.White.copy(alpha = 0.12f)).clickable { channelSort = 0 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                            Text(text = "Mais recentes", style = MaterialTheme.typography.labelLarge, color = if (channelSort == 0) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                        }
+                                        Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (channelSort == 1) Color.White else Color.White.copy(alpha = 0.12f)).clickable { channelSort = 1 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                            Text(text = "Em alta", style = MaterialTheme.typography.labelLarge, color = if (channelSort == 1) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                        }
+                                        Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (channelSort == 2) Color.White else Color.White.copy(alpha = 0.12f)).clickable { channelSort = 2 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                            Text(text = "Mais antigos", style = MaterialTheme.typography.labelLarge, color = if (channelSort == 2) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
                                 if (sortedVideos.isNotEmpty()) {
                                     itemsIndexed(sortedVideos, key = { _, v -> "cv_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
                                 } else {
                                     item(key = "channel_videos_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
                                 }
-                            }
-                            1 -> {
-                                if (state.shorts.isNotEmpty()) {
-                                    item(key = "channel_shorts_grid") { ShortsGridRows(tracks = state.shorts, onClick = { onShortClick(it) }, onMoreClick = { onTrackInfoClick(it) }) }
-                                } else {
-                                    item(key = "channel_shorts_empty") { Text(text = "Nenhum Short ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                                if (state.channelVideosHasMore) {
+                                    item(key = "channel_load_more") {
+                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.12f)).clickable { onLoadMoreChannelVideos() }.padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
+                                            Text(text = if (state.isLoadingMoreChannelVideos) "Carregando..." else "Buscar mais", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                 }
                             }
                             else -> {
+                                // --- PLAYLISTS ---
                                 if (state.channelPlaylists.isNotEmpty()) {
                                     itemsIndexed(state.channelPlaylists, key = { _, pl -> "cp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
                                 } else {
                                     item(key = "channel_playlists_empty") { Text(text = "Nenhuma playlist ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
                                 }
-                            }
-                        }
-                                                // FIX18 - Buscar mais: so em Mais recentes e Em alta. Mais antigos nao tem botao, mas se atualiza sozinho porque usa a mesma lista (videos) invertida.
-                        if (selectedChannelTab == 0 && state.channelVideosHasMore && channelSort != 2) {
-                            item(key = "channel_load_more") {
-                                Box(
-                                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.12f)).clickable { onLoadMoreChannelVideos() }.padding(vertical = 14.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        text = if (state.isLoadingMoreChannelVideos) "Carregando..." else "Buscar mais",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                    )
+                                if (state.channelPlaylistsHasMore) {
+                                    item(key = "channel_playlists_load_more") {
+                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.12f)).clickable { onLoadMoreChannelPlaylists() }.padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
+                                            Text(text = if (state.isLoadingMoreChannelPlaylists) "Carregando..." else "Buscar mais", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                 }
                             }
                         }
-item(key = "channel_space") { Spacer(Modifier.height(SectionGap)) }
+                        item(key = "channel_space") { Spacer(Modifier.height(SectionGap)) }
                         item(key = "description") { ArtistDescription(description = state.description) }
                     } else {
+
                         
                         
                         // ---------- ARTISTA: so Home, sem abas ----------

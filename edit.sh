@@ -1,8 +1,8 @@
 #!/bin/bash
-# VzTune FIX21 - FIX20 CORRIGIDO + COMPLETO (Routes nao corta mais, Page? e Description corrigidos, sem break)
+# VzTune FIX22 - FIX20 CORRIGIDO + COMPLETO (Routes nao corta mais, Page? e Description corrigidos, sem break)
 # FIX21 = FIX20 refeito com cautela, com os 3 bugs corrigidos + HOTFIX Routes/Page/Description/Break embutidos.
 # Pode rodar por cima do FIX20 (ele e idempotente: onde ja esta certo ele pula e avisa 'ja existe').
-# Rode na raiz: bash VzTune-FIX21.sh
+# Rode na raiz: bash VzTune-FIX22.sh
 # 30 mil videos: NAO vem de uma vez (travaria e estouraria memoria - NewPipe devolve ~30 por pagina, seriam 1000 requisicoes).
 # Vem em lotes: 500 iniciais + Buscar mais +500 por clique, ate acabar. Assim voce chega nos 30 mil sem travar.
 # 1) PLAYLIST: Routes.MediaList ganha sourceName ("YOUTUBE" / "YOUTUBE_MUSIC"). openPlaylist passa playlist.source.name.
@@ -44,7 +44,7 @@ else:
         j = t.find("val thumbnailUrl: String? = null,", idx)
         if j != -1:
             end = j + len("val thumbnailUrl: String? = null,")
-            t = t[:end] + "\n        val sourceName: String? = null, // FIX21 - YOUTUBE ou YOUTUBE_MUSIC. Sem isso a playlist perdia o mundo." + t[end:]
+            t = t[:end] + "\n        val sourceName: String? = null, // FIX22 - YOUTUBE ou YOUTUBE_MUSIC. Sem isso a playlist perdia o mundo." + t[end:]
             write(p, t)
             ok("Routes.MediaList: sourceName adicionado")
         else:
@@ -83,7 +83,7 @@ if t is None:
     warn("YouTubeRepository nao achado")
 else:
     if "ChannelPlaylistsSession" not in t:
-        helper = '''    // FIX21 - Sessao de playlists do canal (/playlists). Igual a de videos: guarda extractor + nextPage pra Buscar mais nao recomecar.
+        helper = '''    // FIX22 - Sessao de playlists do canal (/playlists). Igual a de videos: guarda extractor + nextPage pra Buscar mais nao recomecar.
     private data class ChannelPlaylistsSession(
         val extractor: PlaylistExtractor,
         var nextPage: Page?,
@@ -172,7 +172,7 @@ else:
         t = t.replace("collected.distinctBy { it.id }.take(300)", "collected.distinctBy { it.id }.take(500)", 1)
         ok("YouTubeRepository: videos take 300 -> 500")
     old_load = "    suspend fun loadMoreChannelVideos(channelId: String, pageSize: Int = 100): List<Track> = withContext(Dispatchers.IO) {\n        val session = channelVideoSessions[channelId]\n            ?: channelVideoSessions.entries.firstOrNull { (k, v) -> v.nextPage != null && (channelId.contains(k) || k.contains(channelId)) }?.value\n            ?: return@withContext emptyList()\n        val page = session.nextPage ?: return@withContext emptyList()\n        runCatching {\n            val next = session.extractor.getPage(page!!)\n            session.nextPage = next.nextPage\n            parseChannelStreamItems(next.items, session.channelName).take(pageSize)\n        }.getOrDefault(emptyList())\n    }"
-    new_load = "    // FIX21 - Buscar mais videos: +500 por clique (5 paginas). Antes era 1 pagina (100).\n    suspend fun loadMoreChannelVideos(channelId: String, pageSize: Int = 500): List<Track> = withContext(Dispatchers.IO) {\n        val session = channelVideoSessions[channelId]\n            ?: channelVideoSessions.entries.firstOrNull { (k, v) -> v.nextPage != null && (channelId.contains(k) || k.contains(channelId)) }?.value\n            ?: return@withContext emptyList()\n        var page: Page? = session.nextPage ?: return@withContext emptyList()\n        runCatching {\n            val collected = mutableListOf<Track>()\n            var pages = 0\n            while (collected.size < pageSize && page != null && pages < 5) {\n                val next = session.extractor.getPage(page!!)\n                collected += parseChannelStreamItems(next.items, session.channelName)\n                page = next.nextPage\n                session.nextPage = page\n                pages++\n            }\n            collected.distinctBy { it.id }.take(pageSize)\n        }.getOrDefault(emptyList())\n    }"
+    new_load = "    // FIX22 - Buscar mais videos: +500 por clique (5 paginas). Antes era 1 pagina (100).\n    suspend fun loadMoreChannelVideos(channelId: String, pageSize: Int = 500): List<Track> = withContext(Dispatchers.IO) {\n        val session = channelVideoSessions[channelId]\n            ?: channelVideoSessions.entries.firstOrNull { (k, v) -> v.nextPage != null && (channelId.contains(k) || k.contains(channelId)) }?.value\n            ?: return@withContext emptyList()\n        var page: Page? = session.nextPage ?: return@withContext emptyList()\n        runCatching {\n            val collected = mutableListOf<Track>()\n            var pages = 0\n            while (collected.size < pageSize && page != null && pages < 5) {\n                val next = session.extractor.getPage(page!!)\n                collected += parseChannelStreamItems(next.items, session.channelName)\n                page = next.nextPage\n                session.nextPage = page\n                pages++\n            }\n            collected.distinctBy { it.id }.take(pageSize)\n        }.getOrDefault(emptyList())\n    }"
     if old_load in t:
         t = t.replace(old_load, new_load, 1)
         ok("YouTubeRepository: loadMoreChannelVideos agora pega 500 por clique")
@@ -215,13 +215,13 @@ else:
     pat_shorts1 = re.compile(r"if \(uc\.startsWith\(\"UC\"\)\) \{\s*shorts = runCatching \{\s*val pl = ServiceList\.YouTube\.getPlaylistExtractor\(\"https://www\.youtube\.com/channel/\$uc/shorts\"\)(.*?)\.getOrDefault\(emptyList\(\)\)\s*\}", re.DOTALL)
     m1 = pat_shorts1.search(t)
     if m1:
-        t = t[:m1.start()] + "// FIX21 - Shorts fora do canal (UI sem aba Shorts). Nao busca /shorts aqui.\n        shorts = emptyList()" + t[m1.end():]
+        t = t[:m1.start()] + "// FIX22 - Shorts fora do canal (UI sem aba Shorts). Nao busca /shorts aqui.\n        shorts = emptyList()" + t[m1.end():]
         ok("YouTubeRepository: Shorts via /shorts removido do browseChannel")
     if 'shorts = runCatching { searchShorts(channelName' in t:
         pat_shorts2 = re.compile(r"if \(shorts\.isEmpty\(\) && channelName\.isNotBlank\(\)\) \{\s*shorts = runCatching \{ searchShorts\(channelName.*?\.getOrDefault\(emptyList\(\)\)\s*\}", re.DOTALL)
         m2 = pat_shorts2.search(t)
         if m2:
-            t = t[:m2.start()] + "// FIX21 - Fallback Shorts removido (canal sem Shorts)." + t[m2.end():]
+            t = t[:m2.start()] + "// FIX22 - Fallback Shorts removido (canal sem Shorts)." + t[m2.end():]
             ok("YouTubeRepository: fallback Shorts removido")
         else:
             warn("YouTubeRepository: fallback Shorts nao achado")
@@ -247,7 +247,7 @@ if t is None:
     warn("ArtistViewModel nao achado")
 else:
     if "shorts = channel.shorts" in t:
-        t = t.replace("shorts = channel.shorts", "shorts = emptyList(), // FIX21 - Canal sem Shorts", 1)
+        t = t.replace("shorts = channel.shorts", "shorts = emptyList(), // FIX22 - Canal sem Shorts", 1)
         ok("ArtistViewModel: shorts zerado")
     if "channelPlaylistsHasMore" in t:
         ok("ArtistViewModel: channelPlaylistsHasMore ja ligado")
@@ -260,7 +260,7 @@ else:
         anchor = "    fun onVideoClick(track: Track) {"
         idx = t.find(anchor)
         if idx != -1:
-            insert = '''    // FIX21 - Buscar mais playlists: proxima pagina do /playlists, soma na mesma lista.
+            insert = '''    // FIX22 - Buscar mais playlists: proxima pagina do /playlists, soma na mesma lista.
     fun loadMoreChannelPlaylists() {
         val state = _uiState.value
         if (state.isLoadingMoreChannelPlaylists) return
@@ -297,7 +297,7 @@ else:
         anchor = "private fun loadContent()"
         idx = t.find(anchor)
         if idx != -1:
-            helper = '''    // FIX21 - Playlist YouTube tem id PL/UU/FL/LL/OL (menos OLAK que e YT Music). Sem sourceName, infere pelo id.
+            helper = '''    // FIX22 - Playlist YouTube tem id PL/UU/FL/LL/OL (menos OLAK que e YT Music). Sem sourceName, infere pelo id.
     private fun isYouTubePlaylistId(id: String): Boolean {
         val v = id.trim().removePrefix("YT:").trim()
         if (v.startsWith("OLAK")) return false
@@ -322,7 +322,7 @@ else:
         m = pat.search(t)
         if m:
             branch = '''} else if (isYouTubePlaylistRoute()) {
-                    // FIX21 - Playlist YouTube: SO NewPipe, nunca InnerTube. Antes caia no browsePlaylist do InnerTube e o dono vinha como artista do YT Music.
+                    // FIX22 - Playlist YouTube: SO NewPipe, nunca InnerTube. Antes caia no browsePlaylist do InnerTube e o dono vinha como artista do YT Music.
                     val ytPage = runCatching { youTubeRepository.browseYouTubePlaylist(route.id) }.getOrNull()
                     if (ytPage != null) {
                         val ch = runCatching { youTubeRepository.getChannelForPlaylist(route.id) }.getOrNull()
@@ -400,11 +400,206 @@ else:
             warn("ArtistScreen: onLoadMoreChannelVideos nao achado")
     if "homeVideosVisible" not in t:
         if "var playlistMenu by remember { mutableStateOf<Playlist?>(null) }" in t:
-            t = t.replace("var playlistMenu by remember { mutableStateOf<Playlist?>(null) }", "var playlistMenu by remember { mutableStateOf<Playlist?>(null) }\n    val scope = rememberCoroutineScope()\n    // FIX21 - Inicio: quantos mostrar em cada secao (4+4 infinito). Comeca em 4.\n    var homeVideosVisible by remember { mutableStateOf(4) }\n    var homeTopVideosVisible by remember { mutableStateOf(4) }\n    var homePlaylistsVisible by remember { mutableStateOf(4) }", 1)
+            t = t.replace("var playlistMenu by remember { mutableStateOf<Playlist?>(null) }", "var playlistMenu by remember { mutableStateOf<Playlist?>(null) }\n    val scope = rememberCoroutineScope()\n    // FIX22 - Inicio: quantos mostrar em cada secao (4+4 infinito). Comeca em 4.\n    var homeVideosVisible by remember { mutableStateOf(4) }\n    var homeTopVideosVisible by remember { mutableStateOf(4) }\n    var homePlaylistsVisible by remember { mutableStateOf(4) }", 1)
             ok("ArtistScreen: estado Inicio (4+4) + scope")
         else:
             warn("ArtistScreen: playlistMenu nao achado")
     write(p, t)
+
+
+# ============ ArtistScreen ESTILO FIX17 (if isChannel) - FIX22 ============
+# Seu arquivo esta neste estilo (FIX17): ChannelHeader com tabs listOf + if (isChannel) { ... } else {
+# O FIX21 so tratava o estilo antigo (channel_tabs), por isso nao mudou nada. Esse bloco trata o estilo FIX17.
+p = "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistScreen.kt"
+t = read(p)
+if t is not None:
+    changed17 = False
+    # 1) Abas do ChannelHeader: Videos|Playlists -> Inicio|Videos|Playlists
+    if 'val tabs = listOf("Vídeos", "Playlists")' in t:
+        t = t.replace('val tabs = listOf("Vídeos", "Playlists")', 'val tabs = listOf("Início", "Vídeos", "Playlists")', 1)
+        changed17 = True
+        ok("ArtistScreen FIX17: tabs Videos|Playlists -> Inicio|Videos|Playlists")
+    elif 'val tabs = listOf("Início", "Vídeos", "Playlists")' in t:
+        ok("ArtistScreen FIX17: tabs ja em Inicio|Videos|Playlists")
+    # 2) Estado Inicio 4+4 (se ainda nao tem)
+    if "homeVideosVisible" not in t:
+        if "var playlistMenu by remember" in t:
+            t = t.replace("var playlistMenu by remember { mutableStateOf<Playlist?>(null) }", "var playlistMenu by remember { mutableStateOf<Playlist?>(null) }\n    val scope = rememberCoroutineScope()\n    var homeVideosVisible by remember { mutableStateOf(4) }\n    var homeTopVideosVisible by remember { mutableStateOf(4) }\n    var homePlaylistsVisible by remember { mutableStateOf(4) }", 1)
+            changed17 = True
+            ok("ArtistScreen FIX17: estado Inicio 4+4 criado")
+        elif "var selectedChannelTab by remember" in t:
+            t = t.replace("var selectedChannelTab by remember { mutableStateOf(0) }", "var selectedChannelTab by remember { mutableStateOf(0) }\n    val scope = rememberCoroutineScope()\n    var homeVideosVisible by remember { mutableStateOf(4) }\n    var homeTopVideosVisible by remember { mutableStateOf(4) }\n    var homePlaylistsVisible by remember { mutableStateOf(4) }", 1)
+            changed17 = True
+            ok("ArtistScreen FIX17: estado Inicio 4+4 criado (via selectedChannelTab)")
+    # 3) Bloco if (isChannel) -> troca inteiro por Inicio|Videos|Playlists
+    if "home_hero" not in t and "if (isChannel) {" in t:
+        ch_start = t.find("if (isChannel) {")
+        # Fim do bloco do canal = o "} else {" que vem antes do marcador ARTISTA, ou o primeiro "} else {" depois de ch_start
+        artista_marker = t.find("// ---------- ARTISTA", ch_start)
+        if artista_marker != -1:
+            else_idx = t.rfind("} else {", ch_start, artista_marker)
+        else:
+            else_idx = t.find("} else {", ch_start)
+        if ch_start != -1 and else_idx != -1:
+            new_channel17 = """if (isChannel) {
+                        // ---------- CANAL FIX22: Inicio | Videos | Playlists, sem Shorts ----------
+                        val sortedVideos = when (channelSort) {
+                            1 -> state.videos.sortedByDescending { it.viewCount ?: 0 }
+                            2 -> state.videos.reversed()
+                            else -> state.videos
+                        }
+                        val topVideos = state.videos.sortedByDescending { it.viewCount ?: 0 }
+                        val heroVideo = topVideos.firstOrNull()
+                        val forYouVideos = state.videos.take(50)
+                        when (selectedChannelTab) {
+                            0 -> {
+                                // --- INICIO: Hero mais famoso ---
+                                if (heroVideo != null) {
+                                    item(key = "home_hero") {
+                                        Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                            val pv = nowPlaying.playbackOf(heroVideo)
+                                            VzVideoCard(track = heroVideo, isPlaying = pv.isPlaying, isPaused = pv.isPaused, onClick = { onVideoClick(heroVideo) }, onMoreClick = { onTrackInfoClick(heroVideo) }, horizontalPadding = 0.dp)
+                                        }
+                                    }
+                                } else if (state.videos.isEmpty() && !state.isLoading) {
+                                    item(key = "home_hero_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                                }
+                                if (forYouVideos.isNotEmpty()) {
+                                    item(key = "home_foryou_title") {
+                                        Text(text = "Para você", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+                                    }
+                                    item(key = "home_foryou_row") {
+                                        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            items(forYouVideos, key = { "fy_" + it.id }) { video ->
+                                                Box(Modifier.width(300.dp)) {
+                                                    val pv = nowPlaying.playbackOf(video)
+                                                    VzVideoCard(track = video, isPlaying = pv.isPlaying, isPaused = pv.isPaused, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }, horizontalPadding = 0.dp)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                item(key = "home_videos_header") {
+                                    SectionHeaderArrow(title = "Vídeos", onArrowClick = { selectedChannelTab = 1; channelSort = 0 })
+                                }
+                                if (state.videos.isNotEmpty()) {
+                                    itemsIndexed(state.videos.take(homeVideosVisible), key = { _, v -> "hv_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
+                                }
+                                if (homeVideosVisible < state.videos.size || state.channelVideosHasMore) {
+                                    item(key = "home_videos_expand") {
+                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable { if (homeVideosVisible < state.videos.size) homeVideosVisible += 4 else onLoadMoreChannelVideos() }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                            Icon(imageVector = VzIcons.ExpandMore, contentDescription = "Mostrar mais vídeos", tint = Color.White, modifier = Modifier.size(24.dp))
+                                        }
+                                    }
+                                }
+                                item(key = "home_top_header") {
+                                    SectionHeaderArrow(title = "Vídeos mais acessados", onArrowClick = { selectedChannelTab = 1; channelSort = 1 })
+                                }
+                                if (topVideos.isNotEmpty()) {
+                                    itemsIndexed(topVideos.take(homeTopVideosVisible), key = { _, v -> "ht_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
+                                }
+                                if (homeTopVideosVisible < topVideos.size) {
+                                    item(key = "home_top_expand") {
+                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable { homeTopVideosVisible += 4 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                            Icon(imageVector = VzIcons.ExpandMore, contentDescription = "Mostrar mais", tint = Color.White, modifier = Modifier.size(24.dp))
+                                        }
+                                    }
+                                }
+                                item(key = "home_playlists_header") {
+                                    SectionHeaderArrow(title = "Playlists", onArrowClick = { selectedChannelTab = 2 })
+                                }
+                                if (state.channelPlaylists.isNotEmpty()) {
+                                    itemsIndexed(state.channelPlaylists.take(homePlaylistsVisible), key = { _, pl -> "hp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
+                                } else {
+                                    item(key = "home_playlists_empty") { Text(text = "Nenhuma playlist ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
+                                }
+                                if (homePlaylistsVisible < state.channelPlaylists.size || state.channelPlaylistsHasMore) {
+                                    item(key = "home_playlists_expand") {
+                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable { if (homePlaylistsVisible < state.channelPlaylists.size) homePlaylistsVisible += 4 else onLoadMoreChannelPlaylists() }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                            Icon(imageVector = VzIcons.ExpandMore, contentDescription = "Mostrar mais playlists", tint = Color.White, modifier = Modifier.size(24.dp))
+                                        }
+                                    }
+                                }
+                            }
+                            1 -> {
+                                // --- VIDEOS ---
+                                item(key = "channel_chips") {
+                                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (channelSort == 0) Color.White else Color.White.copy(alpha = 0.12f)).clickable { channelSort = 0 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                            Text(text = "Mais recentes", style = MaterialTheme.typography.labelLarge, color = if (channelSort == 0) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                        }
+                                        Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (channelSort == 1) Color.White else Color.White.copy(alpha = 0.12f)).clickable { channelSort = 1 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                            Text(text = "Em alta", style = MaterialTheme.typography.labelLarge, color = if (channelSort == 1) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                        }
+                                        Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (channelSort == 2) Color.White else Color.White.copy(alpha = 0.12f)).clickable { channelSort = 2 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                            Text(text = "Mais antigos", style = MaterialTheme.typography.labelLarge, color = if (channelSort == 2) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                                if (sortedVideos.isNotEmpty()) {
+                                    itemsIndexed(sortedVideos, key = { _, v -> "cv_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
+                                } else {
+                                    item(key = "channel_videos_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                                }
+                                if (state.channelVideosHasMore) {
+                                    item(key = "channel_load_more") {
+                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.12f)).clickable { onLoadMoreChannelVideos() }.padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
+                                            Text(text = if (state.isLoadingMoreChannelVideos) "Carregando..." else "Buscar mais", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                            else -> {
+                                // --- PLAYLISTS ---
+                                if (state.channelPlaylists.isNotEmpty()) {
+                                    itemsIndexed(state.channelPlaylists, key = { _, pl -> "cp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
+                                } else {
+                                    item(key = "channel_playlists_empty") { Text(text = "Nenhuma playlist ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                                }
+                                if (state.channelPlaylistsHasMore) {
+                                    item(key = "channel_playlists_load_more") {
+                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.12f)).clickable { onLoadMoreChannelPlaylists() }.padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
+                                            Text(text = if (state.isLoadingMoreChannelPlaylists) "Carregando..." else "Buscar mais", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        item(key = "channel_space") { Spacer(Modifier.height(SectionGap)) }
+                        item(key = "description") { ArtistDescription(description = state.description) }
+                    } else {
+"""
+            t = t[:ch_start] + new_channel17 + t[else_idx + len("} else {"):]
+            changed17 = True
+            ok("ArtistScreen FIX17: bloco if (isChannel) trocado por Inicio|Videos|Playlists")
+        else:
+            warn("ArtistScreen FIX17: if (isChannel) ou else nao achado")
+    elif "home_hero" in t:
+        ok("ArtistScreen FIX17: Inicio ja existe (home_hero)")
+    # Garante SectionHeaderArrow (veio do FIX14, mas se teu arquivo perdeu ele, recria)
+    if "fun SectionHeaderArrow" not in t and "SectionHeaderArrow" in t:
+        t += '''
+@Composable
+private fun SectionHeaderArrow(title: String, onPlayAllClick: (() -> Unit)? = null, onArrowClick: (() -> Unit)? = null) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(text = title, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        if (onArrowClick != null) {
+            Box(Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).clickable { onArrowClick() }, contentAlignment = Alignment.Center) {
+                Icon(VzIcons.ArrowForward, contentDescription = "Ver tudo", tint = Color.White, modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+'''
+        changed17 = True
+        ok("ArtistScreen FIX17: SectionHeaderArrow recriado (tava usando mas nao existia)")
+    if changed17:
+        write(p, t)
+    else:
+        # Se nao mudou nada aqui, pode ser estilo antigo - deixa o bloco antigo do FIX21 tratar
+        if "if (isChannel) {" not in t:
+            warn("ArtistScreen FIX17: nao e estilo FIX17 (sem if isChannel), vai tentar estilo antigo")
+
 
 # ============ ArtistScreen bloco do canal ============
 p = "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistScreen.kt"
@@ -417,7 +612,7 @@ if t is not None:
     else:
         new_block = '''item(key = "channel_tabs") {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                // FIX21 - Abas: Inicio | Videos | Playlists. Sem Shorts. (Corrige FIX18: Playlists checava == 1)
+                                // FIX22 - Abas: Inicio | Videos | Playlists. Sem Shorts. (Corrige FIX18: Playlists checava == 1)
                                 Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (selectedChannelTab == 0) Color.White else Color.Transparent).clickable { selectedChannelTab = 0 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                                     Text(text = "Início", style = MaterialTheme.typography.labelLarge, color = if (selectedChannelTab == 0) Color.Black else Color.White, fontWeight = FontWeight.Bold)
                                 }
@@ -430,7 +625,7 @@ if t is not None:
                             }
                         }
                         item(key = "channel_tabs_space") { Spacer(Modifier.height(16.dp)) }
-                        // FIX21 - Mesmas listas do canal, sem buscar de novo. Inicio deriva delas.
+                        // FIX22 - Mesmas listas do canal, sem buscar de novo. Inicio deriva delas.
                         val sortedVideos = when (channelSort) {
                             1 -> state.videos.sortedByDescending { it.viewCount ?: 0 }
                             2 -> state.videos.reversed()
@@ -456,7 +651,7 @@ if t is not None:
                                 item(key = "home_foryou_row") {
                                     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                         items(forYouVideos, key = { "fy_" + it.id }) { video ->
-                                            // FIX21 - Box 300dp por fora: VzVideoCard faz fillMaxWidth() por dentro, entao width direto nele seria ignorado.
+                                            // FIX22 - Box 300dp por fora: VzVideoCard faz fillMaxWidth() por dentro, entao width direto nele seria ignorado.
                                             Box(Modifier.width(300.dp)) {
                                                 val pv = nowPlaying.playbackOf(video)
                                                 VzVideoCard(track = video, isPlaying = pv.isPlaying, isPaused = pv.isPaused, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }, horizontalPadding = 0.dp)
@@ -606,6 +801,6 @@ else:
                 ok("AppNavHost: Buscar mais ligado (videos + playlists)")
             else:
                 warn("AppNavHost: fechamento ArtistScreen nao achado")
-print("FIX20 OK")
+print("FIX22 OK")
 PYEOF
 

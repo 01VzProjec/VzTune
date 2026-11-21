@@ -109,15 +109,23 @@ class YouTubeRepository @Inject constructor(
     }
 
     // FIX18 - Buscar mais: proxima pagina do UU (mais ~100). Retorna vazio se acabou.
-    suspend fun loadMoreChannelVideos(channelId: String, pageSize: Int = 100): List<Track> = withContext(Dispatchers.IO) {
+    // FIX20 - Buscar mais videos: +500 por clique (5 paginas). Antes era 1 pagina (100).
+    suspend fun loadMoreChannelVideos(channelId: String, pageSize: Int = 500): List<Track> = withContext(Dispatchers.IO) {
         val session = channelVideoSessions[channelId]
             ?: channelVideoSessions.entries.firstOrNull { (k, v) -> v.nextPage != null && (channelId.contains(k) || k.contains(channelId)) }?.value
             ?: return@withContext emptyList()
-        val page = session.nextPage ?: return@withContext emptyList()
+        var page = session.nextPage ?: return@withContext emptyList()
         runCatching {
-            val next = session.extractor.getPage(page)
-            session.nextPage = next.nextPage
-            parseChannelStreamItems(next.items, session.channelName).take(pageSize)
+            val collected = mutableListOf<Track>()
+            var pages = 0
+            while (collected.size < pageSize && page != null && pages < 5) {
+                val next = session.extractor.getPage(page)
+                collected += parseChannelStreamItems(next.items, session.channelName)
+                page = next.nextPage
+                session.nextPage = page
+                pages++
+            }
+            collected.distinctBy { it.id }.take(pageSize)
         }.getOrDefault(emptyList())
     }
 
@@ -856,6 +864,75 @@ class YouTubeRepository @Inject constructor(
         return norm(owner) == norm(channelName)
     }
 
+    // FIX20 - Sessao de playlists do canal (/playlists). Igual a de videos: guarda extractor + nextPage pra Buscar mais nao recomecar.
+    private data class ChannelPlaylistsSession(
+        val extractor: PlaylistExtractor,
+        var nextPage: Page?,
+        val channelName: String,
+    )
+    private val channelPlaylistSessions = mutableMapOf<String, ChannelPlaylistsSession>()
+    private fun parseChannelPlaylistItems(items: List<InfoItem>, channelName: String): List<Playlist> {
+        return items.filterIsInstance<PlaylistInfoItem>().mapNotNull { item ->
+            val pid = Regex("list=([^&]+)").find(item.url ?: "")?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            if (!item.uploaderName.isNullOrBlank() && !isSameCreator(item.uploaderName, channelName)) return@mapNotNull null
+            Playlist(id = pid, title = item.name ?: "Playlist", owner = item.uploaderName?.takeIf { it.isNotBlank() } ?: channelName, thumbnailUrl = item.thumbnails.lastOrNull()?.url, trackCount = item.streamCount.takeIf { it > 0 }?.toInt(), source = Source.YOUTUBE)
+        }
+    }
+    fun hasMoreChannelPlaylists(channelId: String): Boolean {
+        if (channelPlaylistSessions[channelId]?.nextPage != null) return true
+        return channelPlaylistSessions.entries.any { (k, v) -> v.nextPage != null && (k == channelId || channelId.contains(k) || k.contains(channelId)) }
+    }
+    suspend fun loadMoreChannelPlaylists(channelId: String, pageSize: Int = 200): List<Playlist> = withContext(Dispatchers.IO) {
+        val session = channelPlaylistSessions[channelId]
+            ?: channelPlaylistSessions.entries.firstOrNull { (k, v) -> v.nextPage != null && (channelId.contains(k) || k.contains(channelId)) }?.value
+            ?: return@withContext emptyList()
+        var page = session.nextPage ?: return@withContext emptyList()
+        runCatching {
+            val collected = mutableListOf<Playlist>()
+            var pages = 0
+            while (collected.size < pageSize && page != null && pages < 2) {
+                val next = session.extractor.getPage(page)
+                collected += parseChannelPlaylistItems(next.items, session.channelName)
+                page = next.nextPage
+                session.nextPage = page
+                pages++
+            }
+            collected.distinctBy { it.id }.take(pageSize)
+        }.getOrDefault(emptyList())
+    }
+    data class YouTubePlaylistPage(
+        val title: String?,
+        val owner: String?,
+        val ownerChannelId: String?,
+        val coverUrl: String?,
+        val description: String?,
+        val tracks: List<Track>,
+    )
+    suspend fun browseYouTubePlaylist(playlistId: String): YouTubePlaylistPage? = withContext(Dispatchers.IO) {
+        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
+        runCatching {
+            val raw = playlistId.trim().removePrefix("YT:").trim()
+            val url = if (raw.startsWith("http")) raw else "https://www.youtube.com/playlist?list=$raw"
+            val pl = ServiceList.YouTube.getPlaylistExtractor(url)
+            pl.fetchPage()
+            val ownerName = runCatching { pl.uploaderName?.trim() }.getOrNull()?.takeIf { it.isNotBlank() }
+            val uploaderUrl = runCatching { pl.uploaderUrl?.trim() }.getOrNull().orEmpty()
+            val ownerId = if (uploaderUrl.isNotBlank()) extractChannelId(uploaderUrl) else null
+            val title = runCatching { pl.name?.trim() }.getOrNull()?.takeIf { it.isNotBlank() }
+            val desc = runCatching { pl.description }.getOrNull()?.takeIf { it.isNotBlank() }
+            val collected = parseChannelStreamItems(pl.initialPage.items, ownerName.orEmpty()).toMutableList()
+            var nextPage = pl.initialPage.nextPage
+            var pages = 0
+            while (collected.size < 500 && nextPage != null && pages < 5) {
+                val next = pl.getPage(nextPage)
+                collected += parseChannelStreamItems(next.items, ownerName.orEmpty())
+                nextPage = next.nextPage
+                pages++
+            }
+            val cover = collected.firstOrNull()?.thumbnailUrl
+            YouTubePlaylistPage(title, ownerName, ownerId, cover, desc, collected.distinctBy { it.id })
+        }.getOrNull()
+    }
 suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext(Dispatchers.IO) {
         if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
         val input = channelIdOrHandle.trim()
@@ -907,7 +984,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 channelVideoSessions[uc] = session
                 channelVideoSessions[input] = session
                 channelVideoSessions[channelUrl] = session
-                collected.distinctBy { it.id }.take(300)
+                collected.distinctBy { it.id }.take(500)
             }.getOrDefault(emptyList())
         }
         if (videos.isEmpty() && uc.startsWith("UC")) {
@@ -930,36 +1007,29 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
         // Shorts do canal: tenta /shorts como playlist, se falhar busca Shorts pelo nome
         var shorts: List<Track> = emptyList()
         // FIX18 - Shorts: so da aba /shorts (resolucao de Shorts) E com hashtag no titulo.
-        if (uc.startsWith("UC")) {
-            shorts = runCatching {
-                val pl = ServiceList.YouTube.getPlaylistExtractor("https://www.youtube.com/channel/$uc/shorts")
-                pl.fetchPage()
-                val collected = parseChannelStreamItems(pl.initialPage.items, channelName).toMutableList()
-                var nextPage = pl.initialPage.nextPage
-                var pages = 0
-                while (collected.count { isRealShort(it) } < 60 && nextPage != null && pages < 5) {
-                    val next = pl.getPage(nextPage)
-                    collected += parseChannelStreamItems(next.items, channelName)
-                    nextPage = next.nextPage
-                    pages++
-                }
-                collected.distinctBy { it.id }.filter { isRealShort(it) }.take(100)
-            }.getOrDefault(emptyList())
-        }
-        if (shorts.isEmpty() && channelName.isNotBlank()) {
-            shorts = runCatching { searchShorts(channelName, loadMore = false, pageSize = 30, searchId = "channel:$uc").items.map { it.track }.filter { isSameCreator(it.artist, channelName) && isRealShort(it) } }.getOrDefault(emptyList())
-        }
+        // FIX20 - Shorts fora do canal (UI sem aba Shorts). Nao busca /shorts aqui.
+        shorts = emptyList()
+        // FIX20 - Fallback Shorts removido (canal sem Shorts).
         // Playlists do canal: tenta /playlists como pagina, fallback busca por nome do canal.
         var channelPlaylists: List<Playlist> = emptyList()
         if (uc.startsWith("UC")) {
             channelPlaylists = runCatching {
                 val pl = ServiceList.YouTube.getPlaylistExtractor("https://www.youtube.com/channel/$uc/playlists")
                 pl.fetchPage()
-                pl.initialPage.items.filterIsInstance<PlaylistInfoItem>().mapNotNull { item ->
-                    val pid = Regex("list=([^&]+)").find(item.url ?: "")?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    if (!item.uploaderName.isNullOrBlank() && !isSameCreator(item.uploaderName, channelName)) return@mapNotNull null
-                    Playlist(id = pid, title = item.name ?: "Playlist", owner = item.uploaderName?.takeIf { it.isNotBlank() } ?: channelName, thumbnailUrl = item.thumbnails.lastOrNull()?.url, trackCount = item.streamCount.takeIf { it > 0 }?.toInt(), source = Source.YOUTUBE)
+                val collected = parseChannelPlaylistItems(pl.initialPage.items, channelName).toMutableList()
+                var nextPage = pl.initialPage.nextPage
+                var pages = 0
+                while (collected.size < 300 && nextPage != null && pages < 3) {
+                    val next = pl.getPage(nextPage)
+                    collected += parseChannelPlaylistItems(next.items, channelName)
+                    nextPage = next.nextPage
+                    pages++
                 }
+                val session = ChannelPlaylistsSession(pl, nextPage, channelName)
+                channelPlaylistSessions[uc] = session
+                channelPlaylistSessions[input] = session
+                channelPlaylistSessions[channelUrl] = session
+                collected.distinctBy { it.id }.take(300)
             }.getOrDefault(emptyList())
         }
         if (channelPlaylists.isEmpty() && channelName.isNotBlank()) {

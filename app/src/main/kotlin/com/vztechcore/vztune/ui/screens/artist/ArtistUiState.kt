@@ -28,6 +28,8 @@ data class ArtistUiState(
     val bannerUrl: String? = null,
     // FIX18 - Canal: tem mais videos no UU? + carregando Buscar mais?
     val channelVideosHasMore: Boolean = false,
+    val channelPlaylistsHasMore: Boolean = false,
+    val isLoadingMoreChannelPlaylists: Boolean = false,
     val isLoadingMoreChannelVideos: Boolean = false,
     val isYouTubeChannel: Boolean = false,
     val videosMore: BrowseRef? = null,

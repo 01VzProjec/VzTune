@@ -29,6 +29,7 @@ fun NavController.openAlbum(album: Album) {
             title = album.title,
             subtitle = album.artist,
             thumbnailUrl = album.thumbnailUrl,
+            sourceName = "YOUTUBE_MUSIC",
         )
     )
 }
@@ -41,6 +42,7 @@ fun NavController.openPlaylist(playlist: Playlist) {
             title = playlist.title,
             subtitle = playlist.owner,
             thumbnailUrl = playlist.thumbnailUrl,
+            sourceName = playlist.source.name,
         )
     )
 }

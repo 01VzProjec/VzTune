@@ -80,8 +80,9 @@ class ArtistViewModel @Inject constructor(
                             singles = emptyList(), singlesMore = null,
                             videos = channel.videos, videosMore = null,
                             featured = emptyList(), featuredMore = null, relatedArtists = emptyList(),
-                            shorts = channel.shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true,
+                            shorts = emptyList(), // FIX20 - Canal sem Shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true,
                             channelVideosHasMore = youTubeRepository.hasMoreChannelVideos(route.id), isLoadingMoreChannelVideos = false,
+                            channelPlaylistsHasMore = youTubeRepository.hasMoreChannelPlaylists(route.id), isLoadingMoreChannelPlaylists = false,
                         )
                     }
                     return@launch
@@ -155,6 +156,26 @@ class ArtistViewModel @Inject constructor(
                     videos = merged,
                     channelVideosHasMore = youTubeRepository.hasMoreChannelVideos(route.id),
                     isLoadingMoreChannelVideos = false,
+                )
+            }
+        }
+    }
+
+    // FIX20 - Buscar mais playlists: proxima pagina do /playlists, soma na mesma lista.
+    fun loadMoreChannelPlaylists() {
+        val state = _uiState.value
+        if (state.isLoadingMoreChannelPlaylists) return
+        if (!state.channelPlaylistsHasMore) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingMoreChannelPlaylists = true) }
+            val more = runCatching { youTubeRepository.loadMoreChannelPlaylists(route.id) }.getOrDefault(emptyList())
+            val current = _uiState.value.channelPlaylists
+            val merged = (current + more).distinctBy { it.id }
+            _uiState.update {
+                it.copy(
+                    channelPlaylists = merged,
+                    channelPlaylistsHasMore = youTubeRepository.hasMoreChannelPlaylists(route.id),
+                    isLoadingMoreChannelPlaylists = false,
                 )
             }
         }

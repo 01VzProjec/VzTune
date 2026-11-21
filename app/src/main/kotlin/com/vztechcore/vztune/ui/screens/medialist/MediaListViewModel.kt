@@ -112,7 +112,20 @@ class MediaListViewModel @Inject constructor(
         }
     }
 
-    private fun loadContent() {
+        // FIX20 - Playlist YouTube tem id PL/UU/FL/LL/OL (menos OLAK que e YT Music). Sem sourceName, infere pelo id.
+    private fun isYouTubePlaylistId(id: String): Boolean {
+        val v = id.trim().removePrefix("YT:").trim()
+        if (v.startsWith("OLAK")) return false
+        if (v.startsWith("RD") || v.startsWith("VL")) return false
+        return v.startsWith("PL") || v.startsWith("UU") || v.startsWith("FL") || v.startsWith("LL") || v.startsWith("OL")
+    }
+    private fun isYouTubePlaylistRoute(): Boolean {
+        if (route.sourceName == "YOUTUBE") return true
+        if (route.sourceName == "YOUTUBE_MUSIC") return false
+        return isYouTubePlaylistId(route.id)
+    }
+
+private fun loadContent() {
         if (_uiState.value.isLocal) {
             observeLocalPlaylist()
             return
@@ -153,6 +166,27 @@ class MediaListViewModel @Inject constructor(
                         artistId = album.artistId,
                         excludeAlbumTitle = resolvedTitle,
                     )
+                } else if (isYouTubePlaylistRoute()) {
+                    // FIX20 - Playlist YouTube: SO NewPipe, nunca InnerTube. Antes caia no browsePlaylist do InnerTube e o dono vinha como artista do YT Music.
+                    val ytPage = runCatching { youTubeRepository.browseYouTubePlaylist(route.id) }.getOrNull()
+                    if (ytPage != null) {
+                        val ch = runCatching { youTubeRepository.getChannelForPlaylist(route.id) }.getOrNull()
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false, errorMessage = null,
+                                title = ytPage.title?.takeIf { v -> v.isNotBlank() } ?: it.title,
+                                subtitle = ytPage.owner ?: it.subtitle,
+                                owner = ytPage.owner ?: it.owner,
+                                artistId = ytPage.ownerChannelId ?: ch?.channelId ?: it.artistId,
+                                ownerAvatarUrl = ch?.avatarUrl ?: it.ownerAvatarUrl,
+                                thumbnailUrl = ytPage.coverUrl ?: it.thumbnailUrl,
+                                description = ytPage.description ?: it.description,
+                                allTracks = ytPage.tracks.distinctBy { tr -> "${tr.source}_${tr.id}" },
+                            )
+                        }
+                    } else {
+                        _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar esta playlist.") }
+                    }
                 } else {
                     var playlist = ytMusicRepository.browsePlaylist(route.id)
                     if (playlist.tracks.isEmpty()) {
@@ -370,14 +404,14 @@ class MediaListViewModel @Inject constructor(
             viewModelScope.launch {
                 _navigationEvent.emit(
                     NavigationEvent.OpenArtist(
-                        Artist(id = directId, name = artistName, thumbnailUrl = state.ownerAvatarUrl, source = if (isYouTubePlaylist(state)) Source.YOUTUBE else Source.YOUTUBE_MUSIC)
+                        Artist(id = directId, name = artistName, thumbnailUrl = state.ownerAvatarUrl, source = if (route.sourceName == "YOUTUBE" || isYouTubePlaylist(state)) Source.YOUTUBE else Source.YOUTUBE_MUSIC)
                     )
                 )
             }
             return
         }
         // Playlist do YouTube sem UC ainda: tenta resolver o dono agora via NewPipe.
-        if (isYouTubePlaylist(state)) {
+        if (route.sourceName == "YOUTUBE" || isYouTubePlaylist(state)) {
             viewModelScope.launch {
                 val channel = runCatching { youTubeRepository.getChannelForPlaylist(route.id) }.getOrNull()
                 if (channel != null) {

@@ -1,348 +1,607 @@
 #!/bin/bash
-# VzTune FIX19 - Icones da fila trocados + canal so com conteudo DELE + separacao total NewPipe / InnerTube
-# Aplica sobre FIX18. Rode na raiz do projeto: bash VzTune-FIX19.sh
-# 1) TrackOptionsSheet: troca os icones de "Reproduzir como proxima faixa" <-> "Adicionar a fila" um com o outro
-# 2) YouTubeRepository.browseChannel: Videos / Shorts / Playlists do fallback de busca so aceitam o MESMO criador (isSameCreator, "TH" == "TH - Topic"). Antes o contains() deixava passar canal com nome parecido e a aba Playlists vinha com playlists de canais aleatorios
-# 3) ArtistViewModel.loadContent: respeita route.isYouTubeChannel. true = SO NewPipe, false = SO InnerTube. Antes carregava os dois e se o YT Music tivesse qualquer faixa (mesmo de outro artista com nome parecido) mostrava o YT Music e descartava o canal
-# 4) TrackMenu + Search onOpenChannelForTrack: remove o fallback pro InnerTube getArtistFromVideo. Conteudo NewPipe fica SO no YouTube. InnerTube player com cliente YTMUSIC devolve a MUSICA do video, nao quem postou (video do canal 'th' com musica do artista 'TH' -> UC do TH)
-# 5) Search NavigationEvent.OpenArtist ganha isYouTubeChannel + AppNavHost passa a flag. Antes a busca perdia a flag e todo canal aberto pela busca caia no YT Music
-# 6) MediaList onOpenArtist: playlist do YouTube abre como canal (Source.YOUTUBE), playlist do YT Music continua como artista. Antes tudo ia como YOUTUBE_MUSIC
-# 7) ArtistViewModel.loadChannelPlaylistTracks: playlist do canal YouTube -> NewPipe getYouTubePlaylistTracks, YT Music -> InnerTube. Nunca cruza
+# VzTune FIX20 - Playlist no mundo certo + Canal com Inicio + Maximo de videos/playlists
+# Aplica sobre FIX18 + FIX19. Rode na raiz do projeto: bash VzTune-FIX20.sh
+# 1) PLAYLIST: Routes.MediaList ganha sourceName ("YOUTUBE" / "YOUTUBE_MUSIC"). openPlaylist passa playlist.source.name.
+#    MediaList: se e YouTube -> SO NewPipe browseYouTubePlaylist, nunca InnerTube. Se e YT Music -> SO InnerTube.
+# 2) CANAL: abas viram Inicio | Videos | Playlists. Shorts some da UI do canal (Search continua com Shorts).
+#    Corrige bug do FIX18: Box de Playlists checava selectedChannelTab == 1 em vez de == 2.
+# 3) INICIO: Hero = video mais famoso (mais views, VzVideoCard 16:9 igual Search) + "Para voce" (50 recentes, LazyRow 300dp)
+#    + "Videos" (4+4, > vai p/ aba Videos / Mais recentes) + "Videos mais acessados" (4+4, > vai p/ aba Videos / Em alta)
+#    + "Playlists" (4+4, > vai p/ aba Playlists). Expandir = icone ExpandMore (SVG que voce mandou).
+# 4) MAXIMO: canal comeca com 500 videos (era 300) + 300 playlists. Buscar mais pega +500 videos / +200 playlists por clique.
+#    30 mil videos NAO vem de uma vez (travaria e estouraria memoria) - vem em lotes de Buscar mais ate acabar.
 set -e
-python3 - << 'PY'
+python3 - << 'PYEOF'
 import re, pathlib
-ROOT = pathlib.Path(".")
 def read(p):
-    try:
-        return pathlib.Path(p).read_text(encoding="utf-8")
-    except Exception:
-        return None
+    try: return pathlib.Path(p).read_text(encoding="utf-8")
+    except Exception: return None
 def write(p, t):
     pathlib.Path(p).parent.mkdir(parents=True, exist_ok=True)
     pathlib.Path(p).write_text(t, encoding="utf-8")
 def ok(m): print("OK", m)
-def warn(m): print("WARN", m)
-
-# ============ 1) TrackOptionsSheet - troca os icones ============
-p = "app/src/main/kotlin/com/vztechcore/vztune/ui/components/sheets/TrackOptionsSheet.kt"
+def warn(m): print("AVISO", m)
+p = "app/src/main/kotlin/com/vztechcore/vztune/ui/icons/actions/ExpandMore.kt"
+if pathlib.Path(p).exists():
+    ok("ExpandMore: ja existe")
+else:
+    content = "package com.vztechcore.vztune.ui.icons.actions\n\nimport androidx.compose.ui.graphics.vector.ImageVector\nimport com.vztechcore.vztune.ui.icons.VzIcons\n\n// Seta pra baixo do Inicio (expandir +4). SVG que voce mandou.\nval VzIcons.ExpandMore: ImageVector\n    get() = VzIcons.icon(\n        name = \"ExpandMore\",\n        pathData = \"M11.63,14.89q-0.17-0.06-0.32-0.21l-4.6-4.6Q6.43,9.8 6.41,9.39T6.7,8.67Q6.98,8.4 7.4,8.4T8.1,8.67L12,12.55l3.9-3.88q0.28-0.28 0.69-0.29T17.3,8.67q0.27,0.28 0.27,0.7t-0.27,0.7l-4.6,4.6q-0.15,0.15-0.33,0.21T12,14.95t-0.38-0.06Z\"\n    )\n"
+    write(p, content)
+    ok("ExpandMore: criado")
+p = "app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/Routes.kt"
 t = read(p)
 if t is None:
-    warn("TrackOptionsSheet nao achado")
+    warn("Routes nao achado")
+elif "data class MediaList" in t and "sourceName" in t[t.find("data class MediaList"):t.find("data class MediaList")+800]:
+    ok("Routes.MediaList: ja tem sourceName")
 else:
-    m_next = re.search(r"SheetOptionRow\(icon = VzIcons\.(\w+)[^\n]*onPlayNext\(track\)", t)
-    m_queue = re.search(r"SheetOptionRow\(icon = VzIcons\.(\w+)[^\n]*onAddToQueue\(track\)", t)
-    if not m_next or not m_queue:
-        warn("TrackOptionsSheet: linhas PlayNext/AddToQueue nao achadas")
-    else:
-        icon_next, icon_queue = m_next.group(1), m_queue.group(1)
-        if icon_next == icon_queue:
-            ok(f"TrackOptionsSheet: icones ja iguais ({icon_next}), nada a trocar")
-        else:
-            t = re.sub(r"(SheetOptionRow\(icon = VzIcons\.)\w+([^\n]*onPlayNext\(track\))", r"\1__FIX19_TMP__\2", t, count=1)
-            t = re.sub(r"(SheetOptionRow\(icon = VzIcons\.)\w+([^\n]*onAddToQueue\(track\))", r"\1" + icon_next + r"\2", t, count=1)
-            t = t.replace("__FIX19_TMP__", icon_queue, 1)
+    idx = t.find("data class MediaList")
+    if idx != -1:
+        j = t.find("val thumbnailUrl: String? = null,", idx)
+        if j != -1:
+            end = j + len("val thumbnailUrl: String? = null,")
+            t = t[:end] + "\n        val sourceName: String? = null, // FIX20 - YOUTUBE ou YOUTUBE_MUSIC. Sem isso a playlist perdia o mundo."
             write(p, t)
-            ok(f"TrackOptionsSheet: icones trocados {icon_next} <-> {icon_queue} (Proxima agora {icon_queue}, Fila agora {icon_next})")
+            ok("Routes.MediaList: sourceName adicionado")
+        else:
+            warn("Routes.MediaList: thumbnailUrl nao achado")
+    else:
+        warn("Routes.MediaList: data class nao achada")
+p = "app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/NavExtensions.kt"
+t = read(p)
+if t is None:
+    warn("NavExtensions nao achado")
+else:
+    changed = False
+    if "sourceName = playlist.source.name" not in t:
+        if "thumbnailUrl = playlist.thumbnailUrl," in t:
+            t = t.replace("thumbnailUrl = playlist.thumbnailUrl,", "thumbnailUrl = playlist.thumbnailUrl,\n            sourceName = playlist.source.name,", 1)
+            changed = True
+            ok("NavExtensions: openPlaylist agora passa sourceName")
+        else:
+            warn("NavExtensions: openPlaylist thumbnailUrl nao achado")
+    else:
+        ok("NavExtensions: openPlaylist ja passa sourceName")
+    if 'sourceName = "YOUTUBE_MUSIC"' not in t:
+        if "thumbnailUrl = album.thumbnailUrl," in t:
+            t = t.replace("thumbnailUrl = album.thumbnailUrl,", 'thumbnailUrl = album.thumbnailUrl,\n            sourceName = "YOUTUBE_MUSIC",', 1)
+            changed = True
+            ok("NavExtensions: openAlbum agora passa YOUTUBE_MUSIC")
+        else:
+            warn("NavExtensions: openAlbum thumbnailUrl nao achado")
+    if changed:
+        write(p, t)
 
-# ============ 2) YouTubeRepository - isSameCreator + fallbacks estritos ============
+# ============ YouTubeRepository ============
 p = "data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeRepository.kt"
 t = read(p)
 if t is None:
     warn("YouTubeRepository nao achado")
 else:
-    changed = False
-    # 2a) helper isSameCreator
-    if "fun isSameCreator" not in t:
-        helper = r'''    // FIX19 - So aceita conteudo do MESMO criador. Normaliza: minusculo, sem " - Topic", sem espacos extras.
-    // "TH" vs "TH - Topic" = mesmo criador. "th" vs "TH2" / "The ..." = criador diferente, descarta.
-    private fun isSameCreator(owner: String?, channelName: String): Boolean {
-        if (owner.isNullOrBlank() || channelName.isBlank()) return false
-        fun norm(s: String): String {
-            var v = s.trim().lowercase()
-            if (v.endsWith(" - topic")) v = v.removeSuffix(" - topic").trim()
-            if (v.endsWith("- topic")) v = v.removeSuffix("- topic").trim()
-            return v.replace(Regex("\\s+"), " ").trim()
+    if "ChannelPlaylistsSession" not in t:
+        helper = '''    // FIX20 - Sessao de playlists do canal (/playlists). Igual a de videos: guarda extractor + nextPage pra Buscar mais nao recomecar.
+    private data class ChannelPlaylistsSession(
+        val extractor: PlaylistExtractor,
+        var nextPage: Page?,
+        val channelName: String,
+    )
+    private val channelPlaylistSessions = mutableMapOf<String, ChannelPlaylistsSession>()
+    private fun parseChannelPlaylistItems(items: List<InfoItem>, channelName: String): List<Playlist> {
+        return items.filterIsInstance<PlaylistInfoItem>().mapNotNull { item ->
+            val pid = Regex("list=([^&]+)").find(item.url ?: "")?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            if (!item.uploaderName.isNullOrBlank() && !isSameCreator(item.uploaderName, channelName)) return@mapNotNull null
+            Playlist(id = pid, title = item.name ?: "Playlist", owner = item.uploaderName?.takeIf { it.isNotBlank() } ?: channelName, thumbnailUrl = item.thumbnails.lastOrNull()?.url, trackCount = item.streamCount.takeIf { it > 0 }?.toInt(), source = Source.YOUTUBE)
         }
-        return norm(owner) == norm(channelName)
     }
-
+    fun hasMoreChannelPlaylists(channelId: String): Boolean {
+        if (channelPlaylistSessions[channelId]?.nextPage != null) return true
+        return channelPlaylistSessions.entries.any { (k, v) -> v.nextPage != null && (k == channelId || channelId.contains(k) || k.contains(channelId)) }
+    }
+    suspend fun loadMoreChannelPlaylists(channelId: String, pageSize: Int = 200): List<Playlist> = withContext(Dispatchers.IO) {
+        val session = channelPlaylistSessions[channelId]
+            ?: channelPlaylistSessions.entries.firstOrNull { (k, v) -> v.nextPage != null && (channelId.contains(k) || k.contains(channelId)) }?.value
+            ?: return@withContext emptyList()
+        var page = session.nextPage ?: return@withContext emptyList()
+        runCatching {
+            val collected = mutableListOf<Playlist>()
+            var pages = 0
+            while (collected.size < pageSize && page != null && pages < 2) {
+                val next = session.extractor.getPage(page)
+                collected += parseChannelPlaylistItems(next.items, session.channelName)
+                page = next.nextPage
+                session.nextPage = page
+                pages++
+            }
+            collected.distinctBy { it.id }.take(pageSize)
+        }.getOrDefault(emptyList())
+    }
+    data class YouTubePlaylistPage(
+        val title: String?,
+        val owner: String?,
+        val ownerChannelId: String?,
+        val coverUrl: String?,
+        val description: String?,
+        val tracks: List<Track>,
+    )
+    suspend fun browseYouTubePlaylist(playlistId: String): YouTubePlaylistPage? = withContext(Dispatchers.IO) {
+        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
+        runCatching {
+            val raw = playlistId.trim().removePrefix("YT:").trim()
+            val url = if (raw.startsWith("http")) raw else "https://www.youtube.com/playlist?list=$raw"
+            val pl = ServiceList.YouTube.getPlaylistExtractor(url)
+            pl.fetchPage()
+            val ownerName = runCatching { pl.uploaderName?.trim() }.getOrNull()?.takeIf { it.isNotBlank() }
+            val uploaderUrl = runCatching { pl.uploaderUrl?.trim() }.getOrNull().orEmpty()
+            val ownerId = if (uploaderUrl.isNotBlank()) extractChannelId(uploaderUrl) else null
+            val title = runCatching { pl.name?.trim() }.getOrNull()?.takeIf { it.isNotBlank() }
+            val desc = runCatching { pl.description }.getOrNull()?.takeIf { it.isNotBlank() }
+            val collected = parseChannelStreamItems(pl.initialPage.items, ownerName.orEmpty()).toMutableList()
+            var nextPage = pl.initialPage.nextPage
+            var pages = 0
+            while (collected.size < 500 && nextPage != null && pages < 5) {
+                val next = pl.getPage(nextPage)
+                collected += parseChannelStreamItems(next.items, ownerName.orEmpty())
+                nextPage = next.nextPage
+                pages++
+            }
+            val cover = collected.firstOrNull()?.thumbnailUrl
+            YouTubePlaylistPage(title, ownerName, ownerId, cover, desc, collected.distinctBy { it.id })
+        }.getOrNull()
+    }
 '''
         if "suspend fun browseChannel" in t:
             t = t.replace("suspend fun browseChannel", helper + "suspend fun browseChannel", 1)
-            changed = True
-            ok("YouTubeRepository: isSameCreator criado")
+            ok("YouTubeRepository: sessoes playlists + browseYouTubePlaylist criados")
         else:
-            warn("YouTubeRepository: browseChannel nao achado p/ isSameCreator")
-    # 2b) Videos fallback: contains() frouxo -> isSameCreator exato
-    old_videos = ".filter { it.artist.contains(channelName, ignoreCase = true) || channelName.contains(it.artist, ignoreCase = true) }"
-    if old_videos in t:
-        t = t.replace(old_videos, ".filter { isSameCreator(it.artist, channelName) }")
-        changed = True
-        ok("YouTubeRepository: fallback Videos agora so mesmo criador")
+            warn("YouTubeRepository: browseChannel nao achado")
     else:
-        t2, n = re.subn(r"\.filter \{ it\.artist\.contains\(channelName[^}]*\}", ".filter { isSameCreator(it.artist, channelName) }", t)
+        ok("YouTubeRepository: helpers playlists ja existem")
+    # Videos 300->500: so se ainda esta 300 no loop de videos. Se ja esta 500, pula pra nao encostar no loop de playlists (300).
+    if "while (collected.size < 500" in t and "ChannelPlaylistsSession" in t:
+        ok("YouTubeRepository: videos ja em 500 (pulado)")
+    elif "while (collected.size < 300" in t:
+        t = t.replace("while (collected.size < 300", "while (collected.size < 500", 1)
+        ok("YouTubeRepository: videos iniciais 300 -> 500")
+    if "collected.distinctBy { it.id }.take(500)" in t:
+        ok("YouTubeRepository: videos take ja em 500")
+    elif "collected.distinctBy { it.id }.take(300)" in t:
+        t = t.replace("collected.distinctBy { it.id }.take(300)", "collected.distinctBy { it.id }.take(500)", 1)
+        ok("YouTubeRepository: videos take 300 -> 500")
+    old_load = "    suspend fun loadMoreChannelVideos(channelId: String, pageSize: Int = 100): List<Track> = withContext(Dispatchers.IO) {\n        val session = channelVideoSessions[channelId]\n            ?: channelVideoSessions.entries.firstOrNull { (k, v) -> v.nextPage != null && (channelId.contains(k) || k.contains(channelId)) }?.value\n            ?: return@withContext emptyList()\n        val page = session.nextPage ?: return@withContext emptyList()\n        runCatching {\n            val next = session.extractor.getPage(page)\n            session.nextPage = next.nextPage\n            parseChannelStreamItems(next.items, session.channelName).take(pageSize)\n        }.getOrDefault(emptyList())\n    }"
+    new_load = "    // FIX20 - Buscar mais videos: +500 por clique (5 paginas). Antes era 1 pagina (100).\n    suspend fun loadMoreChannelVideos(channelId: String, pageSize: Int = 500): List<Track> = withContext(Dispatchers.IO) {\n        val session = channelVideoSessions[channelId]\n            ?: channelVideoSessions.entries.firstOrNull { (k, v) -> v.nextPage != null && (channelId.contains(k) || k.contains(channelId)) }?.value\n            ?: return@withContext emptyList()\n        var page = session.nextPage ?: return@withContext emptyList()\n        runCatching {\n            val collected = mutableListOf<Track>()\n            var pages = 0\n            while (collected.size < pageSize && page != null && pages < 5) {\n                val next = session.extractor.getPage(page)\n                collected += parseChannelStreamItems(next.items, session.channelName)\n                page = next.nextPage\n                session.nextPage = page\n                pages++\n            }\n            collected.distinctBy { it.id }.take(pageSize)\n        }.getOrDefault(emptyList())\n    }"
+    if old_load in t:
+        t = t.replace(old_load, new_load, 1)
+        ok("YouTubeRepository: loadMoreChannelVideos agora pega 500 por clique")
+    elif "pageSize: Int = 500" in t and "loadMoreChannelVideos" in t:
+        ok("YouTubeRepository: loadMoreChannelVideos ja pega 500")
+    else:
+        t2, n = re.subn(r"suspend fun loadMoreChannelVideos\(channelId: String, pageSize: Int = 100\)", "suspend fun loadMoreChannelVideos(channelId: String, pageSize: Int = 500)", t)
         if n > 0:
-            t = t2; changed = True
-            ok("YouTubeRepository: fallback Videos (regex) agora so mesmo criador")
+            t = t2
+            ok("YouTubeRepository: loadMoreChannelVideos default 100 -> 500")
         else:
-            warn("YouTubeRepository: fallback Videos nao achado (talvez ja esteja estrito)")
-    # 2c) Shorts fallback: searchShorts(channelName ...) -> filtra dono + (se ja tem isRealShort, mantem)
-    def patch_shorts_line(m):
-        line = m.group(0)
-        if "isSameCreator" in line:
-            return line
-        if "isRealShort(it)" in line:
-            return line.replace(".filter { isRealShort(it) }", ".filter { isSameCreator(it.artist, channelName) && isRealShort(it) }")
-        return line.replace(".items.map { it.track }", ".items.map { it.track }.filter { isSameCreator(it.artist, channelName) }")
-    t2, n = re.subn(r"[^\n]*searchShorts\(channelName[^\n]*", patch_shorts_line, t)
-    if n > 0 and t2 != t:
-        t = t2; changed = True
-        ok("YouTubeRepository: fallback Shorts agora so mesmo criador")
-    elif n > 0:
-        ok("YouTubeRepository: fallback Shorts ja estava estrito")
+            warn("YouTubeRepository: loadMoreChannelVideos nao achado")
+    pat_pl = re.compile(r"if \(uc\.startsWith\(\"UC\"\)\) \{\s*channelPlaylists = runCatching \{\s*val pl = ServiceList\.YouTube\.getPlaylistExtractor\(\"https://www\.youtube\.com/channel/\$uc/playlists\"\)(.*?)\.getOrDefault\(emptyList\(\)\)\s*\}", re.DOTALL)
+    m = pat_pl.search(t)
+    if m:
+        new_pl = '''if (uc.startsWith("UC")) {
+            channelPlaylists = runCatching {
+                val pl = ServiceList.YouTube.getPlaylistExtractor("https://www.youtube.com/channel/$uc/playlists")
+                pl.fetchPage()
+                val collected = parseChannelPlaylistItems(pl.initialPage.items, channelName).toMutableList()
+                var nextPage = pl.initialPage.nextPage
+                var pages = 0
+                while (collected.size < 300 && nextPage != null && pages < 3) {
+                    val next = pl.getPage(nextPage)
+                    collected += parseChannelPlaylistItems(next.items, channelName)
+                    nextPage = next.nextPage
+                    pages++
+                }
+                val session = ChannelPlaylistsSession(pl, nextPage, channelName)
+                channelPlaylistSessions[uc] = session
+                channelPlaylistSessions[input] = session
+                channelPlaylistSessions[channelUrl] = session
+                collected.distinctBy { it.id }.take(300)
+            }.getOrDefault(emptyList())
+        }'''
+        t = t[:m.start()] + new_pl + t[m.end():]
+        ok("YouTubeRepository: playlists canal paginam ate 300 + sessao")
     else:
-        warn("YouTubeRepository: fallback Shorts nao achado")
-    # 2d) Playlists fallback: searchPlaylists(channelName ...) -> filtra dono
-    def patch_pl_line(m):
-        line = m.group(0)
-        if "isSameCreator" in line:
-            return line
-        return line.replace(".map { it.playlist }", ".map { it.playlist }.filter { isSameCreator(it.owner, channelName) }")
-    t2, n = re.subn(r"[^\n]*searchPlaylists\(channelName[^\n]*", patch_pl_line, t)
-    if n > 0 and t2 != t:
-        t = t2; changed = True
-        ok("YouTubeRepository: fallback Playlists agora so do mesmo criador")
-    elif n > 0:
-        ok("YouTubeRepository: fallback Playlists ja estava estrito")
-    else:
-        warn("YouTubeRepository: fallback Playlists nao achado")
-    # 2e) Playlists primaria (/playlists): usa uploaderName real e descarta se for de outro criador
-    old_pl_primary = "Playlist(id = pid, title = item.name"
-    if old_pl_primary in t and "isSameCreator(item.uploaderName" not in t:
-        t = t.replace(old_pl_primary, "if (!item.uploaderName.isNullOrBlank() && !isSameCreator(item.uploaderName, channelName)) return@mapNotNull null\n                    Playlist(id = pid, title = item.name", 1)
-        changed = True
-        ok("YouTubeRepository: Playlists primaria descarta dono diferente")
-    if "owner = channelName, thumbnailUrl = item.thumbnails.lastOrNull()?.url, trackCount = item.streamCount" in t:
-        t = t.replace("owner = channelName, thumbnailUrl = item.thumbnails.lastOrNull()?.url, trackCount = item.streamCount", "owner = item.uploaderName?.takeIf { it.isNotBlank() } ?: channelName, thumbnailUrl = item.thumbnails.lastOrNull()?.url, trackCount = item.streamCount", 1)
-        changed = True
-        ok("YouTubeRepository: Playlists primaria usa uploaderName real")
-    if changed:
-        write(p, t)
+        warn("YouTubeRepository: bloco primario playlists nao achado")
+    pat_shorts1 = re.compile(r"if \(uc\.startsWith\(\"UC\"\)\) \{\s*shorts = runCatching \{\s*val pl = ServiceList\.YouTube\.getPlaylistExtractor\(\"https://www\.youtube\.com/channel/\$uc/shorts\"\)(.*?)\.getOrDefault\(emptyList\(\)\)\s*\}", re.DOTALL)
+    m1 = pat_shorts1.search(t)
+    if m1:
+        t = t[:m1.start()] + "// FIX20 - Shorts fora do canal (UI sem aba Shorts). Nao busca /shorts aqui.\n        shorts = emptyList()" + t[m1.end():]
+        ok("YouTubeRepository: Shorts via /shorts removido do browseChannel")
+    if 'shorts = runCatching { searchShorts(channelName' in t:
+        pat_shorts2 = re.compile(r"if \(shorts\.isEmpty\(\) && channelName\.isNotBlank\(\)\) \{\s*shorts = runCatching \{ searchShorts\(channelName.*?\.getOrDefault\(emptyList\(\)\)\s*\}", re.DOTALL)
+        m2 = pat_shorts2.search(t)
+        if m2:
+            t = t[:m2.start()] + "// FIX20 - Fallback Shorts removido (canal sem Shorts)." + t[m2.end():]
+            ok("YouTubeRepository: fallback Shorts removido")
+        else:
+            warn("YouTubeRepository: fallback Shorts nao achado")
+    write(p, t)
 
-# ============ 3) ArtistViewModel - separacao total + loadChannelPlaylistTracks ============
+# ============ ArtistUiState + ArtistViewModel + MediaListViewModel ============
+p = "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistUiState.kt"
+t = read(p)
+if t is None:
+    warn("ArtistUiState nao achado")
+elif "channelPlaylistsHasMore" in t:
+    ok("ArtistUiState: ja tem channelPlaylistsHasMore")
+else:
+    if "val channelVideosHasMore: Boolean = false," in t:
+        t = t.replace("val channelVideosHasMore: Boolean = false,", "val channelVideosHasMore: Boolean = false,\n    val channelPlaylistsHasMore: Boolean = false,\n    val isLoadingMoreChannelPlaylists: Boolean = false,", 1)
+        write(p, t)
+        ok("ArtistUiState: channelPlaylistsHasMore + isLoadingMore")
+    else:
+        warn("ArtistUiState: channelVideosHasMore nao achado")
 p = "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistViewModel.kt"
 t = read(p)
 if t is None:
     warn("ArtistViewModel nao achado")
 else:
-    # Detecta FIX18 (channelVideosHasMore) p/ nao quebrar quem nao aplicou FIX18
-    ui_state = read("app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistUiState.kt") or ""
-    yt_repo = read("data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeRepository.kt") or ""
-    has_more = ("channelVideosHasMore" in ui_state) and ("hasMoreChannelVideos" in yt_repo)
-    more_line = "                            channelVideosHasMore = youTubeRepository.hasMoreChannelVideos(route.id), isLoadingMoreChannelVideos = false,\n" if has_more else ""
-    # Import Source p/ loadChannelPlaylistTracks comparar playlist.source
-    if "import com.vztechcore.vztune.core.domain.music.Source" not in t:
-        if "import com.vztechcore.vztune.core.domain.music.Playlist" in t:
-            t = t.replace("import com.vztechcore.vztune.core.domain.music.Playlist", "import com.vztechcore.vztune.core.domain.music.Playlist\nimport com.vztechcore.vztune.core.domain.music.Source", 1)
-        elif "import com.vztechcore.vztune.core.domain.music.Track" in t:
-            t = t.replace("import com.vztechcore.vztune.core.domain.music.Track", "import com.vztechcore.vztune.core.domain.music.Track\nimport com.vztechcore.vztune.core.domain.music.Source", 1)
-    # 3a) Substitui loadContent inteiro (do "private fun loadContent" ate o "/** Tocar tudo")
-    start = t.find("private fun loadContent()")
-    end = t.find("/** Tocar tudo", start)
-    if start != -1 and end != -1:
-        new_load = '''    // FIX19 - Separacao total: quem veio do YouTube fica no YouTube, quem veio do YT Music fica no YT Music.
-    // Antes: carregava os dois mundos e se o YT Music tivesse QUALQUER faixa (mesmo de outro artista com nome parecido, ex: musica "TH" dentro do video do canal "th") mostrava o YT Music e descartava o canal. O YT Music tinha preferencia.
-    // Agora: route.isYouTubeChannel == true -> SO NewPipe browseChannel, sem InnerTube. false -> SO InnerTube browseArtist, sem NewPipe. Sem fallback pro outro mundo.
-    private fun loadContent() {
+    if "shorts = channel.shorts" in t:
+        t = t.replace("shorts = channel.shorts", "shorts = emptyList(), // FIX20 - Canal sem Shorts", 1)
+        ok("ArtistViewModel: shorts zerado")
+    if "channelPlaylistsHasMore" in t:
+        ok("ArtistViewModel: channelPlaylistsHasMore ja ligado")
+    elif "channelVideosHasMore = youTubeRepository.hasMoreChannelVideos(route.id), isLoadingMoreChannelVideos = false," in t:
+        t = t.replace("channelVideosHasMore = youTubeRepository.hasMoreChannelVideos(route.id), isLoadingMoreChannelVideos = false,", "channelVideosHasMore = youTubeRepository.hasMoreChannelVideos(route.id), isLoadingMoreChannelVideos = false,\n                            channelPlaylistsHasMore = youTubeRepository.hasMoreChannelPlaylists(route.id), isLoadingMoreChannelPlaylists = false,", 1)
+        ok("ArtistViewModel: channelPlaylistsHasMore ligado")
+    else:
+        warn("ArtistViewModel: linha channelVideosHasMore nao achada")
+    if "fun loadMoreChannelPlaylists" not in t:
+        anchor = "    fun onVideoClick(track: Track) {"
+        idx = t.find(anchor)
+        if idx != -1:
+            insert = '''    // FIX20 - Buscar mais playlists: proxima pagina do /playlists, soma na mesma lista.
+    fun loadMoreChannelPlaylists() {
+        val state = _uiState.value
+        if (state.isLoadingMoreChannelPlaylists) return
+        if (!state.channelPlaylistsHasMore) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            if (route.isYouTubeChannel) {
-                val channel = runCatching { youTubeRepository.browseChannel(route.id) }.getOrNull()
-                if (channel != null) {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false, errorMessage = null,
-                            name = channel.channelName ?: it.name,
-                            thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl,
-                            subscribers = channel.subscriberCount ?: it.subscribers,
-                            description = channel.description ?: it.description,
-                            topSongs = emptyList(), songsMore = null,
-                            albums = emptyList(), albumsMore = null,
-                            singles = emptyList(), singlesMore = null,
-                            videos = channel.videos, videosMore = null,
-                            featured = emptyList(), featuredMore = null, relatedArtists = emptyList(),
-                            shorts = channel.shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true,
-''' + more_line + '''                        )
-                    }
-                    return@launch
-                }
-                _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar este canal.") }
-                return@launch
+            _uiState.update { it.copy(isLoadingMoreChannelPlaylists = true) }
+            val more = runCatching { youTubeRepository.loadMoreChannelPlaylists(route.id) }.getOrDefault(emptyList())
+            val current = _uiState.value.channelPlaylists
+            val merged = (current + more).distinctBy { it.id }
+            _uiState.update {
+                it.copy(
+                    channelPlaylists = merged,
+                    channelPlaylistsHasMore = youTubeRepository.hasMoreChannelPlaylists(route.id),
+                    isLoadingMoreChannelPlaylists = false,
+                )
             }
-            // YT Music: SO InnerTube, nunca NewPipe
-            val music = runCatching { ytMusicRepository.browseArtist(route.id) }.getOrNull()
-            if (music != null && (music.topSongs.isNotEmpty() || music.albums.isNotEmpty() || music.singles.isNotEmpty() || music.videos.isNotEmpty())) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false, errorMessage = null,
-                        name = music.name.takeUnless { n -> n == "Artista" || n == "Unknown Artist" } ?: it.name,
-                        thumbnailUrl = music.thumbnailUrl ?: it.thumbnailUrl,
-                        subscribers = music.subscribers, views = music.views, description = music.description,
-                        topSongs = music.topSongs, songsMore = music.songsMore,
-                        albums = music.albums, albumsMore = music.albumsMore,
-                        singles = music.singles, singlesMore = music.singlesMore,
-                        videos = music.videos, videosMore = music.videosMore,
-                        featured = music.featured, featuredMore = music.featuredMore,
-                        relatedArtists = music.relatedArtists,
-                        shorts = emptyList(), channelPlaylists = emptyList(), bannerUrl = null, isYouTubeChannel = false,
-                    )
-                }
-                return@launch
-            }
-            _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar este artista.") }
         }
     }
 
 '''
-        t = t[:start] + new_load + t[end:]
-        ok("ArtistViewModel: loadContent agora respeita isYouTubeChannel (sem preferencia pro YT Music)")
-    else:
-        warn("ArtistViewModel: loadContent nao achado p/ substituir")
-    # 3b) loadChannelPlaylistTracks: YouTube -> NewPipe, YT Music -> InnerTube
-    start2 = t.find("private suspend fun loadChannelPlaylistTracks")
-    if start2 != -1:
-        end2 = t.find("\n    }\n", start2)
-        if end2 != -1:
-            end2 = end2 + len("\n    }\n")
-            new_tracks = '''    private suspend fun loadChannelPlaylistTracks(playlist: Playlist): List<Track> {
-        // FIX19 - Playlist do canal: YouTube -> NewPipe, YT Music -> InnerTube. Nunca cruza.
-        if (playlist.source == Source.YOUTUBE) {
-            return runCatching { youTubeRepository.getYouTubePlaylistTracks(playlist.id) }.getOrDefault(emptyList())
-        }
-        return runCatching { ytMusicRepository.browsePlaylist(playlist.id).tracks }.getOrDefault(emptyList())
-    }
-'''
-            t = t[:start2] + new_tracks + t[end2:]
-            ok("ArtistViewModel: loadChannelPlaylistTracks agora separa NewPipe / InnerTube")
+            t = t[:idx] + insert + t[idx:]
+            ok("ArtistViewModel: loadMoreChannelPlaylists criado")
         else:
-            warn("ArtistViewModel: fim de loadChannelPlaylistTracks nao achado")
+            warn("ArtistViewModel: onVideoClick nao achado")
     else:
-        warn("ArtistViewModel: loadChannelPlaylistTracks nao achado")
+        ok("ArtistViewModel: loadMoreChannelPlaylists ja existe")
     write(p, t)
-
-# ============ 4) TrackMenuViewModel - tira fallback InnerTube ============
-p_menu = None
-for cand in ["app/src/main/kotlin/com/vztechcore/vztune/ui/components/sheets/TrackMenuViewModel.kt", "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/trackmenu/TrackMenuViewModel.kt"]:
-    if read(cand) is not None:
-        p_menu = cand
-        break
-if p_menu is None:
-    warn("TrackMenuViewModel nao achado")
-else:
-    t = read(p_menu)
-    old_fb = """            val fromInnerTube = runCatching { ytMusicRepository.getArtistFromVideo(track.id) }.getOrNull()
-            if (fromInnerTube != null) {
-                _navigationEvent.emit(MenuNavigationEvent.OpenArtist(fromInnerTube))
-                return@launch
-            }"""
-    if old_fb in t:
-        t = t.replace(old_fb, """            // FIX19 - Sem fallback pro InnerTube: conteudo NewPipe fica SO no YouTube.
-            // InnerTube player com cliente YTMUSIC devolve a MUSICA do video (ex: video do canal 'th' com musica do artista 'TH' -> UC do TH), nao quem postou. Sem canal NewPipe = nao navega.""")
-        t = t.replace("So usa InnerTube se o\n            // NewPipe falhar.", "Nunca usa InnerTube aqui.")
-        t = t.replace("So usa InnerTube se o NewPipe falhar.", "Nunca usa InnerTube aqui.")
-        write(p_menu, t)
-        ok("TrackMenuViewModel: fallback InnerTube removido")
-    elif "getArtistFromVideo" not in t:
-        ok("TrackMenuViewModel: ja sem fallback InnerTube")
-    else:
-        warn("TrackMenuViewModel: fallback InnerTube nao achado no formato esperado")
-
-# ============ 5) SearchViewModel - tira fallback + ganha isYouTubeChannel ============
-p = "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/search/SearchViewModel.kt"
-t = read(p)
-if t is None:
-    warn("SearchViewModel nao achado")
-else:
-    changed = False
-    # 5a) NavigationEvent.OpenArtist ganha isYouTubeChannel = false (default mantem os outros 3 emits como YT Music)
-    old_ev = """        data class OpenArtist(
-            val id: String, val name: String, val thumbnailUrl: String?,
-        ) : NavigationEvent"""
-    if old_ev in t:
-        t = t.replace(old_ev, """        data class OpenArtist(
-            val id: String, val name: String, val thumbnailUrl: String?,
-            val isYouTubeChannel: Boolean = false,
-        ) : NavigationEvent""")
-        changed = True
-        ok("SearchViewModel: OpenArtist ganhou isYouTubeChannel")
-    else:
-        t2, n = re.subn(r"(data class OpenArtist\(\s*val id: String, val name: String, val thumbnailUrl: String\?,)(\s*\) : NavigationEvent)", r"\1\n            val isYouTubeChannel: Boolean = false,\2", t)
-        if n > 0:
-            t = t2; changed = True
-            ok("SearchViewModel: OpenArtist ganhou isYouTubeChannel (regex)")
-        else:
-            warn("SearchViewModel: OpenArtist nao achado")
-    # 5b) onOpenChannelForTrack: emite como canal + tira fallback InnerTube
-    old_emit = "_navigationEvent.emit(NavigationEvent.OpenArtist(channel.channelId, channel.channelName, channel.avatarUrl))"
-    if old_emit in t:
-        t = t.replace(old_emit, "_navigationEvent.emit(NavigationEvent.OpenArtist(channel.channelId, channel.channelName, channel.avatarUrl, isYouTubeChannel = true))")
-        changed = True
-        ok("SearchViewModel: onOpenChannelForTrack agora emite como canal")
-    old_fb2 = """            val fromInnerTube = runCatching { ytMusicRepository.getArtistFromVideo(track.id) }.getOrNull()
-            if (fromInnerTube != null) {
-                _navigationEvent.emit(NavigationEvent.OpenArtist(fromInnerTube.id, fromInnerTube.name, fromInnerTube.thumbnailUrl))
-                return@launch
-            }"""
-    if old_fb2 in t:
-        t = t.replace(old_fb2, """            // FIX19 - Sem fallback pro InnerTube: conteudo NewPipe fica SO no YouTube. Sem canal NewPipe = nao navega.""")
-        changed = True
-        ok("SearchViewModel: fallback InnerTube removido")
-    if changed:
-        write(p, t)
-
-# ============ 6) AppNavHost - Search passa isYouTubeChannel ============
-p = "app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt"
-t = read(p)
-if t is None:
-    warn("AppNavHost nao achado")
-else:
-    # So o bloco da Search (id = event.id ...) ganha a flag. Os outros ja passam source == YOUTUBE.
-    pattern = re.compile(r"(is SearchViewModel\.NavigationEvent\.OpenArtist -> navController\.navigate\(\s*Routes\.Artist\(\s*id = event\.id,\s*name = event\.name,\s*thumbnailUrl = event\.thumbnailUrl,)(\s*\))", re.DOTALL)
-    t2, n = pattern.subn(r"\1\n                                            isYouTubeChannel = event.isYouTubeChannel,\2", t)
-    if n > 0:
-        t = t2
-        write(p, t)
-        ok("AppNavHost: Search agora passa isYouTubeChannel")
-    elif "isYouTubeChannel = event.isYouTubeChannel" in t:
-        ok("AppNavHost: Search ja passa isYouTubeChannel")
-    else:
-        warn("AppNavHost: bloco Search OpenArtist nao achado")
-
-# ============ 7) MediaListViewModel - onOpenArtist respeita o mundo da playlist ============
 p = "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListViewModel.kt"
 t = read(p)
 if t is None:
     warn("MediaListViewModel nao achado")
 else:
-    start = t.find("fun onOpenArtist()")
-    end = t.find("fun onOpenArtistByName", start)
-    if start == -1 or end == -1:
-        warn("MediaListViewModel: onOpenArtist nao achado")
-    else:
-        block = t[start:end]
-        orig = block
-        # 7a) directId: se a playlist e do YouTube -> canal, senao -> artista YT Music
-        # So o primeiro emit dentro de onOpenArtist (directId) vira condicional
-        block = block.replace("source = Source.YOUTUBE_MUSIC", "source = if (isYouTubePlaylist(state)) Source.YOUTUBE else Source.YOUTUBE_MUSIC", 1)
-        # 7b) getChannelForPlaylist: sempre canal YouTube (ja esta dentro de if (isYouTubePlaylist))
-        block = block.replace("source = Source.YOUTUBE_MUSIC", "source = Source.YOUTUBE", 1)
-        if block != orig:
-            t = t[:start] + block + t[end:]
-            write(p, t)
-            ok("MediaListViewModel: onOpenArtist agora abre playlist YouTube como canal")
-        elif "isYouTubePlaylist(state)) Source.YOUTUBE" in block:
-            ok("MediaListViewModel: onOpenArtist ja estava certo")
+    if "fun isYouTubePlaylistRoute" not in t:
+        anchor = "private fun loadContent()"
+        idx = t.find(anchor)
+        if idx != -1:
+            helper = '''    // FIX20 - Playlist YouTube tem id PL/UU/FL/LL/OL (menos OLAK que e YT Music). Sem sourceName, infere pelo id.
+    private fun isYouTubePlaylistId(id: String): Boolean {
+        val v = id.trim().removePrefix("YT:").trim()
+        if (v.startsWith("OLAK")) return false
+        if (v.startsWith("RD") || v.startsWith("VL")) return false
+        return v.startsWith("PL") || v.startsWith("UU") || v.startsWith("FL") || v.startsWith("LL") || v.startsWith("OL")
+    }
+    private fun isYouTubePlaylistRoute(): Boolean {
+        if (route.sourceName == "YOUTUBE") return true
+        if (route.sourceName == "YOUTUBE_MUSIC") return false
+        return isYouTubePlaylistId(route.id)
+    }
+
+'''
+            t = t[:idx] + helper + t[idx:]
+            ok("MediaListViewModel: helpers isYouTubePlaylistId/Route criados")
         else:
-            warn("MediaListViewModel: emits de onOpenArtist nao achados")
-print("== FIX19 pronto ==")
-PY
+            warn("MediaListViewModel: loadContent nao achado")
+    else:
+        ok("MediaListViewModel: helpers ja existem")
+    if "browseYouTubePlaylist(route.id)" not in t:
+        pat = re.compile(r"\} else \{\s*var playlist = ytMusicRepository\.browsePlaylist\(route\.id\)", re.DOTALL)
+        m = pat.search(t)
+        if m:
+            branch = '''} else if (isYouTubePlaylistRoute()) {
+                    // FIX20 - Playlist YouTube: SO NewPipe, nunca InnerTube. Antes caia no browsePlaylist do InnerTube e o dono vinha como artista do YT Music.
+                    val ytPage = runCatching { youTubeRepository.browseYouTubePlaylist(route.id) }.getOrNull()
+                    if (ytPage != null) {
+                        val ch = runCatching { youTubeRepository.getChannelForPlaylist(route.id) }.getOrNull()
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false, errorMessage = null,
+                                title = ytPage.title?.takeIf { v -> v.isNotBlank() } ?: it.title,
+                                subtitle = ytPage.owner ?: it.subtitle,
+                                owner = ytPage.owner ?: it.owner,
+                                artistId = ytPage.ownerChannelId ?: ch?.channelId ?: it.artistId,
+                                ownerAvatarUrl = ch?.avatarUrl ?: it.ownerAvatarUrl,
+                                thumbnailUrl = ytPage.coverUrl ?: it.thumbnailUrl,
+                                description = ytPage.description ?: it.description,
+                                allTracks = ytPage.tracks.distinctBy { tr -> "${tr.source}_${tr.id}" },
+                            )
+                        }
+                    } else {
+                        _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar esta playlist.") }
+                    }
+                } else {
+                    var playlist = ytMusicRepository.browsePlaylist(route.id)'''
+            t = t[:m.start()] + branch + t[m.end():]
+            ok("MediaListViewModel: ramo YouTube (NewPipe) criado")
+        else:
+            warn("MediaListViewModel: bloco else browsePlaylist nao achado")
+    else:
+        ok("MediaListViewModel: ramo YouTube ja existe")
+    if 'if (route.sourceName == "YOUTUBE") return true' not in t:
+        pat2 = re.compile(r"private fun isYouTubePlaylist\(state: MediaListUiState\): Boolean \{\s*", re.DOTALL)
+        m2 = pat2.search(t)
+        if m2:
+            t = t[:m2.end()] + 'if (route.sourceName == "YOUTUBE") return true\n        ' + t[m2.end():]
+            ok("MediaListViewModel: isYouTubePlaylist respeita sourceName")
+        else:
+            warn("MediaListViewModel: isYouTubePlaylist nao achado")
+    if 'route.sourceName == "YOUTUBE" || isYouTubePlaylist(state)' not in t:
+        if "source = if (isYouTubePlaylist(state)) Source.YOUTUBE else Source.YOUTUBE_MUSIC" in t:
+            t = t.replace("source = if (isYouTubePlaylist(state)) Source.YOUTUBE else Source.YOUTUBE_MUSIC", 'source = if (route.sourceName == "YOUTUBE" || isYouTubePlaylist(state)) Source.YOUTUBE else Source.YOUTUBE_MUSIC', 1)
+            ok("MediaListViewModel: onOpenArtist direto respeita sourceName")
+        idx_o = t.find("fun onOpenArtist()")
+        if idx_o != -1:
+            seg_end = t.find("fun onOpenArtistByName", idx_o)
+            if seg_end == -1: seg_end = len(t)
+            seg = t[idx_o:seg_end]
+            seg2 = seg.replace("if (isYouTubePlaylist(state)) {", 'if (route.sourceName == "YOUTUBE" || isYouTubePlaylist(state)) {', 1)
+            if seg2 != seg:
+                t = t[:idx_o] + seg2 + t[seg_end:]
+                ok("MediaListViewModel: onOpenArtist resolver via NewPipe respeita sourceName")
+    write(p, t)
+
+# ============ ArtistScreen imports/params/estado ============
+p = "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistScreen.kt"
+t = read(p)
+if t is None:
+    warn("ArtistScreen nao achado")
+else:
+    if "import com.vztechcore.vztune.ui.components.cards.VzVideoCard" not in t:
+        t = t.replace("import com.vztechcore.vztune.ui.components.cards.ChannelVideoCard", "import com.vztechcore.vztune.ui.components.cards.ChannelVideoCard\nimport com.vztechcore.vztune.ui.components.cards.VzVideoCard", 1)
+        ok("ArtistScreen: import VzVideoCard")
+    if "import com.vztechcore.vztune.ui.icons.actions.ExpandMore" not in t:
+        t = t.replace("import com.vztechcore.vztune.ui.icons.actions.ChevronRight", "import com.vztechcore.vztune.ui.icons.actions.ChevronRight\nimport com.vztechcore.vztune.ui.icons.actions.ExpandMore", 1)
+        ok("ArtistScreen: import ExpandMore")
+    if "import androidx.compose.runtime.rememberCoroutineScope" not in t:
+        t = t.replace("import androidx.compose.runtime.remember", "import androidx.compose.runtime.remember\nimport androidx.compose.runtime.rememberCoroutineScope", 1)
+        ok("ArtistScreen: import rememberCoroutineScope")
+    if "import kotlinx.coroutines.launch" not in t:
+        if "import com.vztechcore.vztune.ui.icons.VzIcons" in t:
+            t = t.replace("import com.vztechcore.vztune.ui.icons.VzIcons", "import com.vztechcore.vztune.ui.icons.VzIcons\nimport kotlinx.coroutines.launch", 1)
+            ok("ArtistScreen: import launch")
+    if "onLoadMoreChannelPlaylists" not in t:
+        if "onLoadMoreChannelVideos: () -> Unit = {}," in t:
+            t = t.replace("onLoadMoreChannelVideos: () -> Unit = {},", "onLoadMoreChannelVideos: () -> Unit = {},\n    onLoadMoreChannelPlaylists: () -> Unit = {},", 1)
+            ok("ArtistScreen: parametro onLoadMoreChannelPlaylists")
+        else:
+            warn("ArtistScreen: onLoadMoreChannelVideos nao achado")
+    if "homeVideosVisible" not in t:
+        if "var playlistMenu by remember { mutableStateOf<Playlist?>(null) }" in t:
+            t = t.replace("var playlistMenu by remember { mutableStateOf<Playlist?>(null) }", "var playlistMenu by remember { mutableStateOf<Playlist?>(null) }\n    val scope = rememberCoroutineScope()\n    // FIX20 - Inicio: quantos mostrar em cada secao (4+4 infinito). Comeca em 4.\n    var homeVideosVisible by remember { mutableStateOf(4) }\n    var homeTopVideosVisible by remember { mutableStateOf(4) }\n    var homePlaylistsVisible by remember { mutableStateOf(4) }", 1)
+            ok("ArtistScreen: estado Inicio (4+4) + scope")
+        else:
+            warn("ArtistScreen: playlistMenu nao achado")
+    write(p, t)
+
+# ============ ArtistScreen bloco do canal ============
+p = "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistScreen.kt"
+t = read(p)
+if t is not None:
+    start = t.find('item(key = "channel_tabs")')
+    end = t.find('item(key = "channel_space")', start) if start != -1 else -1
+    if start == -1 or end == -1:
+        warn("ArtistScreen: bloco channel_tabs / channel_space nao achado")
+    else:
+        new_block = '''item(key = "channel_tabs") {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                // FIX20 - Abas: Inicio | Videos | Playlists. Sem Shorts. (Corrige FIX18: Playlists checava == 1)
+                                Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (selectedChannelTab == 0) Color.White else Color.Transparent).clickable { selectedChannelTab = 0 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                    Text(text = "Início", style = MaterialTheme.typography.labelLarge, color = if (selectedChannelTab == 0) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                }
+                                Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (selectedChannelTab == 1) Color.White else Color.Transparent).clickable { selectedChannelTab = 1 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                    Text(text = "Vídeos", style = MaterialTheme.typography.labelLarge, color = if (selectedChannelTab == 1) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                }
+                                Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (selectedChannelTab == 2) Color.White else Color.Transparent).clickable { selectedChannelTab = 2 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                    Text(text = "Playlists", style = MaterialTheme.typography.labelLarge, color = if (selectedChannelTab == 2) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        item(key = "channel_tabs_space") { Spacer(Modifier.height(16.dp)) }
+                        // FIX20 - Mesmas listas do canal, sem buscar de novo. Inicio deriva delas.
+                        val sortedVideos = when (channelSort) {
+                            1 -> state.videos.sortedByDescending { it.viewCount ?: 0 }
+                            2 -> state.videos.reversed()
+                            else -> state.videos
+                        }
+                        val topVideosSorted = state.videos.sortedByDescending { it.viewCount ?: 0 }
+                        val mostViewedVideo = topVideosSorted.firstOrNull()
+                        val forYouVideos = state.videos.take(50)
+                        if (selectedChannelTab == 0) {
+                            // ===== INICIO =====
+                            if (mostViewedVideo != null) {
+                                item(key = "home_hero") {
+                                    val heroPlayback = nowPlaying.playbackOf(mostViewedVideo)
+                                    VzVideoCard(track = mostViewedVideo, isPlaying = heroPlayback.isPlaying, isPaused = heroPlayback.isPaused, onClick = { onVideoClick(mostViewedVideo) }, onMoreClick = { onTrackInfoClick(mostViewedVideo) }, horizontalPadding = 16.dp)
+                                }
+                            } else if (state.videos.isEmpty() && !state.isLoading) {
+                                item(key = "home_hero_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                            }
+                            if (forYouVideos.isNotEmpty()) {
+                                item(key = "home_foryou_title") {
+                                    Text(text = "Para você", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+                                }
+                                item(key = "home_foryou_row") {
+                                    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        items(forYouVideos, key = { "fy_" + it.id }) { video ->
+                                            // FIX20 - Box 300dp por fora: VzVideoCard faz fillMaxWidth() por dentro, entao width direto nele seria ignorado.
+                                            Box(Modifier.width(300.dp)) {
+                                                val pv = nowPlaying.playbackOf(video)
+                                                VzVideoCard(track = video, isPlaying = pv.isPlaying, isPaused = pv.isPaused, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }, horizontalPadding = 0.dp)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            item(key = "home_videos_header") {
+                                SectionHeaderArrow(title = "Vídeos", onArrowClick = { selectedChannelTab = 1; channelSort = 0; scope.launch { listState.scrollToItem(1) } })
+                            }
+                            if (state.videos.isNotEmpty()) {
+                                itemsIndexed(state.videos.take(homeVideosVisible), key = { _, v -> "hv_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
+                            } else {
+                                item(key = "home_videos_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
+                            }
+                            if (homeVideosVisible < state.videos.size || state.channelVideosHasMore) {
+                                item(key = "home_videos_expand") {
+                                    Box(
+                                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable {
+                                            if (homeVideosVisible < state.videos.size) homeVideosVisible += 4 else onLoadMoreChannelVideos()
+                                        }.padding(vertical = 10.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(imageVector = VzIcons.ExpandMore, contentDescription = "Mostrar mais vídeos", tint = Color.White, modifier = Modifier.size(24.dp))
+                                    }
+                                }
+                            }
+                            item(key = "home_top_header") {
+                                SectionHeaderArrow(title = "Vídeos mais acessados", onArrowClick = { selectedChannelTab = 1; channelSort = 1; scope.launch { listState.scrollToItem(1) } })
+                            }
+                            if (topVideosSorted.isNotEmpty()) {
+                                itemsIndexed(topVideosSorted.take(homeTopVideosVisible), key = { _, v -> "ht_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
+                            } else {
+                                item(key = "home_top_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
+                            }
+                            if (homeTopVideosVisible < topVideosSorted.size || state.channelVideosHasMore) {
+                                item(key = "home_top_expand") {
+                                    Box(
+                                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable {
+                                            if (homeTopVideosVisible < topVideosSorted.size) homeTopVideosVisible += 4 else onLoadMoreChannelVideos()
+                                        }.padding(vertical = 10.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(imageVector = VzIcons.ExpandMore, contentDescription = "Mostrar mais vídeos em alta", tint = Color.White, modifier = Modifier.size(24.dp))
+                                    }
+                                }
+                            }
+                            item(key = "home_playlists_header") {
+                                SectionHeaderArrow(title = "Playlists", onArrowClick = { selectedChannelTab = 2; scope.launch { listState.scrollToItem(1) } })
+                            }
+                            if (state.channelPlaylists.isNotEmpty()) {
+                                itemsIndexed(state.channelPlaylists.take(homePlaylistsVisible), key = { _, pl -> "hp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
+                            } else {
+                                item(key = "home_playlists_empty") { Text(text = "Nenhuma playlist ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
+                            }
+                            if (homePlaylistsVisible < state.channelPlaylists.size || state.channelPlaylistsHasMore) {
+                                item(key = "home_playlists_expand") {
+                                    Box(
+                                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable {
+                                            if (homePlaylistsVisible < state.channelPlaylists.size) homePlaylistsVisible += 4 else onLoadMoreChannelPlaylists()
+                                        }.padding(vertical = 10.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(imageVector = VzIcons.ExpandMore, contentDescription = "Mostrar mais playlists", tint = Color.White, modifier = Modifier.size(24.dp))
+                                    }
+                                }
+                            }
+                        } else if (selectedChannelTab == 1) {
+                            item(key = "channel_chips") {
+                                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (channelSort == 0) Color.White else Color.White.copy(alpha = 0.12f)).clickable { channelSort = 0 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                        Text(text = "Mais recentes", style = MaterialTheme.typography.labelLarge, color = if (channelSort == 0) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (channelSort == 1) Color.White else Color.White.copy(alpha = 0.12f)).clickable { channelSort = 1 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                        Text(text = "Em alta", style = MaterialTheme.typography.labelLarge, color = if (channelSort == 1) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (channelSort == 2) Color.White else Color.White.copy(alpha = 0.12f)).clickable { channelSort = 2 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                        Text(text = "Mais antigos", style = MaterialTheme.typography.labelLarge, color = if (channelSort == 2) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                            item(key = "channel_chips_space") { Spacer(Modifier.height(8.dp)) }
+                            if (state.videos.isNotEmpty()) {
+                                itemsIndexed(sortedVideos, key = { _, v -> "cv_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
+                            } else {
+                                item(key = "channel_videos_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                            }
+                            if (state.channelVideosHasMore && channelSort != 2) {
+                                item(key = "channel_load_more") {
+                                    Box(
+                                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.12f)).clickable { onLoadMoreChannelVideos() }.padding(vertical = 14.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(text = if (state.isLoadingMoreChannelVideos) "Carregando..." else "Buscar mais", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        } else {
+                            if (state.channelPlaylists.isNotEmpty()) {
+                                itemsIndexed(state.channelPlaylists, key = { _, pl -> "cp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
+                            } else {
+                                item(key = "channel_playlists_empty") { Text(text = "Nenhuma playlist ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                            }
+                            if (state.channelPlaylistsHasMore) {
+                                item(key = "channel_playlists_load_more") {
+                                    Box(
+                                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.12f)).clickable { onLoadMoreChannelPlaylists() }.padding(vertical = 14.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(text = if (state.isLoadingMoreChannelPlaylists) "Carregando..." else "Buscar mais", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+'''
+        t = t[:start] + new_block + t[end:]
+        ok("ArtistScreen: bloco canal substituido (Inicio | Videos | Playlists, sem Shorts)")
+    write(p, t)
+
+# ============ AppNavHost ============
+p = "app/src/main/kotlin/com/vztechcore/vztune/ui/navigation/AppNavHost.kt"
+t = read(p)
+if t is None:
+    warn("AppNavHost nao achado")
+else:
+    idx = t.find("composable<Routes.Artist>")
+    if idx == -1:
+        warn("AppNavHost: composable<Routes.Artist> nao achado")
+    else:
+        seg_end = t.find("composable<Routes.ArtistList>", idx)
+        if seg_end == -1: seg_end = idx + 5000
+        seg = t[idx:seg_end]
+        has_videos = "onLoadMoreChannelVideos" in seg
+        has_playlists = "onLoadMoreChannelPlaylists" in seg
+        if has_videos and has_playlists:
+            ok("AppNavHost: Buscar mais ja ligado")
+        else:
+            m = re.search(r"(onSeeAllClick[\s\S]*?\},\s*\n)(\s*\))", seg)
+            if m:
+                add = ""
+                if not has_videos: add += "                            onLoadMoreChannelVideos = vm::loadMoreChannelVideos,\n"
+                if not has_playlists: add += "                            onLoadMoreChannelPlaylists = vm::loadMoreChannelPlaylists,\n"
+                seg2 = seg[:m.start(2)] + add + seg[m.start(2):]
+                t = t[:idx] + seg2 + t[seg_end:]
+                write(p, t)
+                ok("AppNavHost: Buscar mais ligado (videos + playlists)")
+            else:
+                warn("AppNavHost: fechamento ArtistScreen nao achado")
+print("FIX20 OK")
+PYEOF
+

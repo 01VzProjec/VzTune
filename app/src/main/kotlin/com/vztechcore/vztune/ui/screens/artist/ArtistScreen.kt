@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +52,7 @@ import com.vztechcore.vztune.ui.components.cards.CoverCard
 import com.vztechcore.vztune.ui.components.cards.TrackListRow
 import com.vztechcore.vztune.ui.components.cards.ChannelPlaylistCard
 import com.vztechcore.vztune.ui.components.cards.ChannelVideoCard
+import com.vztechcore.vztune.ui.components.cards.VzVideoCard
 import com.vztechcore.vztune.ui.components.cards.PlaylistOptionsSheet
 import com.vztechcore.vztune.ui.components.cards.ShortsGridRows
 import com.vztechcore.vztune.ui.components.cards.ShortsOptionsSheet
@@ -71,8 +73,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import com.vztechcore.vztune.ui.icons.VzIcons
+import kotlinx.coroutines.launch
 import com.vztechcore.vztune.ui.icons.actions.ArrowForward
 import com.vztechcore.vztune.ui.icons.actions.ChevronRight
+import com.vztechcore.vztune.ui.icons.actions.ExpandMore
 import com.vztechcore.vztune.ui.icons.player.Play
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.border
@@ -119,6 +123,7 @@ fun ArtistScreen(
     onPlaylistAddToQueue: (Playlist) -> Unit = {},
     onSavePlaylistToLibrary: (Playlist) -> Unit = {},
     onLoadMoreChannelVideos: () -> Unit = {},
+    onLoadMoreChannelPlaylists: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -128,6 +133,11 @@ fun ArtistScreen(
     var channelSort by remember { mutableStateOf(0) } // 0 = Mais recentes, 1 = Em alta, 2 = Mais antigos
     var channelDescExpanded by remember { mutableStateOf(false) }
     var playlistMenu by remember { mutableStateOf<Playlist?>(null) }
+    val scope = rememberCoroutineScope()
+    // FIX20 - Inicio: quantos mostrar em cada secao (4+4 infinito). Comeca em 4.
+    var homeVideosVisible by remember { mutableStateOf(4) }
+    var homeTopVideosVisible by remember { mutableStateOf(4) }
+    var homePlaylistsVisible by remember { mutableStateOf(4) }
 
     // Fundo sempre preto AMOLED - camaleao desativado por enquanto
 

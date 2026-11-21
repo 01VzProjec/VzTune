@@ -79,7 +79,7 @@ class ArtistViewModel @Inject constructor(
                         videos = music.videos, videosMore = music.videosMore,
                         featured = music.featured, featuredMore = music.featuredMore,
                         relatedArtists = music.relatedArtists,
-                        shorts = emptyList(), channelPlaylists = channel?.playlists ?: emptyList(), bannerUrl = null, isYouTubeChannel = false,
+                        shorts = emptyList(), channelPlaylists = emptyList(), bannerUrl = null, isYouTubeChannel = false,
                     )
                 }
                 return@launch
@@ -98,7 +98,7 @@ class ArtistViewModel @Inject constructor(
                         singles = emptyList(), singlesMore = null,
                         videos = channel.videos, videosMore = null,
                         featured = emptyList(), featuredMore = null, relatedArtists = emptyList(),
-                        shorts = emptyList(), channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true,
+                        shorts = channel.shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true,
                     )
                 }
                 return@launch

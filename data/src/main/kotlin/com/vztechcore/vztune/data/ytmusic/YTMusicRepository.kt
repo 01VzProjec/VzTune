@@ -539,13 +539,27 @@ class YTMusicRepository @Inject constructor(
 
             val parsed = YTMusicArtistParser.parseArtistPage(browseId, json)
 
+            // FIX16: YT Music manda so 5 musicas na pagina do artista. O slide e 4 fileiras de 4 = 16.
+            // Se ainda falta, busca a pagina "ver tudo" (songsMore) e completa ate 16, sem repetir.
+            var topSongs16 = parsed.topSongs
+            if (topSongs16.size < 16 && parsed.songsMore != null) {
+                val more = runCatching { browseArtistList(ArtistListKind.SONGS, parsed.name, parsed.songsMore, null) }.getOrNull()
+                if (more != null) {
+                    topSongs16 = (topSongs16 + more.tracks).distinctBy { it.id }.take(16)
+                    if (topSongs16.size < 16 && more.continuation != null) {
+                        val more2 = runCatching { browseArtistList(ArtistListKind.SONGS, parsed.name, parsed.songsMore, more.continuation) }.getOrNull()
+                        if (more2 != null) topSongs16 = (topSongs16 + more2.tracks).distinctBy { it.id }.take(16)
+                    }
+                }
+            }
+
             ArtistResult(
                 browseId = parsed.browseId,
                 name = parsed.name,
                 thumbnailUrl = parsed.thumbnailUrl,
                 subscribers = parsed.subscribers,
                 description = parsed.description,
-                topSongs = parsed.topSongs,
+                topSongs = topSongs16,
                 albums = parsed.albums,
                 singles = parsed.singles,
                 relatedArtists = parsed.relatedArtists,

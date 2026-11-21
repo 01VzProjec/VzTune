@@ -175,7 +175,7 @@ fun ArtistHeader(
 }
 
 /**
- * Foto quadrada 1:1, Crop pra nunca esticar, com fade pra preto embaixo.
+ * Foto quadrada 1:1, FillBounds (esticada, sem zoom, sem cortar), com fade pra preto embaixo.
  * Sem foto, ícone grande no fundo preto.
  */
 @Composable
@@ -206,7 +206,7 @@ private fun ArtistPhoto(imageUrl: String?, name: String) {
     AsyncImage(
         model = request,
         contentDescription = name,
-        contentScale = ContentScale.Crop,
+        contentScale = ContentScale.FillBounds,
         alignment = Alignment.Center,
         modifier = Modifier
             .fillMaxSize()

@@ -74,6 +74,17 @@ import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.ArrowForward
 import com.vztechcore.vztune.ui.icons.actions.ChevronRight
 import com.vztechcore.vztune.ui.icons.player.Play
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.border
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import com.vztechcore.vztune.ui.icons.actions.ArrowBackIos
+import com.vztechcore.vztune.ui.icons.actions.Check
+import com.vztechcore.vztune.ui.icons.actions.MoreVert
+import com.vztechcore.vztune.ui.icons.actions.StarFilled
+import com.vztechcore.vztune.ui.icons.media.Groups
+import com.vztechcore.vztune.ui.icons.navigation.Search
+import com.vztechcore.vztune.ui.screens.medialist.MediaListCircleButton
 
 private val RowPadding = PaddingValues(horizontal = 16.dp)
 private val CoverWidth = 160.dp
@@ -113,6 +124,8 @@ fun ArtistScreen(
     val isCollapsed by rememberHeaderCollapsed(listState)
     val nowPlaying = LocalNowPlaying.current
     var selectedChannelTab by remember { mutableStateOf(0) }
+    var channelSort by remember { mutableStateOf(0) } // 0 = Mais recentes, 1 = Em alta, 2 = Mais antigos
+    var channelDescExpanded by remember { mutableStateOf(false) }
     var playlistMenu by remember { mutableStateOf<Playlist?>(null) }
 
     // Fundo sempre preto AMOLED - camaleao desativado por enquanto
@@ -147,14 +160,27 @@ fun ArtistScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
             item(key = "header") {
-                ArtistHeader(
-                    state = state,
-                    accent = Color.Black,
-                    onBackClick = onBackClick,
-                    onRandomClick = onRandomClick,
-                    onFollowClick = onFollowClick,
-                    onShareClick = onShareClick,
-                )
+                if (state.isYouTubeChannel) {
+                    ChannelHeader(
+                        state = state,
+                        selectedTab = selectedChannelTab,
+                        onTabSelected = { selectedChannelTab = it },
+                        descExpanded = channelDescExpanded,
+                        onDescClick = { channelDescExpanded = !channelDescExpanded },
+                        onBackClick = onBackClick,
+                        onFollowClick = onFollowClick,
+                        onShareClick = onShareClick,
+                    )
+                } else {
+                    ArtistHeader(
+                        state = state,
+                        accent = Color.Black,
+                        onBackClick = onBackClick,
+                        onRandomClick = onRandomClick,
+                        onFollowClick = onFollowClick,
+                        onShareClick = onShareClick,
+                    )
+                }
             }
 
             when {
@@ -183,35 +209,73 @@ fun ArtistScreen(
                     val isChannel = !hasMusic
 
                     if (isChannel) {
-                        // ---------- CANAL: abas Videos | Playlists (sem Shorts) ----------
-                        item(key = "channel_tabs") {
-                            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                // Sem forEach: weight() so existe direto dentro do Row. Dentro de forEach o RowScope some e o weight nao resolve.
-                                Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (selectedChannelTab == 0) Color.White else Color.Transparent).clickable { selectedChannelTab = 0 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
-                                    Text(text = "Vídeos", style = MaterialTheme.typography.labelLarge, color = if (selectedChannelTab == 0) Color.Black else Color.White, fontWeight = FontWeight.Bold)
-                                }
-                                Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (selectedChannelTab == 1) Color.White else Color.Transparent).clickable { selectedChannelTab = 1 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
-                                    Text(text = "Playlists", style = MaterialTheme.typography.labelLarge, color = if (selectedChannelTab == 1) Color.Black else Color.White, fontWeight = FontWeight.Bold)
-                                }
-                            }
+                        // ---------- CANAL novo: igual a foto do YouTube, tema VzTune ----------
+                        // Cabecalho (banner, avatar, botoes, abas) ja esta no ChannelHeader la em cima.
+                        // Aqui so vai: chips (so na aba Videos) + conteudo da aba.
+                        val sortedVideos = when (channelSort) {
+                            1 -> state.videos.sortedByDescending { it.viewCount ?: 0 }
+                            2 -> state.videos.reversed()
+                            else -> state.videos
                         }
-                        item(key = "channel_tabs_space") { Spacer(Modifier.height(16.dp)) }
-                        if (selectedChannelTab == 0) {
-                            if (state.videos.isNotEmpty()) {
-                                itemsIndexed(state.videos, key = { _, v -> "cv_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
-                            } else {
-                                item(key = "channel_videos_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                        if (selectedChannelTab == 1) {
+                            item(key = "channel_chips") {
+                                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    // Sem forEach: weight() so existe direto dentro do Row.
+                                    val chips = listOf("Mais recentes", "Em alta", "Mais antigos")
+                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (channelSort == 0) Color.White else Color.White.copy(alpha = 0.12f)).clickable { channelSort = 0 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                        Text(text = chips[0], style = MaterialTheme.typography.labelLarge, color = if (channelSort == 0) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (channelSort == 1) Color.White else Color.White.copy(alpha = 0.12f)).clickable { channelSort = 1 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                        Text(text = chips[1], style = MaterialTheme.typography.labelLarge, color = if (channelSort == 1) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                    Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (channelSort == 2) Color.White else Color.White.copy(alpha = 0.12f)).clickable { channelSort = 2 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                        Text(text = chips[2], style = MaterialTheme.typography.labelLarge, color = if (channelSort == 2) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                             }
-                        } else {
-                            if (state.channelPlaylists.isNotEmpty()) {
-                                itemsIndexed(state.channelPlaylists, key = { _, pl -> "cp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
-                            } else {
-                                item(key = "channel_playlists_empty") { Text(text = "Nenhuma playlist ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                            item(key = "channel_chips_space") { Spacer(Modifier.height(8.dp)) }
+                        }
+                        when (selectedChannelTab) {
+                            0 -> {
+                                // Inicio: lista de videos (igual a foto, thumb esquerda + titulo + views)
+                                if (state.videos.isNotEmpty()) {
+                                    itemsIndexed(state.videos, key = { _, v -> "cv_home_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
+                                } else {
+                                    item(key = "channel_home_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                                }
+                            }
+                            1 -> {
+                                if (sortedVideos.isNotEmpty()) {
+                                    itemsIndexed(sortedVideos, key = { _, v -> "cv_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
+                                } else {
+                                    item(key = "channel_videos_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                                }
+                            }
+                            2 -> {
+                                if (state.shorts.isNotEmpty()) {
+                                    item(key = "channel_shorts_grid") { ShortsGridRows(tracks = state.shorts, onClick = { onVideoClick(it) }, onMoreClick = { onTrackInfoClick(it) }) }
+                                } else {
+                                    item(key = "channel_shorts_empty") { Text(text = "Nenhum Short ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                                }
+                            }
+                            3 -> {
+                                item(key = "channel_live_empty") { Text(text = "Nenhuma transmissão ao vivo", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                            }
+                            4 -> {
+                                if (state.channelPlaylists.isNotEmpty()) {
+                                    itemsIndexed(state.channelPlaylists, key = { _, pl -> "cp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
+                                } else {
+                                    item(key = "channel_playlists_empty") { Text(text = "Nenhuma playlist ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                                }
+                            }
+                            else -> {
+                                item(key = "channel_posts_empty") { Text(text = "Nenhum post ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
                             }
                         }
                         item(key = "channel_space") { Spacer(Modifier.height(SectionGap)) }
                         item(key = "description") { ArtistDescription(description = state.description) }
                     } else {
+                        
                         // ---------- ARTISTA: so Home, sem abas ----------
                         // 1) Musicas populares: slide de 4 por pagina + Tocar tudo + >
                         if (state.topSongs.isNotEmpty()) {
@@ -271,21 +335,7 @@ fun ArtistScreen(
                             }
                             item(key = "videos_space") { Spacer(Modifier.height(SectionGap)) }
                         }
-                        // 5) Playlists do canal (YouTube) - separado do Destacado (featured do YT Music)
-                        if (state.channelPlaylists.isNotEmpty()) {
-                            item(key = "channel_playlists_header") {
-                                SectionHeaderArrow(title = "Playlists")
-                            }
-                            item(key = "channel_playlists_row") {
-                                LazyRow(contentPadding = RowPadding, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    items(state.channelPlaylists, key = { it.id }) { playlist ->
-                                        CoverCard(title = playlist.title, subtitle = playlist.owner, imageUrl = playlist.thumbnailUrl, onClick = { onPlaylistClick(playlist) }, modifier = Modifier.width(CoverWidth))
-                                    }
-                                }
-                            }
-                            item(key = "channel_playlists_space") { Spacer(Modifier.height(SectionGap)) }
-                        }
-                        // 6) Artistas relacionados: foto, nome, ouvintes mensais
+                                                // 6) Artistas relacionados: foto, nome, ouvintes mensais
                         if (state.relatedArtists.isNotEmpty()) {
                             item(key = "related_header") {
                                 SectionHeaderArrow(title = "Artistas relacionados")
@@ -425,7 +475,144 @@ private fun SectionHeaderArrow(
 
 /** Slide de Musicas populares: 4 faixas por pagina, arrasta da direita pra esquerda pra proxima fileira de 4. */
 @Composable
-private fun SongsSlide(
+private 
+/**
+ * Cabecalho do canal igual a foto do YouTube, mas no tema VzTune (preto AMOLED).
+ * Banner 16:9 arredondado, avatar redondo, nome + selo, @handle, inscritos • videos,
+ * descricao com ...mais, botoes Inscrever-se / Seja membro / Comunidade,
+ * abas Inicio | Videos | Shorts | Ao vivo | Playlists | Posts.
+ */
+@Composable
+private fun ChannelHeader(
+    state: ArtistUiState,
+    selectedTab: Int,
+    onTabSelected: (Int) -> Unit,
+    descExpanded: Boolean,
+    onDescClick: () -> Unit,
+    onBackClick: () -> Unit,
+    onFollowClick: () -> Unit,
+    onShareClick: () -> Unit,
+) {
+    val handle = "@" + state.name.replace(" ", "").lowercase()
+    val subsVideos = listOfNotNull(
+        state.subscribers?.takeIf { it.isNotBlank() },
+        if (state.videos.isNotEmpty()) state.videos.size.toString() + " vídeos" else null,
+    ).joinToString(" • ")
+    val tabs = listOf("Início", "Vídeos", "Shorts", "Ao vivo", "Playlists", "Posts")
+    Column(
+        Modifier.fillMaxWidth().background(Color.Black)
+    ) {
+        // Barra de cima: voltar | buscar | mais (igual a foto)
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MediaListCircleButton(VzIcons.ArrowBackIos, "Voltar", onBackClick)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Buscar dentro do canal ainda nao tem tela, deixa visual igual a foto por enquanto.
+                MediaListCircleButton(VzIcons.Search, "Buscar", {})
+                MediaListCircleButton(VzIcons.MoreVert, "Mais", onShareClick)
+            }
+        }
+        // Banner 16:9 arredondado, FillBounds pra nao dar zoom. Sem banner = faixa preta.
+        Box(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.06f))
+        ) {
+            if (!state.bannerUrl.isNullOrBlank()) {
+                AsyncImage(model = state.bannerUrl, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
+            }
+        }
+        // Avatar + nome + @ + inscritos
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(80.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
+            ) {
+                if (!state.thumbnailUrl.isNullOrBlank()) {
+                    AsyncImage(model = state.thumbnailUrl, contentDescription = state.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                }
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = state.name, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Spacer(Modifier.width(6.dp))
+                    Box(Modifier.size(20.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
+                        Icon(imageVector = VzIcons.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(text = handle, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (subsVideos.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(text = subsVideos, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+        // Descricao com ...mais (clica pra expandir)
+        if (!state.description.isNullOrBlank()) {
+            val shown = if (descExpanded) state.description else state.description.take(110) + if (state.description.length > 110) "...mais" else ""
+            Text(
+                text = shown,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.7f),
+                maxLines = if (descExpanded) 10 else 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clickable { onDescClick() },
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+        // Botoes: Inscrever-se (branco) | Seja membro (cinza) | Comunidade (cinza)
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(
+                Modifier.clip(RoundedCornerShape(50)).background(if (state.isFollowing) Color.White.copy(alpha = 0.12f) else Color.White).border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(50)).clickable { onFollowClick() }.padding(horizontal = 20.dp, vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(text = if (state.isFollowing) "Inscrito" else "Inscrever-se", style = MaterialTheme.typography.labelLarge, color = if (state.isFollowing) Color.White else Color.Black, fontWeight = FontWeight.Bold)
+            }
+            Box(
+                Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.12f)).clickable { }.padding(horizontal = 16.dp, vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(imageVector = VzIcons.StarFilled, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Text(text = "Seja membro", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+            Box(
+                Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.12f)).clickable { }.padding(horizontal = 16.dp, vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(imageVector = VzIcons.Groups, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Text(text = "Comunidade", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        // Abas igual a foto, com sublinhado na selecionada
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
+            itemsIndexed(tabs) { index, tab ->
+                Column(Modifier.clickable { onTabSelected(index) }.padding(bottom = 8.dp)) {
+                    Text(text = tab, style = MaterialTheme.typography.titleSmall, color = if (selectedTab == index) Color.White else Color.White.copy(alpha = 0.6f), fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal)
+                    Spacer(Modifier.height(6.dp))
+                    Box(Modifier.fillMaxWidth().height(2.dp).background(if (selectedTab == index) Color.White else Color.Transparent))
+                }
+            }
+        }
+    }
+}
+
+fun SongsSlide(
     tracks: List<Track>,
     onSongClick: (Track) -> Unit,
     onTrackInfoClick: (Track) -> Unit,

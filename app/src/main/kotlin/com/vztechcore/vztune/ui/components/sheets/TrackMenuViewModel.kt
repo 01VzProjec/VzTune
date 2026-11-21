@@ -199,8 +199,7 @@ class TrackMenuViewModel @Inject constructor(
             // StreamExtractor.uploaderUrl = quem POSTOU o video (fonte da verdade).
             // InnerTube.player com cliente YTMUSIC devolve a MUSICA do video,
             // nao quem postou (video do gamer Jazzghost com musica "Jazzghost"
-            // do Moldrin -> devolvia UC do Moldrin). So usa InnerTube se o
-            // NewPipe falhar.
+            // do Moldrin -> devolvia UC do Moldrin). Nunca usa InnerTube aqui.
             val channel = runCatching { youTubeRepository.getChannelForVideo(track.id) }.getOrNull()
             if (channel != null) {
                 _navigationEvent.emit(
@@ -215,11 +214,8 @@ class TrackMenuViewModel @Inject constructor(
                 )
                 return@launch
             }
-            val fromInnerTube = runCatching { ytMusicRepository.getArtistFromVideo(track.id) }.getOrNull()
-            if (fromInnerTube != null) {
-                _navigationEvent.emit(MenuNavigationEvent.OpenArtist(fromInnerTube))
-                return@launch
-            }
+            // FIX19 - Sem fallback pro InnerTube: conteudo NewPipe fica SO no YouTube.
+            // InnerTube player com cliente YTMUSIC devolve a MUSICA do video (ex: video do canal 'th' com musica do artista 'TH' -> UC do TH), nao quem postou. Sem canal NewPipe = nao navega.
             // channel == null -> não navega. A UI já mostra "Ir para o canal" só pra
             // vídeos do YouTube; sem canal real não há pra onde ir.
         }

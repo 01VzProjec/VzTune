@@ -370,7 +370,7 @@ class MediaListViewModel @Inject constructor(
             viewModelScope.launch {
                 _navigationEvent.emit(
                     NavigationEvent.OpenArtist(
-                        Artist(id = directId, name = artistName, thumbnailUrl = state.ownerAvatarUrl, source = Source.YOUTUBE_MUSIC)
+                        Artist(id = directId, name = artistName, thumbnailUrl = state.ownerAvatarUrl, source = if (isYouTubePlaylist(state)) Source.YOUTUBE else Source.YOUTUBE_MUSIC)
                     )
                 )
             }
@@ -384,7 +384,7 @@ class MediaListViewModel @Inject constructor(
                     _uiState.update { it.copy(artistId = channel.channelId, ownerAvatarUrl = channel.avatarUrl ?: it.ownerAvatarUrl) }
                     _navigationEvent.emit(
                         NavigationEvent.OpenArtist(
-                            Artist(id = channel.channelId, name = channel.channelName.ifBlank { artistName ?: "Canal" }, thumbnailUrl = channel.avatarUrl ?: state.ownerAvatarUrl, source = Source.YOUTUBE_MUSIC)
+                            Artist(id = channel.channelId, name = channel.channelName.ifBlank { artistName ?: "Canal" }, thumbnailUrl = channel.avatarUrl ?: state.ownerAvatarUrl, source = Source.YOUTUBE)
                         )
                     )
                 }

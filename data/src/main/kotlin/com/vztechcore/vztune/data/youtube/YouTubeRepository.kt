@@ -843,7 +843,20 @@ class YouTubeRepository @Inject constructor(
 
     // FIX8_BROWSE_CHANNEL - Canal grande abre mesmo se UU vier vazio. Aceita UC, @handle e URL.
     // Antes: se UU viesse vazio, retornava null e a tela mostrava erro. Agora: retorna cabecalho + tenta 3 fontes.
-    suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext(Dispatchers.IO) {
+        // FIX19 - So aceita conteudo do MESMO criador. Normaliza: minusculo, sem " - Topic", sem espacos extras.
+    // "TH" vs "TH - Topic" = mesmo criador. "th" vs "TH2" / "The ..." = criador diferente, descarta.
+    private fun isSameCreator(owner: String?, channelName: String): Boolean {
+        if (owner.isNullOrBlank() || channelName.isBlank()) return false
+        fun norm(s: String): String {
+            var v = s.trim().lowercase()
+            if (v.endsWith(" - topic")) v = v.removeSuffix(" - topic").trim()
+            if (v.endsWith("- topic")) v = v.removeSuffix("- topic").trim()
+            return v.replace(Regex("\\s+"), " ").trim()
+        }
+        return norm(owner) == norm(channelName)
+    }
+
+suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext(Dispatchers.IO) {
         if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
         val input = channelIdOrHandle.trim()
         if (input.isBlank()) return@withContext null
@@ -911,7 +924,7 @@ class YouTubeRepository @Inject constructor(
             videos = runCatching {
                 val ex = ServiceList.YouTube.getSearchExtractor(channelName, listOf("videos"), null)
                 ex.fetchPage()
-                parseVideoItems(ex.initialPage.items).map { it.track }.filter { it.artist.contains(channelName, ignoreCase = true) || channelName.contains(it.artist, ignoreCase = true) }.take(20)
+                parseVideoItems(ex.initialPage.items).map { it.track }.filter { isSameCreator(it.artist, channelName) }.take(20)
             }.getOrDefault(emptyList())
         }
         // Shorts do canal: tenta /shorts como playlist, se falhar busca Shorts pelo nome
@@ -934,7 +947,7 @@ class YouTubeRepository @Inject constructor(
             }.getOrDefault(emptyList())
         }
         if (shorts.isEmpty() && channelName.isNotBlank()) {
-            shorts = runCatching { searchShorts(channelName, loadMore = false, pageSize = 30, searchId = "channel:$uc").items.map { it.track }.filter { isRealShort(it) } }.getOrDefault(emptyList())
+            shorts = runCatching { searchShorts(channelName, loadMore = false, pageSize = 30, searchId = "channel:$uc").items.map { it.track }.filter { isSameCreator(it.artist, channelName) && isRealShort(it) } }.getOrDefault(emptyList())
         }
         // Playlists do canal: tenta /playlists como pagina, fallback busca por nome do canal.
         var channelPlaylists: List<Playlist> = emptyList()
@@ -944,12 +957,13 @@ class YouTubeRepository @Inject constructor(
                 pl.fetchPage()
                 pl.initialPage.items.filterIsInstance<PlaylistInfoItem>().mapNotNull { item ->
                     val pid = Regex("list=([^&]+)").find(item.url ?: "")?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    Playlist(id = pid, title = item.name ?: "Playlist", owner = channelName, thumbnailUrl = item.thumbnails.lastOrNull()?.url, trackCount = item.streamCount.takeIf { it > 0 }?.toInt(), source = Source.YOUTUBE)
+                    if (!item.uploaderName.isNullOrBlank() && !isSameCreator(item.uploaderName, channelName)) return@mapNotNull null
+                    Playlist(id = pid, title = item.name ?: "Playlist", owner = item.uploaderName?.takeIf { it.isNotBlank() } ?: channelName, thumbnailUrl = item.thumbnails.lastOrNull()?.url, trackCount = item.streamCount.takeIf { it > 0 }?.toInt(), source = Source.YOUTUBE)
                 }
             }.getOrDefault(emptyList())
         }
         if (channelPlaylists.isEmpty() && channelName.isNotBlank()) {
-            channelPlaylists = runCatching { searchPlaylists(channelName, loadMore = false, pageSize = 12, searchId = "channelPlaylists:$uc").map { it.playlist } }.getOrDefault(emptyList())
+            channelPlaylists = runCatching { searchPlaylists(channelName, loadMore = false, pageSize = 12, searchId = "channelPlaylists:$uc").map { it.playlist }.filter { isSameCreator(it.owner, channelName) } }.getOrDefault(emptyList())
         }
         ChannelPage(
             videos = videos,

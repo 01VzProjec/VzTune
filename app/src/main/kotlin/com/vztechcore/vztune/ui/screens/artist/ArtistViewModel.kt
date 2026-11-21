@@ -12,6 +12,7 @@ import com.vztechcore.vztune.data.prefs.models.StoredTrack
 import com.vztechcore.vztune.data.prefs.store.FollowedArtistsStore
 import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
 import com.vztechcore.vztune.core.domain.music.Playlist
+import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
@@ -58,15 +59,39 @@ class ArtistViewModel @Inject constructor(
     // Antes: se YT Music devolvesse qualquer artista nao-vazio (ex: Moldrin para JazzGhost), mostrava o errado e nunca tentava o canal.
     // FIX14 REBUILD - Regra: tem faixa de musica = ARTISTA (so InnerTube). Sem musica = CANAL (NewPipe).
     // Antes: juntava os dois mundos e o artista caia como canal. Agora nao mistura mais.
+        // FIX19 - Separacao total: quem veio do YouTube fica no YouTube, quem veio do YT Music fica no YT Music.
+    // Antes: carregava os dois mundos e se o YT Music tivesse QUALQUER faixa (mesmo de outro artista com nome parecido, ex: musica "TH" dentro do video do canal "th") mostrava o YT Music e descartava o canal. O YT Music tinha preferencia.
+    // Agora: route.isYouTubeChannel == true -> SO NewPipe browseChannel, sem InnerTube. false -> SO InnerTube browseArtist, sem NewPipe. Sem fallback pro outro mundo.
     private fun loadContent() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            val isChannelId = route.id.startsWith("UC")
-            val channel = if (isChannelId) runCatching { youTubeRepository.browseChannel(route.id) }.getOrNull() else null
+            if (route.isYouTubeChannel) {
+                val channel = runCatching { youTubeRepository.browseChannel(route.id) }.getOrNull()
+                if (channel != null) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false, errorMessage = null,
+                            name = channel.channelName ?: it.name,
+                            thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl,
+                            subscribers = channel.subscriberCount ?: it.subscribers,
+                            description = channel.description ?: it.description,
+                            topSongs = emptyList(), songsMore = null,
+                            albums = emptyList(), albumsMore = null,
+                            singles = emptyList(), singlesMore = null,
+                            videos = channel.videos, videosMore = null,
+                            featured = emptyList(), featuredMore = null, relatedArtists = emptyList(),
+                            shorts = channel.shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true,
+                            channelVideosHasMore = youTubeRepository.hasMoreChannelVideos(route.id), isLoadingMoreChannelVideos = false,
+                        )
+                    }
+                    return@launch
+                }
+                _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar este canal.") }
+                return@launch
+            }
+            // YT Music: SO InnerTube, nunca NewPipe
             val music = runCatching { ytMusicRepository.browseArtist(route.id) }.getOrNull()
-            val hasMusic = music != null && (music.topSongs.isNotEmpty() || music.albums.isNotEmpty() || music.singles.isNotEmpty())
-            if (hasMusic && music != null) {
-                // ARTISTA: somente InnerTube. NewPipe NAO entra, mesmo que tenha canal com mesmo nome.
+            if (music != null && (music.topSongs.isNotEmpty() || music.albums.isNotEmpty() || music.singles.isNotEmpty() || music.videos.isNotEmpty())) {
                 _uiState.update {
                     it.copy(
                         isLoading = false, errorMessage = null,
@@ -84,30 +109,11 @@ class ArtistViewModel @Inject constructor(
                 }
                 return@launch
             }
-            if (channel != null) {
-                // CANAL: sem musica -> NewPipe entra (Videos + Playlists).
-                _uiState.update {
-                    it.copy(
-                        isLoading = false, errorMessage = null,
-                        name = channel.channelName ?: it.name,
-                        thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl,
-                        subscribers = channel.subscriberCount ?: it.subscribers,
-                        description = channel.description ?: it.description,
-                        topSongs = emptyList(), songsMore = null,
-                        albums = emptyList(), albumsMore = null,
-                        singles = emptyList(), singlesMore = null,
-                        videos = channel.videos, videosMore = null,
-                        featured = emptyList(), featuredMore = null, relatedArtists = emptyList(),
-                        shorts = channel.shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true, channelVideosHasMore = youTubeRepository.hasMoreChannelVideos(route.id), isLoadingMoreChannelVideos = false,
-                    )
-                }
-                return@launch
-            }
-            _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar este canal.") }
+            _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar este artista.") }
         }
     }
 
-    /** Tocar tudo: toca todas as musicas do artista em ordem (nao embaralhado). */
+/** Tocar tudo: toca todas as musicas do artista em ordem (nao embaralhado). */
     fun onPlayAllClick() {
         val songs = _uiState.value.topSongs
         if (songs.isEmpty()) return
@@ -161,7 +167,11 @@ class ArtistViewModel @Inject constructor(
     }
 
 
-    private suspend fun loadChannelPlaylistTracks(playlist: Playlist): List<Track> {
+        private suspend fun loadChannelPlaylistTracks(playlist: Playlist): List<Track> {
+        // FIX19 - Playlist do canal: YouTube -> NewPipe, YT Music -> InnerTube. Nunca cruza.
+        if (playlist.source == Source.YOUTUBE) {
+            return runCatching { youTubeRepository.getYouTubePlaylistTracks(playlist.id) }.getOrDefault(emptyList())
+        }
         return runCatching { ytMusicRepository.browsePlaylist(playlist.id).tracks }.getOrDefault(emptyList())
     }
 

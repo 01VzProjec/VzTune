@@ -226,9 +226,9 @@ fun TrackOptionsSheet(
         onClick = { onToggleFavorite(track); onDismiss() },
     )
     // 3. Reproduzir como proxima faixa
-    SheetOptionRow(icon = VzIcons.PlayNext, label = "Reproduzir como proxima faixa", subtitle = "Toca logo depois da atual", onClick = { onPlayNext(track); onDismiss() })
+    SheetOptionRow(icon = VzIcons.AddToQueue, label = "Reproduzir como proxima faixa", subtitle = "Toca logo depois da atual", onClick = { onPlayNext(track); onDismiss() })
     // 4. Adicionar a fila
-    SheetOptionRow(icon = VzIcons.AddToQueue, label = "Adicionar a fila", subtitle = "Toca no final da fila", onClick = { onAddToQueue(track); onDismiss() })
+    SheetOptionRow(icon = VzIcons.PlayNext, label = "Adicionar a fila", subtitle = "Toca no final da fila", onClick = { onAddToQueue(track); onDismiss() })
     // 5. Iniciar radio
     SheetOptionRow(icon = VzIcons.Radio, label = "Iniciar radio", subtitle = "Baseada nesta faixa", onClick = { onStartRadio(track); onDismiss() })
     // 6. Ir para o album

@@ -63,6 +63,7 @@ class SearchViewModel @Inject constructor(
         ) : NavigationEvent
         data class OpenArtist(
             val id: String, val name: String, val thumbnailUrl: String?,
+            val isYouTubeChannel: Boolean = false,
         ) : NavigationEvent
     }
 
@@ -364,14 +365,10 @@ class SearchViewModel @Inject constructor(
             // nao quem postou (video do canal 'th' com musica do artista 'TH' -> devolvia UC do TH). NewPipe uploaderUrl = quem POSTOU.
             val channel = runCatching { youTubeRepository.getChannelForVideo(track.id) }.getOrNull()
             if (channel != null) {
-                _navigationEvent.emit(NavigationEvent.OpenArtist(channel.channelId, channel.channelName, channel.avatarUrl))
+                _navigationEvent.emit(NavigationEvent.OpenArtist(channel.channelId, channel.channelName, channel.avatarUrl, isYouTubeChannel = true))
                 return@launch
             }
-            val fromInnerTube = runCatching { ytMusicRepository.getArtistFromVideo(track.id) }.getOrNull()
-            if (fromInnerTube != null) {
-                _navigationEvent.emit(NavigationEvent.OpenArtist(fromInnerTube.id, fromInnerTube.name, fromInnerTube.thumbnailUrl))
-                return@launch
-            }
+            // FIX19 - Sem fallback pro InnerTube: conteudo NewPipe fica SO no YouTube. Sem canal NewPipe = nao navega.
             // channel == null -> nao navega. Nunca chuta artista por nome.
         }
     }

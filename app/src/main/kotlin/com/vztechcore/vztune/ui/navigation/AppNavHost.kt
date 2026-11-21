@@ -302,6 +302,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                                             id = event.id,
                                             name = event.name,
                                             thumbnailUrl = event.thumbnailUrl,
+                                            isYouTubeChannel = event.isYouTubeChannel,
                                         )
                                     )
                                     is SearchViewModel.NavigationEvent.OpenAlbum -> navController.navigate(

@@ -1461,7 +1461,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 ytChannelPlaylistContinuations[input] = playlistsCont
                 // FIX PLAYLISTS V5 Path1 - debug NO COMECO, mesmo se falhar mostra o erro.
                 var debugPlV5 = ""
-                if (true) // V7 log sempre {
+                if (playlists.isEmpty()) {
                     runCatching {
                         val dbgJson = InnerTubeYouTube.browse(uc, "EgZwbGF5bGlzdHPyBgQKAkIA")
                         val dbgWhole = YouTubeChannelParser.parsePlaylistsWholeJson(dbgJson, channelName)
@@ -1591,20 +1591,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 Log.w(TAG, "Playlists V3 Path2 whole: ${wholeV3b.size}")
             }.onFailure { Log.w(TAG, "Playlists V3 Path2 whole failed: ${it.message}") }
         }
-        // FIX PLAYLISTS V7 - aba direta com UC resolvido, ANTES da busca por nome.
-        var debugV7Path2 = ""
-        if (uc.startsWith("UC") && uc.length >= 24 && channelName.isNotBlank()) {
-            runCatching {
-                val tabJsonV7 = InnerTubeYouTube.browse(uc, "EgZwbGF5bGlzdHPyBgQKAkIA")
-                val wholeV7 = YouTubeChannelParser.parsePlaylistsWholeJson(tabJsonV7, channelName)
-                val infoV7 = YouTubeChannelParser.debugLockups(tabJsonV7)
-                debugV7Path2 = "[V7 tab UC whole=" + wholeV7.size + " " + infoV7 + "]"
-                if (wholeV7.isNotEmpty()) channelPlaylists = wholeV7
-                Log.w(TAG, "Playlists V7 tab " + debugV7Path2)
-            }.onFailure { debugV7Path2 = "[V7 tab falhou: " + it.message + "]"; Log.w(TAG, "Playlists V7 tab failed: " + (it.message ?: "")) }
-        } else {
-            debugV7Path2 = "[V7 tab pulado: uc=" + uc + " nome=" + channelName + "]"
-        }
+        if (channelPlaylists.isEmpty()) channelPlaylists = fetchPlaylistsTabV7(uc, channelName)
         val playlistQuery = channelName.ifBlank { input.takeIf { it.startsWith("@") }.orEmpty() }
         if (channelPlaylists.isEmpty() && playlistQuery.isNotBlank()) {
             channelPlaylists = runCatching {
@@ -1645,13 +1632,24 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
             avatarUrl = header?.avatar,
             bannerUrl = header?.banner,
             description = header?.description?.takeIf { it.isNotBlank() },
-            debugLog = (debugV7Path2 + " " + debugPlV5Path2.orEmpty()).trim().takeIf { it.isNotBlank() },
+            debugLog = debugPlV5Path2.takeIf { it.isNotBlank() },
             subscriberCount = header?.subs,
             hasMoreVideos = hasMoreChannelVideos(uc),
             hasMorePlaylists = hasMoreChannelPlaylists(uc),
         )
     }
 
+
+    // FIX V7-COMPILE - helper fora do browseChannel, nao mexe nas chaves dele.
+    private suspend fun fetchPlaylistsTabV7(uc: String, channelName: String): List<Playlist> {
+        if (!uc.startsWith("UC") || uc.length < 24 || channelName.isBlank()) return emptyList()
+        return runCatching {
+            val tabJson = InnerTubeYouTube.browse(uc, "EgZwbGF5bGlzdHPyBgQKAkIA")
+            val whole = YouTubeChannelParser.parsePlaylistsWholeJson(tabJson, channelName)
+            Log.w(TAG, "Playlists V7 helper whole=" + whole.size)
+            whole
+        }.getOrDefault(emptyList())
+    }
 
     private fun parseChannelStreams(items: List<*>, channelName: String): List<Track> {
         return items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->

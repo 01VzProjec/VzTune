@@ -39,14 +39,13 @@ object YouTubePlaylistParser {
         return tracks.distinctBy { it.id } to cont
     }
 
-    private fun collectTracks(node: Any?): List<Track> {
+        private fun collectTracks(node: Any?): List<Track> {
         val out = mutableListOf<Track>()
         val renderers = mutableListOf<JSONObject>()
         collect(node, "playlistVideoRenderer", renderers)
         for (r in renderers) {
             val videoId = r.optString("videoId").takeIf { it.isNotBlank() } ?: continue
             val title = YouTubeSearchParser.textOf(r.optJSONObject("title")) ?: continue
-            // Skip deleted / unavailable
             if (title.contains("Deleted video") || title.contains("Vídeo excluído")) continue
             val channel = YouTubeSearchParser.textOf(r.optJSONObject("shortBylineText")) ?: ""
             val thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))
@@ -55,31 +54,53 @@ object YouTubePlaylistParser {
             )
             out += Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE)
         }
-                // Fallback YT Music: playlist via youtube.com pode vir como musicResponsiveListItemRenderer
-        runCatching {
-            val musicItems = mutableListOf<JSONObject>()
-            collect(node, "musicResponsiveListItemRenderer", musicItems)
-            for (r in musicItems) {
-                val vid = extractMusicVideoId(r) ?: continue
-                val title = extractMusicTitle(r) ?: continue
-                val artist = extractMusicArtist(r)
-                val thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))
-                out += Track(id = vid, title = title, artist = artist, durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
+        // Layout 2026: lockupViewModel VIDEO dentro da playlist (mesmo formato da aba Videos)
+        val lockups = mutableListOf<JSONObject>()
+        collect(node, "lockupViewModel", lockups)
+        for (lvm in lockups) {
+            val type = lvm.optString("contentType")
+            if (type != "LOCKUP_CONTENT_TYPE_VIDEO" && type != "LOCKUP_CONTENT_TYPE_STREAM" && type != "") continue
+            val videoId = lvm.optString("contentId").takeIf { it.isNotBlank() } ?: continue
+            val meta = lvm.optJSONObject("metadata")?.optJSONObject("lockupMetadataViewModel")
+            val titleObj = meta?.optJSONObject("title")
+            val title = titleObj?.optString("content")?.takeIf { it.isNotBlank() } ?: YouTubeSearchParser.textOf(titleObj) ?: continue
+            if (title.contains("Deleted video") || title.contains("Vídeo excluído")) continue
+            val thumb = YouTubeSearchParser.lockupThumbnail(lvm)
+            var duration = 0L
+            var channel = ""
+            // metadataRows: primeira parte que nao e views/ago e o canal; badge com ":" e a duracao
+            val rows = meta?.optJSONObject("metadata")?.optJSONObject("contentMetadataViewModel")?.optJSONArray("metadataRows")
+            if (rows != null) {
+                for (i in 0 until rows.length()) {
+                    val parts = rows.optJSONObject(i)?.optJSONArray("metadataParts") ?: continue
+                    for (j in 0 until parts.length()) {
+                        val txt = parts.optJSONObject(j)?.optJSONObject("text")?.optString("content")?.takeIf { it.isNotBlank() } ?: continue
+                        val low = txt.lowercase()
+                        if (low.contains("view") || low.contains("visualiza") || low.contains("ago") || low.contains("há")) continue
+                        if (channel.isBlank()) channel = txt.trim()
+                    }
+                }
             }
-        }
-        // Fallback panel: playlistPanelVideoRenderer
-        runCatching {
-            val panelItems = mutableListOf<JSONObject>()
-            collect(node, "playlistPanelVideoRenderer", panelItems)
-            for (r in panelItems) {
-                val vid = r.optString("videoId").takeIf { it.isNotBlank() } ?: continue
-                val title = YouTubeSearchParser.textOf(r.optJSONObject("title")) ?: continue
-                val artist = YouTubeSearchParser.textOf(r.optJSONObject("shortBylineText")) ?: ""
-                val thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))
-                out += Track(id = vid, title = title, artist = artist, durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
+            // Duracao via badge
+            fun walk(n: Any?) {
+                if (duration != 0L) return
+                when (n) {
+                    is JSONObject -> {
+                        val badge = n.optJSONObject("thumbnailBadgeViewModel")
+                        if (badge != null) {
+                            val txt = badge.optString("text").takeIf { it.isNotBlank() } ?: YouTubeSearchParser.textOf(badge.optJSONObject("text"))
+                            if (txt != null && txt.contains(":")) { duration = YouTubeSearchParser.parseDuration(txt); return }
+                        }
+                        val keys = n.keys()
+                        while (keys.hasNext()) walk(n.opt(keys.next()))
+                    }
+                    is JSONArray -> for (i in 0 until n.length()) walk(n.opt(i))
+                }
             }
+            walk(lvm.optJSONObject("contentImage"))
+            out += Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE)
         }
-return out
+        return out
     }
 
     private fun parseHeaderTitle(json: JSONObject): String? {

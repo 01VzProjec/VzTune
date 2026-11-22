@@ -241,7 +241,7 @@ internal object YTMusicSearchParser {
         when {
             browseId.startsWith("VL") || browseId.startsWith("PL") -> {
                 val cleanBrowseId = YTMusicTextUtils.normalizePlaylistBrowseId(browseId)
-                val owner = extractPlaylistOwner(subtitleCol) ?: subtitle.substringBefore("•").trim().takeIf { it.isNotBlank() && !YTMusicTextUtils.isTypeWord(it) } ?: "Playlist"
+                val owner = extractPlaylistOwner(subtitleCol) ?: playlistOwnerFromSubtitleText(subtitle) ?: "Playlist"
                 out += ParsedItem.Playlist(cleanBrowseId, title, owner, thumb)
             }
             browseId.startsWith("MPREb_") -> {
@@ -268,7 +268,7 @@ internal object YTMusicSearchParser {
             }
             browseId.startsWith("VL") || browseId.startsWith("PL") -> {
                 val cleanBrowseId = YTMusicTextUtils.normalizePlaylistBrowseId(browseId)
-                val owner = extractPlaylistOwner(subtitleCol) ?: subtitle.substringBefore("•").trim().takeIf { it.isNotBlank() && !YTMusicTextUtils.isTypeWord(it) } ?: "Playlist"
+                val owner = extractPlaylistOwner(subtitleCol) ?: playlistOwnerFromSubtitleText(subtitle) ?: "Playlist"
                 out += ParsedItem.Playlist(cleanBrowseId, title, owner, thumb)
             }
             browseId.startsWith("UC") -> out += ParsedItem.Artist(browseId, title, thumb)
@@ -324,19 +324,55 @@ internal object YTMusicSearchParser {
         return if (artists.isNotEmpty()) artists.joinToString(", ") else null
     }
 
+        // FIX YTM PLAYLIST OWNER - dono pode vir sem browseId UC (texto puro). E o fallback antigo pegava
+    // substringBefore("•") = "Playlist". Subtitle real: "Playlist • Dono • 20 songs" -> dono e o 2o segmento.
     private fun extractPlaylistOwner(subtitleCol: JSONObject?): String? {
         val runs = subtitleCol?.optJSONObject("text")?.optJSONArray("runs") ?: subtitleCol?.optJSONArray("runs") ?: return null
-        val owners = mutableListOf<String>()
+        // 1. Dono com link UC (mais confiavel)
         for (i in 0 until runs.length()) {
             val run = runs.optJSONObject(i) ?: continue
             val text = run.optString("text").trim()
             if (text.isBlank() || text == "•" || text == "·") continue
             val browseId = run.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")?.optString("browseId")
             if (browseId?.startsWith("UC") == true) {
-                if (text !in owners) owners += text
+                if (text !in listOf("Playlist", "Podcast")) return text
             }
         }
-        return if (owners.isNotEmpty()) owners.joinToString(", ") else null
+        // 2. Dono em texto puro: primeiro segmento que nao e tipo, nem contagem, nem duracao, nem ano/data/views
+        for (i in 0 until runs.length()) {
+            val run = runs.optJSONObject(i) ?: continue
+            val text = run.optString("text").trim()
+            if (text.isBlank() || text == "•" || text == "·") continue
+            if (YTMusicTextUtils.isTypeWord(text)) continue
+            if (YTMusicTextUtils.isCountOrDurationLabel(text)) continue
+            if (YTMusicTextUtils.isDuration(text)) continue
+            if (YTMusicTextUtils.isYear(text)) continue
+            if (YTMusicTextUtils.isDate(text)) continue
+            if (YTMusicTextUtils.isViewCount(text)) continue
+            if (YTMusicTextUtils.isEpisode(text)) continue
+            if (text.length > 80) continue
+            val clean = YTMusicTextUtils.cleanArtistName(text).trim()
+            if (clean.isNotBlank()) return clean
+        }
+        return null
+    }
+
+    internal fun playlistOwnerFromSubtitleText(subtitle: String): String? {
+        // "Playlist • Dono • 20 songs" -> Dono. "Dono • Playlist • ..." -> Dono tambem.
+        val parts = subtitle.split("•", "·").map { it.trim() }.filter { it.isNotBlank() }
+        for (part in parts) {
+            if (YTMusicTextUtils.isTypeWord(part)) continue
+            if (YTMusicTextUtils.isCountOrDurationLabel(part)) continue
+            if (YTMusicTextUtils.isDuration(part)) continue
+            if (YTMusicTextUtils.isYear(part)) continue
+            if (YTMusicTextUtils.isDate(part)) continue
+            if (YTMusicTextUtils.isViewCount(part)) continue
+            if (YTMusicTextUtils.isEpisode(part)) continue
+            if (part.length > 80) continue
+            val clean = YTMusicTextUtils.cleanArtistName(part).trim()
+            if (clean.isNotBlank()) return clean
+        }
+        return null
     }
 
     internal fun extractArtistFromSubtitle(subtitleCol: JSONObject?, subtitleText: String): String? {

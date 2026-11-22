@@ -1186,30 +1186,89 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
         if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
         val input = channelIdOrHandle.trim()
         if (input.isBlank()) return@withContext null
-        // PART 2+3 - InnerTube first for browseChannel (UC only, handle falls back to NewPipe)
+                // FIX CHANNEL TABS - InnerTube first for browseChannel: nao retorna cedo so por ter nome.
+        // browse(UC) sem params = Home (quase sempre vazia). Cada aba tem que ser pedida com o params DELA, lido do tabRenderer.
+        // Se tudo vier vazio, NAO retorna - cai pro NewPipe abaixo. So retorna via InnerTube se vier algum conteudo.
         runCatching {
             val uc = Regex("UC[\\w-]{22}").find(input)?.value
             if (uc != null) {
-                val json = InnerTubeYouTube.browse(uc)
-                val parsed = YouTubeChannelParser.parseChannelPage(json)
-                if (parsed.channelName.isNotBlank() || parsed.videos.isNotEmpty() || parsed.playlists.isNotEmpty()) {
-                    ytChannelVideoContinuations[uc] = parsed.videosContinuation
-                    ytChannelVideoContinuations[input] = parsed.videosContinuation
-                    ytChannelPlaylistContinuations[uc] = parsed.playlistsContinuation
-                    ytChannelPlaylistContinuations[input] = parsed.playlistsContinuation
+                val homeJson = InnerTubeYouTube.browse(uc)
+                val homeParsed = YouTubeChannelParser.parseChannelPage(homeJson)
+                var videos = homeParsed.videos.toMutableList()
+                var shorts = homeParsed.shorts.toMutableList()
+                var playlists = homeParsed.playlists.toMutableList()
+                var videosCont = homeParsed.videosContinuation
+                var playlistsCont = homeParsed.playlistsContinuation
+                var shortsCont = homeParsed.shortsContinuation
+                // Videos aba com params dela
+                val videosParams = YouTubeChannelParser.tabParams(homeJson, "videos")
+                if (videos.isEmpty() && videosParams != null) {
+                    runCatching {
+                        val tabJson = InnerTubeYouTube.browse(uc, videosParams)
+                        val parsed = YouTubeChannelParser.parseChannelPage(tabJson)
+                        if (parsed.videos.isNotEmpty()) { videos = parsed.videos.toMutableList(); videosCont = parsed.videosContinuation }
+                    }
+                }
+                // Shorts aba com params dela
+                val shortsParams = YouTubeChannelParser.tabParams(homeJson, "shorts")
+                if (shorts.isEmpty() && shortsParams != null) {
+                    runCatching {
+                        val tabJson = InnerTubeYouTube.browse(uc, shortsParams)
+                        val parsed = YouTubeChannelParser.parseChannelPage(tabJson)
+                        if (parsed.shorts.isNotEmpty()) { shorts = parsed.shorts.toMutableList(); shortsCont = parsed.shortsContinuation }
+                        if (parsed.videos.isNotEmpty() && videos.isEmpty()) { videos = parsed.videos.toMutableList(); videosCont = parsed.videosContinuation }
+                    }
+                }
+                // Playlists aba com params dela
+                val playlistsParams = YouTubeChannelParser.tabParams(homeJson, "playlists")
+                if (playlists.isEmpty() && playlistsParams != null) {
+                    runCatching {
+                        val tabJson = InnerTubeYouTube.browse(uc, playlistsParams)
+                        val parsed = YouTubeChannelParser.parseChannelPage(tabJson)
+                        if (parsed.playlists.isNotEmpty()) { playlists = parsed.playlists.toMutableList(); playlistsCont = parsed.playlistsContinuation }
+                    }
+                }
+                // Fallback UU: UULF = videos normais, UUSH = shorts, UU = tudo (dev.to). Via browse VL+...
+                if (videos.isEmpty()) {
+                    runCatching {
+                        val uuJson = InnerTubeYouTube.browse("VL" + "UULF" + uc.drop(2))
+                        val plParsed = YouTubePlaylistParser.parsePlaylistPage(uuJson, homeParsed.channelName)
+                        if (plParsed.tracks.isNotEmpty()) { videos = plParsed.tracks.map { if (it.artist.isBlank()) it.copy(artist = homeParsed.channelName) else it }.toMutableList(); videosCont = plParsed.continuation }
+                    }
+                    if (videos.isEmpty()) {
+                        runCatching {
+                            val uuJson2 = InnerTubeYouTube.browse("VL" + "UU" + uc.drop(2))
+                            val plParsed2 = YouTubePlaylistParser.parsePlaylistPage(uuJson2, homeParsed.channelName)
+                            if (plParsed2.tracks.isNotEmpty()) { videos = plParsed2.tracks.map { if (it.artist.isBlank()) it.copy(artist = homeParsed.channelName) else it }.toMutableList(); videosCont = plParsed2.continuation }
+                        }
+                    }
+                }
+                if (shorts.isEmpty()) {
+                    runCatching {
+                        val ushJson = InnerTubeYouTube.browse("VL" + "UUSH" + uc.drop(2))
+                        val plParsed = YouTubePlaylistParser.parsePlaylistPage(ushJson, homeParsed.channelName)
+                        if (plParsed.tracks.isNotEmpty()) { shorts = plParsed.tracks.map { if (it.artist.isBlank()) it.copy(artist = homeParsed.channelName) else it }.toMutableList(); shortsCont = plParsed.continuation }
+                    }
+                }
+                if (videos.isNotEmpty() || shorts.isNotEmpty() || playlists.isNotEmpty()) {
+                    ytChannelVideoContinuations[uc] = videosCont
+                    ytChannelVideoContinuations[input] = videosCont
+                    ytChannelPlaylistContinuations[uc] = playlistsCont
+                    ytChannelPlaylistContinuations[input] = playlistsCont
                     return@withContext ChannelPage(
-                        videos = parsed.videos,
-                        shorts = parsed.shorts,
-                        playlists = parsed.playlists,
-                        channelName = parsed.channelName.ifBlank { null },
-                        avatarUrl = parsed.avatarUrl,
-                        bannerUrl = parsed.bannerUrl,
-                        description = parsed.description,
-                        subscriberCount = parsed.subscriberCount,
-                        hasMoreVideos = parsed.videosContinuation != null,
-                        hasMorePlaylists = parsed.playlistsContinuation != null
+                        videos = videos,
+                        shorts = shorts,
+                        playlists = playlists,
+                        channelName = homeParsed.channelName.ifBlank { null },
+                        avatarUrl = homeParsed.avatarUrl,
+                        bannerUrl = homeParsed.bannerUrl,
+                        description = homeParsed.description,
+                        subscriberCount = homeParsed.subscriberCount,
+                        hasMoreVideos = videosCont != null,
+                        hasMorePlaylists = playlistsCont != null
                     )
                 }
+                // Tudo vazio via InnerTube: nao retorna, deixa o NewPipe abaixo tentar (ele pode achar via extractor).
             }
         }.onFailure { Log.w(TAG, "InnerTube browseChannel failed, fallback NewPipe: ${it.message}") }
         // Normaliza: UC..., @handle, youtube.com/channel/UC, youtube.com/@handle, youtube.com/c/nome

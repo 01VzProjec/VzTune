@@ -170,6 +170,12 @@ class YTMusicEnricher @Inject constructor(
      * Lightweight enrichment for playlists from other sources (YouTube search):
      * only fills views and owner, keeping the original cover.
      */
+        private fun isPlaceholderOwner(owner: String?): Boolean {
+        if (owner.isNullOrBlank()) return true
+        val low = owner.trim().lowercase()
+        return low in setOf("playlist", "playlists", "podcast", "podcasts", "mix", "album", "álbum", "albums", "álbuns")
+    }
+
     suspend fun fillPlaylistStats(
         hits: List<SearchHit.PlaylistHit>,
     ): List<SearchHit.PlaylistHit> {
@@ -183,12 +189,13 @@ class YTMusicEnricher @Inject constructor(
                         // PART FIX PLAYLIST OWNER YOUTUBE - playlist YouTube ja vem com dono da busca; YT Music nao carrega ela, entao nao tenta enriquecer (apagava o dono)
                         if (p.source == Source.YOUTUBE) return@withPermit hit
                         val hasViews = !p.views.isNullOrBlank()
-                        val hasOwner = !p.owner.isNullOrBlank()
+                        val hasOwner = !p.owner.isNullOrBlank() && !isPlaceholderOwner(p.owner)
+                        // FIX ENRICHER PLAYLIST PLACEHOLDER - "Playlist" nao e dono, tem que buscar o real no browse
                         if (hasViews && hasOwner) return@withPermit hit
                         val meta = YTMusicPlaylistMeta.fetch(p.id)
                         SearchHit.PlaylistHit(
                             p.copy(
-                                owner = p.owner?.takeIf { it.isNotBlank() } ?: meta.owner,
+                                owner = p.owner?.takeIf { it.isNotBlank() && !isPlaceholderOwner(it) } ?: meta.owner,
                                 views = p.views?.takeIf { it.isNotBlank() } ?: meta.views,
                             )
                         )

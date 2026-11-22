@@ -1424,6 +1424,38 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                         playlists += filtered.filter { it.id !in idsSearch }
                     }.onFailure { Log.w(TAG, "Playlists InnerTube search failed: ${it.message}") }
                 }
+                // FIX PLAYLISTS V3 - whole-JSON, ignora aba selecionada. So roda se ainda ta vazio.
+                if (playlists.isEmpty()) {
+                    runCatching {
+                        val jsonV3 = InnerTubeYouTube.browse(uc, "EglwbGF5bGlzdHPyBgQKAkIA")
+                        val wholeV3 = YouTubeChannelParser.parsePlaylistsWholeJson(jsonV3, channelName)
+                        val idsV3 = playlists.map { it.id }.toSet()
+                        playlists += wholeV3.filter { it.id !in idsV3 }
+                        Log.w(TAG, "Playlists V3 whole fixed-param: ${wholeV3.size}, total agora ${playlists.size}")
+                    }.onFailure { Log.w(TAG, "Playlists V3 whole fixed failed: ${it.message}") }
+                }
+                if (playlists.isEmpty()) {
+                    runCatching {
+                        val tpV3 = YouTubeChannelParser.tabParams(homeJson, "playlists")
+                        if (tpV3 != null) {
+                            val jsonTpV3 = InnerTubeYouTube.browse(uc, tpV3)
+                            val wholeTpV3 = YouTubeChannelParser.parsePlaylistsWholeJson(jsonTpV3, channelName)
+                            val idsTpV3 = playlists.map { it.id }.toSet()
+                            playlists += wholeTpV3.filter { it.id !in idsTpV3 }
+                            Log.w(TAG, "Playlists V3 whole tabParams: ${wholeTpV3.size}, total agora ${playlists.size}")
+                        } else {
+                            Log.w(TAG, "Playlists V3 tabParams veio null pra $channelName")
+                        }
+                    }.onFailure { Log.w(TAG, "Playlists V3 whole tabParams failed: ${it.message}") }
+                }
+                if (playlists.isEmpty()) {
+                    runCatching {
+                        val homeWholeV3 = YouTubeChannelParser.parsePlaylistsWholeJson(homeJson, channelName)
+                        val idsHomeV3 = playlists.map { it.id }.toSet()
+                        playlists += homeWholeV3.filter { it.id !in idsHomeV3 }
+                        Log.w(TAG, "Playlists V3 whole home: ${homeWholeV3.size}, total agora ${playlists.size}")
+                    }.onFailure { Log.w(TAG, "Playlists V3 whole home failed: ${it.message}") }
+                }
                 ytChannelPlaylistContinuations[uc] = playlistsCont
                 ytChannelPlaylistContinuations[input] = playlistsCont
                 if (videos.isNotEmpty() || shorts.isNotEmpty() || playlists.isNotEmpty()) {
@@ -1536,6 +1568,15 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                     ytChannelPlaylistContinuations[channelUrl] = tabCont
                 }
             }.onFailure { Log.w(TAG, "Playlists Path2 fixed-param failed: ${it.message}") }
+        }
+        // FIX PLAYLISTS V3 Path2 - whole-JSON, ignora aba selecionada.
+        if (channelPlaylists.isEmpty() && uc.startsWith("UC") && uc.length >= 24 && channelName.isNotBlank()) {
+            runCatching {
+                val tabJsonV3 = InnerTubeYouTube.browse(uc, "EglwbGF5bGlzdHPyBgQKAkIA")
+                val wholeV3b = YouTubeChannelParser.parsePlaylistsWholeJson(tabJsonV3, channelName)
+                if (wholeV3b.isNotEmpty()) channelPlaylists = wholeV3b
+                Log.w(TAG, "Playlists V3 Path2 whole: ${wholeV3b.size}")
+            }.onFailure { Log.w(TAG, "Playlists V3 Path2 whole failed: ${it.message}") }
         }
         val playlistQuery = channelName.ifBlank { input.takeIf { it.startsWith("@") }.orEmpty() }
         if (channelPlaylists.isEmpty() && playlistQuery.isNotBlank()) {

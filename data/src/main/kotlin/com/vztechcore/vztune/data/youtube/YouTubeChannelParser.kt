@@ -160,6 +160,14 @@ object YouTubeChannelParser {
         return playlists.distinctBy { it.id } to cont
     }
 
+    // FIX PLAYLISTS V3 - varre o JSON INTEIRO, ignora aba selecionada.
+    // parseChannelPage so le a aba selected=true. Se o YouTube marcar a errada, volta 0.
+    fun parsePlaylistsWholeJson(json: JSONObject, channelName: String): List<Playlist> {
+        val all = collectPlaylists(json).distinctBy { it.id }
+        return all.map { if (it.owner.isNullOrBlank() && channelName.isNotBlank()) it.copy(owner = channelName) else it }
+    }
+
+
     private fun parseHeader(json: JSONObject): Quint<String, String?, String?, String?, String?> {
         val headers = mutableListOf<JSONObject>()
         collect(json, "c4TabbedHeaderRenderer", headers)
@@ -380,7 +388,7 @@ object YouTubeChannelParser {
         return out
     }
 
-    private fun collectPlaylists(node: Any?): List<Playlist> {
+    fun collectPlaylists(node: Any?): List<Playlist> {
         val out = mutableListOf<Playlist>()
         val renderers = mutableListOf<JSONObject>()
         collect(node, "playlistRenderer", renderers)

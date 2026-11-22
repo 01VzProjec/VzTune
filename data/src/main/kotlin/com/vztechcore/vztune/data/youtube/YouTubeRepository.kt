@@ -170,6 +170,7 @@ class YouTubeRepository @Inject constructor(
         val avatarUrl: String?,
         val bannerUrl: String? = null,
         val description: String? = null,
+        val debugLog: String? = null,
         val subscriberCount: String?,
         val hasMoreVideos: Boolean = false,
         val hasMorePlaylists: Boolean = false,

@@ -1377,6 +1377,53 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 // Guarda token restante pro loadMore (se bateu o teto, ainda tem mais)
                 ytChannelVideoContinuations[uc] = videosCont
                 ytChannelVideoContinuations[input] = videosCont
+                // FIX PLAYLISTS V2 - param FIXO NewPipe, nao depende de tabParams da Home.
+                // tabParams pode vir null / errado e ai a aba nunca era nem buscada.
+                runCatching {
+                    var jsonV2 = InnerTubeYouTube.browse(uc, "EglwbGF5bGlzdHPyBgQKAkIA")
+                    var parsedV2 = YouTubeChannelParser.parseChannelPage(jsonV2)
+                    var fixedAll = parsedV2.playlists.distinctBy { it.id }
+                    fixedAll = fixedAll.map { if (it.owner.isNullOrBlank() && channelName.isNotBlank()) it.copy(owner = channelName) else it }
+                    val idsV2 = playlists.map { it.id }.toSet()
+                    playlists += fixedAll.filter { it.id !in idsV2 }
+                    var fixedCont: String? = parsedV2.playlistsContinuation ?: InnerTubeYouTube.findContinuationToken(jsonV2)
+                    var seenV2 = mutableSetOf<String>()
+                    var pagesV2 = 1
+                    while (playlists.size < 200 && fixedCont != null && pagesV2 < 5) {
+                        val tokenV2 = fixedCont ?: break
+                        if (!seenV2.add(tokenV2)) break
+                        val cjV2 = InnerTubeYouTube.browseContinuation(tokenV2)
+                        val (moreV2, nextV2) = YouTubeChannelParser.parsePlaylistsContinuation(cjV2)
+                        if (moreV2.isEmpty() && nextV2 == null) { fixedCont = null; break }
+                        val moreFixed = moreV2.map { if (it.owner.isNullOrBlank() && channelName.isNotBlank()) it.copy(owner = channelName) else it }
+                        val idsV2b = playlists.map { it.id }.toSet()
+                        playlists += moreFixed.filter { it.id !in idsV2b }
+                        fixedCont = nextV2
+                        pagesV2++
+                    }
+                    if (fixedCont != null) playlistsCont = fixedCont
+                }.onFailure { Log.w(TAG, "Playlists fixed-param failed: ${it.message}") }
+                // FIX PLAYLISTS V2 - Home scan: Home as vezes tem prateleira Playlists com lockup.
+                if (playlists.isEmpty()) {
+                    runCatching {
+                        val homeAll = YouTubeChannelParser.parseChannelPage(homeJson).playlists
+                        val idsHome = playlists.map { it.id }.toSet()
+                        playlists += homeAll.filter { it.id !in idsHome }.map { if (it.owner.isNullOrBlank() && channelName.isNotBlank()) it.copy(owner = channelName) else it }
+                    }.onFailure { Log.w(TAG, "Playlists home scan failed: ${it.message}") }
+                }
+                // FIX PLAYLISTS V2 - busca InnerTube por playlists (usa nosso parser lockup, nao o NewPipe).
+                if (playlists.isEmpty() && channelName.isNotBlank()) {
+                    runCatching {
+                        val searchJson = InnerTubeYouTube.search(channelName, "EgIQAw%3D%3D")
+                        val hits = YouTubeSearchParser.parsePlaylists(searchJson)
+                        val filtered = hits.map { it.playlist }.filter { pl ->
+                            val owner = pl.owner
+                            owner.isNullOrBlank() || isSameCreator(owner, channelName)
+                        }.map { if (it.owner.isNullOrBlank()) it.copy(owner = channelName) else it }
+                        val idsSearch = playlists.map { it.id }.toSet()
+                        playlists += filtered.filter { it.id !in idsSearch }
+                    }.onFailure { Log.w(TAG, "Playlists InnerTube search failed: ${it.message}") }
+                }
                 ytChannelPlaylistContinuations[uc] = playlistsCont
                 ytChannelPlaylistContinuations[input] = playlistsCont
                 if (videos.isNotEmpty() || shorts.isNotEmpty() || playlists.isNotEmpty()) {
@@ -1474,8 +1521,24 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
         // nao a aba de playlists do canal, entao sempre voltava vazio. A busca e a fonte de playlists
         // que o NewPipe expoe aqui: devolve as playlists do canal (as principais). Sessao de verdade = Buscar mais funciona.
         var channelPlaylists: List<Playlist> = emptyList()
+        // FIX PLAYLISTS V2 - Path 2: tenta aba fixa InnerTube ANTES da busca NewPipe.
+        if (uc.startsWith("UC") && uc.length >= 24 && channelName.isNotBlank()) {
+            runCatching {
+                val tabJson = InnerTubeYouTube.browse(uc, "EglwbGF5bGlzdHPyBgQKAkIA")
+                val parsedTab = YouTubeChannelParser.parseChannelPage(tabJson)
+                var tabAll = parsedTab.playlists.distinctBy { it.id }
+                tabAll = tabAll.map { if (it.owner.isNullOrBlank()) it.copy(owner = channelName) else it }
+                if (tabAll.isNotEmpty()) channelPlaylists = tabAll
+                val tabCont = parsedTab.playlistsContinuation ?: InnerTubeYouTube.findContinuationToken(tabJson)
+                if (tabCont != null) {
+                    ytChannelPlaylistContinuations[uc] = tabCont
+                    ytChannelPlaylistContinuations[input] = tabCont
+                    ytChannelPlaylistContinuations[channelUrl] = tabCont
+                }
+            }.onFailure { Log.w(TAG, "Playlists Path2 fixed-param failed: ${it.message}") }
+        }
         val playlistQuery = channelName.ifBlank { input.takeIf { it.startsWith("@") }.orEmpty() }
-        if (playlistQuery.isNotBlank()) {
+        if (channelPlaylists.isEmpty() && playlistQuery.isNotBlank()) {
             channelPlaylists = runCatching {
                 val extractor = ServiceList.YouTube.getSearchExtractor(playlistQuery, listOf("playlists"), null)
                 extractor.fetchPage()

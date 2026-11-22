@@ -14,7 +14,22 @@
           "line": 60
         }
       }
+    },
+    {
+      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/edit.py",
+      "selection": {
+        "end": {
+          "column": 0,
+          "index": 5907,
+          "line": 131
+        },
+        "start": {
+          "column": 0,
+          "index": 5907,
+          "line": 131
+        }
+      }
     }
   ],
-  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/edit.sh"
+  "selectedFile": "/storage/emulated/0/AndroidIDE_Projects/VzTune/edit.py"
 }

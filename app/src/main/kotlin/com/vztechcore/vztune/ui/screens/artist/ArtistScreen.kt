@@ -277,9 +277,9 @@ fun ArtistScreen(
                                 if (topVideos.isNotEmpty()) {
                                     itemsIndexed(topVideos.take(homeTopVideosVisible), key = { _, v -> "ht_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
                                 }
-                                if (homeTopVideosVisible < topVideos.size) {
+                                if (homeTopVideosVisible < topVideos.size || state.channelVideosHasMore) {
                                     item(key = "home_top_expand") {
-                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable { homeTopVideosVisible += 4 }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable { if (homeTopVideosVisible < topVideos.size) homeTopVideosVisible += 4 else onLoadMoreChannelVideos() }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                                             Icon(imageVector = VzIcons.ExpandMore, contentDescription = "Mostrar mais", tint = Color.White, modifier = Modifier.size(24.dp))
                                         }
                                     }
@@ -569,7 +569,7 @@ private fun ChannelHeader(
         state.subscribers?.takeIf { it.isNotBlank() },
         if (state.videos.isNotEmpty()) state.videos.size.toString() + " vídeos" else null,
     ).joinToString(" • ")
-    val tabs = listOf("Vídeos", "Shorts", "Playlists")
+    val tabs = listOf("Início", "Vídeos", "Playlists")
     Column(
         Modifier.fillMaxWidth().background(Color.Black)
     ) {

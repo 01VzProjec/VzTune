@@ -118,15 +118,20 @@ class MediaListViewModel @Inject constructor(
 
         // FIX20 - Playlist YouTube tem id PL/UU/FL/LL/OL (menos OLAK que e YT Music). Sem sourceName, infere pelo id.
     private fun isYouTubePlaylistId(id: String): Boolean {
-        val v = id.trim().removePrefix("YT:").trim()
+        var v = id.trim().removePrefix("YT:").trim()
         if (v.startsWith("OLAK")) return false
-        if (v.startsWith("RD") || v.startsWith("VL")) return false
+        if (v.startsWith("RD")) return false
+        // VLPL... = playlist do YouTube embrulhada pelo YT Music (VL = Video List). Tira o VL e testa o PL.
+        if (v.startsWith("VL")) v = v.removePrefix("VL")
         return v.startsWith("PL") || v.startsWith("UU") || v.startsWith("FL") || v.startsWith("LL") || v.startsWith("OL")
     }
     private fun isYouTubePlaylistRoute(): Boolean {
+        // ID manda mais que sourceName: busca do InnerTube devolve playlist do YouTube (PL... / VLPL...) com source YOUTUBE_MUSIC.
+        // Se o ID e PL/UU/VLPL, e YouTube (NewPipe), mesmo que sourceName diga YOUTUBE_MUSIC.
+        if (isYouTubePlaylistId(route.id)) return true
         if (route.sourceName == "YOUTUBE") return true
         if (route.sourceName == "YOUTUBE_MUSIC") return false
-        return isYouTubePlaylistId(route.id)
+        return false
     }
 
 private fun loadContent() {

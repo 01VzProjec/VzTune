@@ -877,7 +877,7 @@ class YouTubeRepository @Inject constructor(
         runCatching {
             val collected = mutableListOf<Playlist>()
             var pages = 0
-            while (collected.size < pageSize && page != null && pages < 2) {
+            while (collected.size < pageSize && page != null && pages < 3) {
                 val next = session.extractor.getPage(page!!)
                 collected += parseChannelPlaylistItems(next.items, session.channelName)
                 page = next.nextPage
@@ -962,7 +962,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 pl.fetchPage()
                 val collected = parseChannelStreamItems(pl.initialPage.items, channelName).toMutableList()
                 var nextPage: Page? = pl.initialPage.nextPage
-                while (collected.size < 300 && nextPage != null) {
+                while (collected.size < 500 && nextPage != null) {
                     val next = pl.getPage(nextPage!!)
                     collected += parseChannelStreamItems(next.items, channelName)
                     nextPage = next.nextPage
@@ -1006,7 +1006,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 val collected = parseChannelPlaylistItems(pl.initialPage.items, channelName).toMutableList()
                 var nextPage: Page? = pl.initialPage.nextPage
                 var pages = 0
-                while (collected.size < 300 && nextPage != null && pages < 3) {
+                while (collected.size < 500 && nextPage != null && pages < 5) {
                     val next = pl.getPage(nextPage!!)
                     collected += parseChannelPlaylistItems(next.items, channelName)
                     nextPage = next.nextPage
@@ -1016,7 +1016,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 channelPlaylistSessions[uc] = session
                 channelPlaylistSessions[input] = session
                 channelPlaylistSessions[channelUrl] = session
-                collected.distinctBy { it.id }.take(300)
+                collected.distinctBy { it.id }.take(500)
             }.getOrDefault(emptyList())
         }
         if (channelPlaylists.isEmpty() && channelName.isNotBlank()) {

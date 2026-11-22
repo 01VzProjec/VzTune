@@ -81,7 +81,10 @@ class ArtistViewModel @Inject constructor(
                             singles = emptyList(), singlesMore = null,
                             videos = channel.videos, videosMore = null,
                             featured = emptyList(), featuredMore = null, relatedArtists = emptyList(),
-                            shorts = emptyList(), // FIX20 - Canal sem Shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true,
+                            shorts = emptyList(), // FIX20 - Canal sem Shorts
+                            channelPlaylists = channel.playlists,
+                            bannerUrl = channel.bannerUrl ?: it.bannerUrl,
+                            isYouTubeChannel = true,
                             channelVideosHasMore = musicRepository.hasMoreChannelVideos(route.id), isLoadingMoreChannelVideos = false,
                             channelPlaylistsHasMore = musicRepository.hasMoreChannelPlaylists(route.id), isLoadingMoreChannelPlaylists = false,
                         )

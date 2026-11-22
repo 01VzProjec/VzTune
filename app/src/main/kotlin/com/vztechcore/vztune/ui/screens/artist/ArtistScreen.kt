@@ -150,8 +150,8 @@ fun ArtistScreen(
     var channelSearchOpen by remember { mutableStateOf(false) }
     var channelSearchQuery by remember { mutableStateOf("") }
     val displayState = if (channelSearchQuery.isBlank()) state else state.copy(
-        videos = displayState.videos.filter { it.title.contains(channelSearchQuery, ignoreCase = true) },
-        channelPlaylists = displayState.channelPlaylists.filter { it.title.contains(channelSearchQuery, ignoreCase = true) },
+        videos = state.videos.filter { it.title.contains(channelSearchQuery, ignoreCase = true) },
+        channelPlaylists = state.channelPlaylists.filter { it.title.contains(channelSearchQuery, ignoreCase = true) },
     )
 
     // Fundo sempre preto AMOLED - camaleao desativado por enquanto

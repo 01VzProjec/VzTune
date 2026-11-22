@@ -16,6 +16,7 @@ import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.search.SearchExtractor
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
+import com.vztechcore.vztune.data.innertube.InnerTubeYouTube
 import java.time.OffsetDateTime
 import org.schabi.newpipe.extractor.localization.DateWrapper
 import java.time.temporal.ChronoUnit
@@ -85,6 +86,13 @@ class YouTubeRepository @Inject constructor(
     )
 
     private val channelVideoSessions = mutableMapOf<String, ChannelVideosSession>()
+
+    // PART 2+3 - InnerTube continuation tokens (separate from NewPipe Page)
+    private val ytVideoContinuations = mutableMapOf<String, String?>()
+    private val ytPlaylistContinuations = mutableMapOf<String, String?>()
+    private val ytShortContinuations = mutableMapOf<String, String?>()
+    private val ytChannelVideoContinuations = mutableMapOf<String, String?>()
+    private val ytChannelPlaylistContinuations = mutableMapOf<String, String?>()
     private val videoSearches = mutableMapOf<String, VideoSearchSession>()
     private val playlistSearches = mutableMapOf<String, PlaylistSearchSession>()
     private val shortSearches = mutableMapOf<String, VideoSearchSession>()
@@ -100,6 +108,8 @@ class YouTubeRepository @Inject constructor(
 
     // FIX18 - Tem mais videos no UU? Usado pra mostrar/esconder o botao Buscar mais.
     fun hasMoreChannelVideos(channelId: String): Boolean {
+        if (ytChannelVideoContinuations[channelId] != null) return true
+        if (ytChannelVideoContinuations.entries.any { (k, v) -> v != null && (k == channelId || channelId.contains(k) || k.contains(channelId)) }) return true
         if (channelVideoSessions[channelId]?.nextPage != null) return true
         return channelVideoSessions.entries.any { (k, v) -> v.nextPage != null && (k == channelId || channelId.contains(k) || k.contains(channelId)) }
     }
@@ -107,6 +117,19 @@ class YouTubeRepository @Inject constructor(
     // FIX18 - Buscar mais: proxima pagina do UU (mais ~100). Retorna vazio se acabou.
     // FIX20 - Buscar mais videos: +500 por clique (5 paginas). Antes era 1 pagina (100).
     suspend fun loadMoreChannelVideos(channelId: String, pageSize: Int = 500): List<Track> = withContext(Dispatchers.IO) {
+
+        // PART 2+3 - InnerTube continuation first for loadMoreChannelVideos
+        val ytCont = ytChannelVideoContinuations[channelId]
+            ?: ytChannelVideoContinuations.entries.firstOrNull { (k, v) -> v != null && (channelId.contains(k) || k.contains(channelId)) }?.value
+        if (ytCont != null) {
+            runCatching {
+                val json = InnerTubeYouTube.browseContinuation(ytCont)
+                val (items, next) = YouTubeChannelParser.parseVideosContinuation(json)
+                ytChannelVideoContinuations[channelId] = next
+                if (items.isNotEmpty() || next != null) return@withContext items.distinctBy { it.id }.take(pageSize)
+            }.onFailure { Log.w(TAG, "InnerTube loadMoreChannelVideos failed: ${it.message}") }
+        }
+
         val session = channelVideoSessions[channelId]
             ?: channelVideoSessions.entries.firstOrNull { (k, v) -> v.nextPage != null && (channelId.contains(k) || k.contains(channelId)) }?.value
             ?: return@withContext emptyList()
@@ -131,6 +154,11 @@ class YouTubeRepository @Inject constructor(
         videoSearches.clear()
         playlistSearches.clear()
         shortSearches.clear()
+        ytVideoContinuations.clear()
+        ytPlaylistContinuations.clear()
+        ytShortContinuations.clear()
+        ytChannelVideoContinuations.clear()
+        ytChannelPlaylistContinuations.clear()
     }
 
     /** Canal do YouTube (não-artista do YT Music): vídeos que ele postou. */
@@ -160,6 +188,29 @@ class YouTubeRepository @Inject constructor(
         pageSize: Int = 20,
         searchId: String = query,
     ): VideoPage = withContext(Dispatchers.IO) {
+
+        // PART 2+3 - InnerTube first for searchVideos
+        if (!loadMore) {
+            runCatching {
+                val json = InnerTubeYouTube.search(query)
+                val items = YouTubeSearchParser.parseVideos(json).take(pageSize)
+                val cont = YouTubeSearchParser.parseContinuation(json)
+                ytVideoContinuations[searchId] = cont
+                if (items.isNotEmpty() || cont != null) return@withContext VideoPage(items, cont != null)
+            }.onFailure { Log.w(TAG, "InnerTube searchVideos failed, fallback NewPipe: ${it.message}") }
+        } else {
+            val cont = ytVideoContinuations[searchId]
+            if (cont != null) {
+                runCatching {
+                    val json = InnerTubeYouTube.searchContinuation(cont)
+                    val items = YouTubeSearchParser.parseVideos(json).take(pageSize)
+                    val next = YouTubeSearchParser.parseContinuation(json)
+                    ytVideoContinuations[searchId] = next
+                    return@withContext VideoPage(items, next != null)
+                }.onFailure { Log.w(TAG, "InnerTube searchVideos continuation failed: ${it.message}") }
+            }
+        }
+
         if (!NewPipeInitializer.ensureInitialized(downloader)) {
             Log.e(TAG, "searchVideos: NewPipe not initialized")
             return@withContext VideoPage(emptyList(), false)
@@ -193,6 +244,29 @@ class YouTubeRepository @Inject constructor(
         pageSize: Int = 30,
         searchId: String = query,
     ): List<SearchHit.PlaylistHit> = withContext(Dispatchers.IO) {
+
+        // PART 2+3 - InnerTube first for searchPlaylists
+        if (!loadMore) {
+            runCatching {
+                val json = InnerTubeYouTube.search(query)
+                val items = YouTubeSearchParser.parsePlaylists(json).take(pageSize)
+                val cont = YouTubeSearchParser.parseContinuation(json)
+                ytPlaylistContinuations[searchId] = cont
+                if (items.isNotEmpty() || cont != null) return@withContext items
+            }.onFailure { Log.w(TAG, "InnerTube searchPlaylists failed, fallback NewPipe: ${it.message}") }
+        } else {
+            val cont = ytPlaylistContinuations[searchId]
+            if (cont != null) {
+                runCatching {
+                    val json = InnerTubeYouTube.searchContinuation(cont)
+                    val items = YouTubeSearchParser.parsePlaylists(json).take(pageSize)
+                    val next = YouTubeSearchParser.parseContinuation(json)
+                    ytPlaylistContinuations[searchId] = next
+                    return@withContext items
+                }.onFailure { Log.w(TAG, "InnerTube searchPlaylists continuation failed: ${it.message}") }
+            }
+        }
+
         if (!NewPipeInitializer.ensureInitialized(downloader)) {
             Log.e(TAG, "searchPlaylists: NewPipe not initialized")
             return@withContext emptyList()
@@ -239,6 +313,29 @@ class YouTubeRepository @Inject constructor(
         pageSize: Int = 30,
         searchId: String = query,
     ): ShortPage = withContext(Dispatchers.IO) {
+
+        // PART 2+3 - InnerTube first for searchShorts
+        if (!loadMore) {
+            runCatching {
+                val json = InnerTubeYouTube.search(query)
+                val items = YouTubeSearchParser.parseShorts(json).take(pageSize)
+                val cont = YouTubeSearchParser.parseContinuation(json)
+                ytShortContinuations[searchId] = cont
+                if (items.isNotEmpty() || cont != null) return@withContext ShortPage(items, cont != null)
+            }.onFailure { Log.w(TAG, "InnerTube searchShorts failed, fallback NewPipe: ${it.message}") }
+        } else {
+            val cont = ytShortContinuations[searchId]
+            if (cont != null) {
+                runCatching {
+                    val json = InnerTubeYouTube.searchContinuation(cont)
+                    val items = YouTubeSearchParser.parseShorts(json).take(pageSize)
+                    val next = YouTubeSearchParser.parseContinuation(json)
+                    ytShortContinuations[searchId] = next
+                    return@withContext ShortPage(items, next != null)
+                }.onFailure { Log.w(TAG, "InnerTube searchShorts continuation failed: ${it.message}") }
+            }
+        }
+
         if (!NewPipeInitializer.ensureInitialized(downloader)) {
             Log.e(TAG, "searchShorts: NewPipe not initialized")
             return@withContext ShortPage(emptyList(), false)
@@ -735,6 +832,23 @@ class YouTubeRepository @Inject constructor(
      */
     // FIX8_CHANNEL_VIDEO - Canal real do video via NewPipe, 3 URLs. Sem busca por nome, sem YT Music.
     suspend fun getChannelForVideo(videoId: String): YouTubeChannelInfo? = withContext(Dispatchers.IO) {
+
+        // PART 2+3 - InnerTube first for getChannelForVideo
+        runCatching {
+            val player = InnerTubeYouTube.player(cleanId)
+            val details = player.optJSONObject("videoDetails")
+            val chId = details?.optString("channelId").orEmpty()
+            val author = details?.optString("author").orEmpty()
+            if (chId.startsWith("UC") && author.isNotBlank()) {
+                return@withContext YouTubeChannelInfo(
+                    channelId = chId,
+                    channelName = cleanChannelName(author),
+                    avatarUrl = null,
+                    channelUrl = "https://www.youtube.com/channel/$chId"
+                )
+            }
+        }.onFailure { Log.w(TAG, "InnerTube getChannelForVideo failed: ${it.message}") }
+
         if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
         val cleanId = videoId.trim().substringAfter("v=").substringAfter("/shorts/").substringBefore("?").substringBefore("&").trim()
         if (cleanId.isBlank()) return@withContext null
@@ -770,6 +884,25 @@ class YouTubeRepository @Inject constructor(
     // PL/UU/UC = playlist de video -> NewPipe. OLAK/RD/RDAMVM = radio/mix do YT Music -> nao tem dono de canal, retorna null.
     // VL = prefixo do YT Music, tira. UU = playlist de uploads -> UC direto, sem precisar de extractor.
     suspend fun getChannelForPlaylist(playlistId: String): YouTubeChannelInfo? = withContext(Dispatchers.IO) {
+
+        // PART 2+3 - InnerTube first for getChannelForPlaylist (UC/UU only)
+        runCatching {
+            val ucFromUu = if (rawId.startsWith("UU") && rawId.length >= 24) "UC" + rawId.drop(2) else null
+            val ucDirect = if (rawId.startsWith("UC") && rawId.length >= 24) rawId else ucFromUu
+            if (ucDirect != null) {
+                val json = InnerTubeYouTube.browse(ucDirect)
+                val parsed = YouTubeChannelParser.parseChannelPage(json)
+                if (parsed.channelName.isNotBlank()) {
+                    return@withContext YouTubeChannelInfo(
+                        channelId = ucDirect,
+                        channelName = cleanChannelName(parsed.channelName),
+                        avatarUrl = parsed.avatarUrl,
+                        channelUrl = "https://www.youtube.com/channel/$ucDirect"
+                    )
+                }
+            }
+        }.onFailure { Log.w(TAG, "InnerTube getChannelForPlaylist failed: ${it.message}") }
+
         if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
         var rawId = playlistId.trim().removePrefix("YT:").removePrefix("VL").trim()
         if (rawId.isBlank()) return@withContext null
@@ -879,10 +1012,25 @@ class YouTubeRepository @Inject constructor(
         }
     }
     fun hasMoreChannelPlaylists(channelId: String): Boolean {
+        if (ytChannelPlaylistContinuations[channelId] != null) return true
+        if (ytChannelPlaylistContinuations.entries.any { (k, v) -> v != null && (k == channelId || channelId.contains(k) || k.contains(channelId)) }) return true
         if (channelPlaylistSessions[channelId]?.nextPage != null) return true
         return channelPlaylistSessions.entries.any { (k, v) -> v.nextPage != null && (k == channelId || channelId.contains(k) || k.contains(channelId)) }
     }
     suspend fun loadMoreChannelPlaylists(channelId: String, pageSize: Int = 500): List<Playlist> = withContext(Dispatchers.IO) {
+
+        // PART 2+3 - InnerTube continuation first for loadMoreChannelPlaylists
+        val ytContPl = ytChannelPlaylistContinuations[channelId]
+            ?: ytChannelPlaylistContinuations.entries.firstOrNull { (k, v) -> v != null && (channelId.contains(k) || k.contains(channelId)) }?.value
+        if (ytContPl != null) {
+            runCatching {
+                val json = InnerTubeYouTube.browseContinuation(ytContPl)
+                val (items, next) = YouTubeChannelParser.parsePlaylistsContinuation(json)
+                ytChannelPlaylistContinuations[channelId] = next
+                if (items.isNotEmpty() || next != null) return@withContext items.distinctBy { it.id }.take(pageSize)
+            }.onFailure { Log.w(TAG, "InnerTube loadMoreChannelPlaylists failed: ${it.message}") }
+        }
+
         val session = channelPlaylistSessions[channelId]
             ?: channelPlaylistSessions.entries.firstOrNull { (k, v) -> v.nextPage != null && (channelId.contains(k) || k.contains(channelId)) }?.value
             ?: return@withContext emptyList()
@@ -934,6 +1082,34 @@ class YouTubeRepository @Inject constructor(
         }.getOrNull()
     }
 suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext(Dispatchers.IO) {
+
+        // PART 2+3 - InnerTube first for browseChannel (UC only, handle falls back to NewPipe)
+        runCatching {
+            val uc = Regex("UC[\\w-]{22}").find(input)?.value
+            if (uc != null) {
+                val json = InnerTubeYouTube.browse(uc)
+                val parsed = YouTubeChannelParser.parseChannelPage(json)
+                if (parsed.channelName.isNotBlank() || parsed.videos.isNotEmpty() || parsed.playlists.isNotEmpty()) {
+                    ytChannelVideoContinuations[uc] = parsed.videosContinuation
+                    ytChannelVideoContinuations[input] = parsed.videosContinuation
+                    ytChannelPlaylistContinuations[uc] = parsed.playlistsContinuation
+                    ytChannelPlaylistContinuations[input] = parsed.playlistsContinuation
+                    return@withContext ChannelPage(
+                        videos = parsed.videos,
+                        shorts = parsed.shorts,
+                        playlists = parsed.playlists,
+                        channelName = parsed.channelName.ifBlank { null },
+                        avatarUrl = parsed.avatarUrl,
+                        bannerUrl = parsed.bannerUrl,
+                        description = parsed.description,
+                        subscriberCount = parsed.subscriberCount,
+                        hasMoreVideos = parsed.videosContinuation != null,
+                        hasMorePlaylists = parsed.playlistsContinuation != null
+                    )
+                }
+            }
+        }.onFailure { Log.w(TAG, "InnerTube browseChannel failed, fallback NewPipe: ${it.message}") }
+
         if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
         val input = channelIdOrHandle.trim()
         if (input.isBlank()) return@withContext null

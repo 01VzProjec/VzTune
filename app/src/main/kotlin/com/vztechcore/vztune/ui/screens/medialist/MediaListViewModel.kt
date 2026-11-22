@@ -23,6 +23,7 @@ import com.vztechcore.vztune.data.prefs.store.MediaListPreferencesStore
 import com.vztechcore.vztune.data.ytmusic.YTMusicOwnerValidator
 import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
+import com.vztechcore.vztune.data.music.MusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -46,6 +47,7 @@ class MediaListViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val ytMusicRepository: YTMusicRepository,
     private val youTubeRepository: YouTubeRepository,
+    private val musicRepository: MusicRepository,
     private val playerController: PlayerController,
     private val trackDownloader: TrackDownloader,
     private val store: MediaListPreferencesStore,
@@ -177,9 +179,9 @@ private fun loadContent() {
                     )
                 } else if (isYouTubePlaylistRoute()) {
                     // FIX20 - Playlist YouTube: SO NewPipe, nunca InnerTube. Antes caia no browsePlaylist do InnerTube e o dono vinha como artista do YT Music.
-                    val ytPage = runCatching { youTubeRepository.browseYouTubePlaylist(route.id) }.getOrNull()
+                    val ytPage = runCatching { musicRepository.browseYouTubePlaylist(route.id) }.getOrNull()
                     if (ytPage != null) {
-                        val ch = runCatching { youTubeRepository.getChannelForPlaylist(route.id) }.getOrNull()
+                        val ch = runCatching { musicRepository.getChannelForPlaylist(route.id) }.getOrNull()
                         _uiState.update {
                             it.copy(
                                 isLoading = false, errorMessage = null,
@@ -200,8 +202,8 @@ private fun loadContent() {
                     // Playlist do YouTube: NewPipe primeiro (faixas + canal real). Se vier vazia, cai pro InnerTube abaixo.
                     var loadedViaYouTube = false
                     if (playlistSource == Source.YOUTUBE) {
-                        val ytChannel = runCatching { youTubeRepository.getChannelForPlaylist(route.id) }.getOrNull()
-                        val ytTracks = runCatching { youTubeRepository.getYouTubePlaylistTracks(route.id) }.getOrDefault(emptyList())
+                        val ytChannel = runCatching { musicRepository.getChannelForPlaylist(route.id) }.getOrNull()
+                        val ytTracks = runCatching { musicRepository.getYouTubePlaylistTracks(route.id) }.getOrDefault(emptyList())
                         if (ytTracks.isNotEmpty()) {
                             loadedViaYouTube = true
                             _uiState.update {
@@ -268,7 +270,7 @@ private fun loadContent() {
 
                     // Playlist do YouTube sem UC no InnerTube: resolve via NewPipe
                     if (isYouTubePlaylist && _uiState.value.artistId.isNullOrBlank()) {
-                        val channel = runCatching { youTubeRepository.getChannelForPlaylist(route.id) }.getOrNull()
+                        val channel = runCatching { musicRepository.getChannelForPlaylist(route.id) }.getOrNull()
                         if (channel != null) {
                             _uiState.update {
                                 it.copy(
@@ -444,7 +446,7 @@ private fun loadContent() {
         // Playlist do YouTube sem UC ainda: tenta resolver o dono agora via NewPipe.
         if (route.sourceName == "YOUTUBE" || isYouTubePlaylist(state)) {
             viewModelScope.launch {
-                val channel = runCatching { youTubeRepository.getChannelForPlaylist(route.id) }.getOrNull()
+                val channel = runCatching { musicRepository.getChannelForPlaylist(route.id) }.getOrNull()
                 if (channel != null) {
                     _uiState.update { it.copy(artistId = channel.channelId, ownerAvatarUrl = channel.avatarUrl ?: it.ownerAvatarUrl) }
                     _navigationEvent.emit(

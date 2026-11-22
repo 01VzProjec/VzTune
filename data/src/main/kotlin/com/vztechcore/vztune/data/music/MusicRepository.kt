@@ -334,5 +334,15 @@ class MusicRepository @Inject constructor(
         return out
     }
 
+
+    // PART 6 - Facade unificada: ViewModels usam so MusicRepository, nao YouTubeRepository direto.
+    suspend fun browseChannel(channelIdOrHandle: String) = runCatching { youTubeRepository.browseChannel(channelIdOrHandle) }.getOrNull()
+    suspend fun browseYouTubePlaylist(playlistId: String) = runCatching { youTubeRepository.browseYouTubePlaylist(playlistId) }.getOrNull()
+    suspend fun getYouTubePlaylistTracks(playlistId: String): List<Track> = runCatching { youTubeRepository.getYouTubePlaylistTracks(playlistId) }.getOrDefault(emptyList())
+    fun hasMoreChannelVideos(channelId: String): Boolean = youTubeRepository.hasMoreChannelVideos(channelId)
+    fun hasMoreChannelPlaylists(channelId: String): Boolean = youTubeRepository.hasMoreChannelPlaylists(channelId)
+    suspend fun loadMoreChannelVideos(channelId: String, pageSize: Int = 500): List<Track> = runCatching { youTubeRepository.loadMoreChannelVideos(channelId, pageSize) }.getOrDefault(emptyList())
+    suspend fun loadMoreChannelPlaylists(channelId: String, pageSize: Int = 500): List<com.vztechcore.vztune.core.domain.music.Playlist> = runCatching { youTubeRepository.loadMoreChannelPlaylists(channelId, pageSize) }.getOrDefault(emptyList())
+
     private companion object { const val TAG = "VzTuneMusic" }
 }

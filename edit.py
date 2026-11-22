@@ -1,78 +1,69 @@
-# parte2_3_fix.py - Corrige o erro Unresolved reference cleanId / rawId / input
-# Roda na raiz: python3 parte2_3_fix.py
-# Nao cria .bak. Se ja estiver corrigido, nao faz nada.
+FACADE = '\n    // PART 6 - Facade unificada: ViewModels usam so MusicRepository, nao YouTubeRepository direto.\n    suspend fun browseChannel(channelIdOrHandle: String) = runCatching { youTubeRepository.browseChannel(channelIdOrHandle) }.getOrNull()\n    suspend fun browseYouTubePlaylist(playlistId: String) = runCatching { youTubeRepository.browseYouTubePlaylist(playlistId) }.getOrNull()\n    suspend fun getYouTubePlaylistTracks(playlistId: String): List<Track> = runCatching { youTubeRepository.getYouTubePlaylistTracks(playlistId) }.getOrDefault(emptyList())\n    fun hasMoreChannelVideos(channelId: String): Boolean = youTubeRepository.hasMoreChannelVideos(channelId)\n    fun hasMoreChannelPlaylists(channelId: String): Boolean = youTubeRepository.hasMoreChannelPlaylists(channelId)\n    suspend fun loadMoreChannelVideos(channelId: String, pageSize: Int = 500): List<Track> = runCatching { youTubeRepository.loadMoreChannelVideos(channelId, pageSize) }.getOrDefault(emptyList())\n    suspend fun loadMoreChannelPlaylists(channelId: String, pageSize: Int = 500): List<com.vztechcore.vztune.core.domain.music.Playlist> = runCatching { youTubeRepository.loadMoreChannelPlaylists(channelId, pageSize) }.getOrDefault(emptyList())\n'
+# parte6.py - Parte 6: Unificacao - MusicRepository vira facade unica
+# Roda na raiz: python3 parte6.py
+# Nao apaga YouTubeRepository, so faz ViewModels usarem MusicRepository.
 import os, sys
-
 def fail(msg):
-    print(f"ABORTOU: {msg}")
-    sys.exit(1)
-
-ROOT = os.getcwd()
-YT_REPO = os.path.join(ROOT, "data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeRepository.kt")
-if not os.path.isfile(YT_REPO):
-    fail(f"nao achei {YT_REPO} - roda na raiz do VzTune")
-
-with open(YT_REPO, "r", encoding="utf-8") as f:
-    text = f.read()
-
-def remove_block(orig, marker):
-    # marker = "InnerTube first for browseChannel" etc
-    start = orig.find(f"// PART 2+3 - {marker}")
-    if start == -1:
-        return orig, None
-    line_start = orig.rfind("\n", 0, start)
-    if line_start == -1:
-        line_start = 0
-    onf = orig.find(".onFailure", start)
-    if onf == -1:
-        fail(f"nao achei fim do bloco {marker}")
-    end = orig.find("\n", onf)
-    if end == -1:
-        end = len(orig)
-    block = orig[line_start:end]  # inclui \n do inicio ate fim da linha onFailure
-    new_text = orig[:line_start] + orig[end:]
-    return new_text, block
-
-# Lista: (marker, anchor_unico)
-jobs = [
-    ("InnerTube first for browseChannel", "if (input.isBlank()) return@withContext null"),
-    ("InnerTube first for getChannelForVideo", "if (cleanId.isBlank()) return@withContext null"),
-    ("InnerTube first for getChannelForPlaylist", "if (rawId.isBlank()) return@withContext null"),
-]
-
-fixed_any = False
-for marker, anchor in jobs:
-    snippet_pos = text.find(f"// PART 2+3 - {marker}")
-    anchor_pos = text.find(anchor)
-    if snippet_pos == -1:
-        print(f"Pulando {marker} - bloco nao encontrado (talvez ja removido?)")
-        continue
-    if anchor_pos == -1:
-        fail(f"ancora nao bateu: {anchor} para {marker}")
-    if snippet_pos > anchor_pos:
-        print(f"OK {marker} - ja esta depois da variavel, nao precisa mexer")
-        continue
-    # Esta antes da variavel = bug: remove e reinsere depois da ancora
-    print(f"Corrigindo {marker} - estava antes da variavel, movendo pra depois")
-    text, block = remove_block(text, marker)
-    if block is None:
-        fail(f"falhou ao remover {marker}")
-    # Reacha ancora depois da remocao (posicao mudou)
-    anchor_pos2 = text.find(anchor)
-    if anchor_pos2 == -1:
-        fail(f"ancora sumiu depois de remover: {anchor}")
-    anchor_end = text.find("\n", anchor_pos2)
-    if anchor_end == -1:
-        anchor_end = len(text)
-    # Insere bloco logo depois da linha da ancora
-    text = text[:anchor_end] + block + text[anchor_end:]
-    fixed_any = True
-    print(f"  -> {marker} movido para depois de: {anchor}")
-
-if not fixed_any:
-    print("Nada para corrigir - ja estava certo.")
+    print(f"ABORTOU: {msg}"); sys.exit(1)
+ROOT=os.getcwd()
+MR=os.path.join(ROOT,"data/src/main/kotlin/com/vztechcore/vztune/data/music/MusicRepository.kt")
+ARTIST_VM=os.path.join(ROOT,"app/src/main/kotlin/com/vztechcore/vztune/ui/screens/artist/ArtistViewModel.kt")
+MEDIALIST_VM=os.path.join(ROOT,"app/src/main/kotlin/com/vztechcore/vztune/ui/screens/medialist/MediaListViewModel.kt")
+for p in [MR, ARTIST_VM, MEDIALIST_VM]:
+    if not os.path.isfile(p): fail(f"nao achei {p}")
+# 1 - Facade no MusicRepository
+mr_text=open(MR,encoding="utf-8").read()
+if "PART 6 - Facade unificada" not in mr_text:
+    anchor="    private companion object { const val TAG = \"VzTuneMusic\" }"
+    if anchor not in mr_text: fail("ancora MusicRepository companion nao bateu")
+    mr_text=mr_text.replace(anchor, FACADE + "\n" + anchor, 1)
+    print("Facade adicionada no MusicRepository")
+    open(MR,"w",encoding="utf-8").write(mr_text)
 else:
-    # So escreve se tudo ok
-    with open(YT_REPO, "w", encoding="utf-8") as f:
-        f.write(text)
-    print(f"Fix OK - {YT_REPO} corrigido. Roda o build de novo.")
+    print("Facade ja existe - pulando")
+
+def patch_vm(path, vm_name):
+    t=open(path,encoding="utf-8").read()
+    changed=False
+    # import MusicRepository
+    if "import com.vztechcore.vztune.data.music.MusicRepository" not in t:
+        # acha ultimo import de data.*
+        # insere depois do import de YTMusicRepository
+        anchor2="import com.vztechcore.vztune.data.ytmusic.YTMusicRepository"
+        if anchor2 not in t: fail(f"ancora import YTMusic nao bateu em {vm_name}")
+        t=t.replace(anchor2, anchor2 + "\nimport com.vztechcore.vztune.data.music.MusicRepository", 1)
+        changed=True
+        print(f"{vm_name}: import MusicRepository adicionado")
+    # constructor param - insere depois de youTubeRepository line
+    if "private val musicRepository: MusicRepository" not in t:
+        # procura linha youTubeRepository
+        lines=t.splitlines()
+        new_lines=[]
+        inserted=False
+        for line in lines:
+            new_lines.append(line)
+            if not inserted and "private val youTubeRepository: YouTubeRepository" in line:
+                indent=line[:len(line)-len(line.lstrip())]
+                new_lines.append(f"{indent}private val musicRepository: MusicRepository,")
+                inserted=True
+        if not inserted: fail(f"ancora constructor youTubeRepository nao bateu em {vm_name}")
+        t="\n".join(new_lines)
+        # garante newline final
+        if not t.endswith("\n"): t+="\n"
+        changed=True
+        print(f"{vm_name}: param musicRepository adicionado")
+    # troca chamadas youTubeRepository. -> musicRepository. (todas tem facade)
+    if "youTubeRepository." in t:
+        count=t.count("youTubeRepository.")
+        t=t.replace("youTubeRepository.", "musicRepository.")
+        changed=True
+        print(f"{vm_name}: {count} chamadas migradas para musicRepository")
+    if changed:
+        open(path,"w",encoding="utf-8").write(t)
+    else:
+        print(f"{vm_name}: nada para mudar")
+    return
+
+patch_vm(ARTIST_VM, "ArtistViewModel")
+patch_vm(MEDIALIST_VM, "MediaListViewModel")
+print("Parte 6 OK - ViewModels agora usam MusicRepository como facade unica.")

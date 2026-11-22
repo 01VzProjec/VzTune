@@ -585,6 +585,41 @@ class YouTubeRepository @Inject constructor(
         titleHint: String? = null,
         artistHint: String? = null,
     ): String? = withContext(Dispatchers.IO) {
+
+        // PART 5 - InnerTube first for getStreamUrl (player streamingData)
+        runCatching {
+            val playerJson = InnerTubeYouTube.player(videoId)
+            val streaming = playerJson.optJSONObject("streamingData")
+            val adaptive = streaming?.optJSONArray("adaptiveFormats")
+            var bestUrl: String? = null
+            var bestBitrate = -1L
+            if (adaptive != null) {
+                for (i in 0 until adaptive.length()) {
+                    val f = adaptive.optJSONObject(i) ?: continue
+                    val mime = f.optString("mimeType")
+                    if (!mime.contains("audio")) continue
+                    val bitrate = f.optLong("bitrate", 0)
+                    val url = f.optString("url").takeIf { it.isNotBlank() }
+                    if (url != null && bitrate > bestBitrate) {
+                        bestBitrate = bitrate
+                        bestUrl = url
+                    }
+                }
+            }
+            if (bestUrl == null) {
+                val formats = streaming?.optJSONArray("formats")
+                if (formats != null) {
+                    for (i in 0 until formats.length()) {
+                        val f = formats.optJSONObject(i) ?: continue
+                        val url = f.optString("url").takeIf { it.isNotBlank() } ?: continue
+                        bestUrl = url
+                        break
+                    }
+                }
+            }
+            if (!bestUrl.isNullOrBlank()) return@withContext bestUrl
+        }.onFailure { Log.w(TAG, "InnerTube getStreamUrl failed, fallback NewPipe: ${it.message}") }
+
         if (!NewPipeInitializer.ensureInitialized(downloader)) {
             Log.e(TAG, "getStreamUrl: NewPipe not initialized")
             return@withContext null
@@ -636,6 +671,37 @@ class YouTubeRepository @Inject constructor(
      * Usado pela tela TrackInfo pra exibir detalhes técnicos.
      */
     suspend fun getAudioStreamInfo(videoId: String): AudioStreamInfo? = withContext(Dispatchers.IO) {
+
+        // PART 5 - InnerTube first for getAudioStreamInfo
+        runCatching {
+            val playerJson5 = InnerTubeYouTube.player(videoId)
+            val streaming5 = playerJson5.optJSONObject("streamingData")
+            val adaptive5 = streaming5?.optJSONArray("adaptiveFormats")
+            var bestItag: String? = null
+            var bestMime: String? = null
+            var bestBitrate5 = -1L
+            if (adaptive5 != null) {
+                for (i in 0 until adaptive5.length()) {
+                    val f = adaptive5.optJSONObject(i) ?: continue
+                    val mime = f.optString("mimeType")
+                    if (!mime.contains("audio")) continue
+                    val bitrate = f.optLong("bitrate", 0)
+                    if (bitrate > bestBitrate5) {
+                        bestBitrate5 = bitrate
+                        bestItag = f.optString("itag").takeIf { it.isNotBlank() }
+                        bestMime = mime
+                    }
+                }
+            }
+            if (bestBitrate5 > 0) {
+                return@withContext AudioStreamInfo(
+                    itag = bestItag,
+                    mimeType = bestMime,
+                    quality = "${bestBitrate5 / 1000} kbps",
+                )
+            }
+        }.onFailure { Log.w(TAG, "InnerTube getAudioStreamInfo failed, fallback NewPipe: ${it.message}") }
+
         if (!NewPipeInitializer.ensureInitialized(downloader)) {
             Log.e(TAG, "getAudioStreamInfo: NewPipe not initialized")
             return@withContext null
@@ -1057,6 +1123,33 @@ class YouTubeRepository @Inject constructor(
         val tracks: List<Track>,
     )
     suspend fun browseYouTubePlaylist(playlistId: String): YouTubePlaylistPage? = withContext(Dispatchers.IO) {
+
+        // PART 4 - InnerTube first for browseYouTubePlaylist
+        runCatching {
+            val raw4 = playlistId.trim().removePrefix("YT:").trim()
+            val listId4 = if (raw4.startsWith("http")) {
+                Regex("[?&]list=([^&]+)").find(raw4)?.groupValues?.getOrNull(1) ?: raw4
+            } else raw4
+            if (listId4.isNotBlank() && !listId4.startsWith("OLAK") && !listId4.startsWith("RD")) {
+                val browseId4 = if (listId4.startsWith("VL")) listId4 else "VL" + listId4
+                val json4 = InnerTubeYouTube.browse(browseId4)
+                val parsed4 = YouTubePlaylistParser.parsePlaylistPage(json4)
+                val all4 = parsed4.tracks.toMutableList()
+                var cont4 = parsed4.continuation
+                var pages4 = 0
+                while (all4.size < 500 && cont4 != null && pages4 < 5) {
+                    val cj = InnerTubeYouTube.browseContinuation(cont4)
+                    val (more, next) = YouTubePlaylistParser.parsePlaylistContinuation(cj)
+                    all4 += more
+                    cont4 = next
+                    pages4++
+                }
+                if (all4.isNotEmpty() || !parsed4.title.isNullOrBlank()) {
+                    return@withContext YouTubePlaylistPage(parsed4.title, parsed4.owner, parsed4.ownerChannelId, parsed4.coverUrl, parsed4.description, all4.distinctBy { it.id })
+                }
+            }
+        }.onFailure { Log.w(TAG, "InnerTube browseYouTubePlaylist failed, fallback NewPipe: ${it.message}") }
+
         if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
         runCatching {
             val raw = playlistId.trim().removePrefix("YT:").trim()
@@ -1265,6 +1358,31 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
 
     /** Faixas de uma playlist do YouTube (PL..., UU..., OL...). Usado no menu da playlist do canal. */
     suspend fun getYouTubePlaylistTracks(playlistId: String): List<Track> = withContext(Dispatchers.IO) {
+
+        // PART 4 - InnerTube first for getYouTubePlaylistTracks
+        runCatching {
+            val raw4t = playlistId.trim().removePrefix("YT:").trim()
+            val listId4t = if (raw4t.startsWith("http")) {
+                Regex("[?&]list=([^&]+)").find(raw4t)?.groupValues?.getOrNull(1) ?: raw4t
+            } else raw4t
+            if (listId4t.isNotBlank() && !listId4t.startsWith("OLAK") && !listId4t.startsWith("RD")) {
+                val browseId4t = if (listId4t.startsWith("VL")) listId4t else "VL" + listId4t
+                val json4t = InnerTubeYouTube.browse(browseId4t)
+                val parsed4t = YouTubePlaylistParser.parsePlaylistPage(json4t)
+                val all4t = parsed4t.tracks.toMutableList()
+                var cont4t = parsed4t.continuation
+                var pages4t = 0
+                while (all4t.size < 500 && cont4t != null && pages4t < 10) {
+                    val cj = InnerTubeYouTube.browseContinuation(cont4t)
+                    val (more, next) = YouTubePlaylistParser.parsePlaylistContinuation(cj)
+                    all4t += more
+                    cont4t = next
+                    pages4t++
+                }
+                if (all4t.isNotEmpty()) return@withContext all4t.distinctBy { it.id }
+            }
+        }.onFailure { Log.w(TAG, "InnerTube getYouTubePlaylistTracks failed, fallback NewPipe: ${it.message}") }
+
         if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext emptyList()
         val url = if (playlistId.startsWith("http")) playlistId else "https://www.youtube.com/playlist?list=$playlistId"
         runCatching {

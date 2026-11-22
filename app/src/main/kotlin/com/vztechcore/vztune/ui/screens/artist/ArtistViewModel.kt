@@ -15,6 +15,7 @@ import com.vztechcore.vztune.core.domain.music.Playlist
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
+import com.vztechcore.vztune.data.music.MusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +30,7 @@ class ArtistViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val ytMusicRepository: YTMusicRepository,
     private val youTubeRepository: YouTubeRepository,
+    private val musicRepository: MusicRepository,
     private val playerController: PlayerController,
     private val followedStore: FollowedArtistsStore,
     private val localPlaylistsStore: LocalPlaylistsStore,
@@ -66,7 +68,7 @@ class ArtistViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             if (route.isYouTubeChannel) {
-                val channel = runCatching { youTubeRepository.browseChannel(route.id) }.getOrNull()
+                val channel = runCatching { musicRepository.browseChannel(route.id) }.getOrNull()
                 if (channel != null) {
                     _uiState.update {
                         it.copy(
@@ -81,8 +83,8 @@ class ArtistViewModel @Inject constructor(
                             videos = channel.videos, videosMore = null,
                             featured = emptyList(), featuredMore = null, relatedArtists = emptyList(),
                             shorts = emptyList(), // FIX20 - Canal sem Shorts, channelPlaylists = channel.playlists, bannerUrl = channel.bannerUrl ?: it.bannerUrl, isYouTubeChannel = true,
-                            channelVideosHasMore = youTubeRepository.hasMoreChannelVideos(route.id), isLoadingMoreChannelVideos = false,
-                            channelPlaylistsHasMore = youTubeRepository.hasMoreChannelPlaylists(route.id), isLoadingMoreChannelPlaylists = false,
+                            channelVideosHasMore = musicRepository.hasMoreChannelVideos(route.id), isLoadingMoreChannelVideos = false,
+                            channelPlaylistsHasMore = musicRepository.hasMoreChannelPlaylists(route.id), isLoadingMoreChannelPlaylists = false,
                         )
                     }
                     return@launch
@@ -148,13 +150,13 @@ class ArtistViewModel @Inject constructor(
         if (!state.channelVideosHasMore) return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingMoreChannelVideos = true) }
-            val more = runCatching { youTubeRepository.loadMoreChannelVideos(route.id) }.getOrDefault(emptyList())
+            val more = runCatching { musicRepository.loadMoreChannelVideos(route.id) }.getOrDefault(emptyList())
             val current = _uiState.value.videos
             val merged = (current + more).distinctBy { it.id }
             _uiState.update {
                 it.copy(
                     videos = merged,
-                    channelVideosHasMore = youTubeRepository.hasMoreChannelVideos(route.id),
+                    channelVideosHasMore = musicRepository.hasMoreChannelVideos(route.id),
                     isLoadingMoreChannelVideos = false,
                 )
             }
@@ -168,13 +170,13 @@ class ArtistViewModel @Inject constructor(
         if (!state.channelPlaylistsHasMore) return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingMoreChannelPlaylists = true) }
-            val more = runCatching { youTubeRepository.loadMoreChannelPlaylists(route.id) }.getOrDefault(emptyList())
+            val more = runCatching { musicRepository.loadMoreChannelPlaylists(route.id) }.getOrDefault(emptyList())
             val current = _uiState.value.channelPlaylists
             val merged = (current + more).distinctBy { it.id }
             _uiState.update {
                 it.copy(
                     channelPlaylists = merged,
-                    channelPlaylistsHasMore = youTubeRepository.hasMoreChannelPlaylists(route.id),
+                    channelPlaylistsHasMore = musicRepository.hasMoreChannelPlaylists(route.id),
                     isLoadingMoreChannelPlaylists = false,
                 )
             }
@@ -191,9 +193,9 @@ class ArtistViewModel @Inject constructor(
         private suspend fun loadChannelPlaylistTracks(playlist: Playlist): List<Track> {
         // FIX19 - Playlist do canal: YouTube -> NewPipe, YT Music -> InnerTube. Nunca cruza.
         if (playlist.source == Source.YOUTUBE) {
-            return runCatching { youTubeRepository.getYouTubePlaylistTracks(playlist.id) }.getOrDefault(emptyList())
+            return runCatching { musicRepository.getYouTubePlaylistTracks(playlist.id) }.getOrDefault(emptyList())
         }
-        if (_uiState.value.isYouTubeChannel) return runCatching { youTubeRepository.getYouTubePlaylistTracks(playlist.id) }.getOrDefault(emptyList())
+        if (_uiState.value.isYouTubeChannel) return runCatching { musicRepository.getYouTubePlaylistTracks(playlist.id) }.getOrDefault(emptyList())
         return runCatching { ytMusicRepository.browsePlaylist(playlist.id).tracks }.getOrDefault(emptyList())
     }
 

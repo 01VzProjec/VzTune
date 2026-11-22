@@ -21,7 +21,6 @@ import com.vztechcore.vztune.data.prefs.store.DownloadedPlaylistsStore
 import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
 import com.vztechcore.vztune.data.prefs.store.MediaListPreferencesStore
 import com.vztechcore.vztune.data.ytmusic.YTMusicOwnerValidator
-import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.data.music.MusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
@@ -46,7 +45,6 @@ class MediaListViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     @ApplicationContext private val context: Context,
     private val ytMusicRepository: YTMusicRepository,
-    private val youTubeRepository: YouTubeRepository,
     private val musicRepository: MusicRepository,
     private val playerController: PlayerController,
     private val trackDownloader: TrackDownloader,
@@ -180,7 +178,7 @@ private fun loadContent() {
                 } else if (isYouTubePlaylistRoute()) {
                     // FIX20 - Playlist YouTube: SO NewPipe, nunca InnerTube. Antes caia no browsePlaylist do InnerTube e o dono vinha como artista do YT Music.
                     val ytPage = runCatching { musicRepository.browseYouTubePlaylist(route.id) }.getOrNull()
-                    if (ytPage != null) {
+                    if (ytPage != null && ytPage.tracks.isNotEmpty()) {
                         val ch = runCatching { musicRepository.getChannelForPlaylist(route.id) }.getOrNull()
                         _uiState.update {
                             it.copy(
@@ -196,7 +194,26 @@ private fun loadContent() {
                             )
                         }
                     } else {
-                        _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar esta playlist.") }
+                        _uiState.update { it.copy(isLoading = false, errorMessage = null) }
+                        // PART FIX PLAYLIST FALLBACK YTM - YouTube falhou/vazio: tenta YT Music antes de dar erro
+                        val ytmFallback = runCatching { ytMusicRepository.browsePlaylist(route.id) }.getOrNull()
+                        if (ytmFallback != null && ytmFallback.tracks.isNotEmpty()) {
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false, errorMessage = null,
+                                    title = ytmFallback.title ?: it.title,
+                                    subtitle = ytmFallback.owner ?: it.subtitle,
+                                    owner = ytmFallback.owner ?: it.owner,
+                                    artistId = ytmFallback.ownerChannelId ?: it.artistId,
+                                    ownerAvatarUrl = ytmFallback.ownerAvatarUrl ?: it.ownerAvatarUrl,
+                                    thumbnailUrl = ytmFallback.coverUrl ?: it.thumbnailUrl,
+                                    description = ytmFallback.description ?: it.description,
+                                    allTracks = ytmFallback.tracks.distinctBy { tr -> "${tr.source}_${tr.id}" },
+                                )
+                            }
+                        } else {
+                            _uiState.update { it.copy(isLoading = false, errorMessage = "Não foi possível carregar esta playlist.") }
+                        }
                     }
                 } else {
                     // Playlist do YouTube: NewPipe primeiro (faixas + canal real). Se vier vazia, cai pro InnerTube abaixo.

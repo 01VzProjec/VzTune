@@ -13,7 +13,6 @@ import com.vztechcore.vztune.data.prefs.store.FollowedArtistsStore
 import com.vztechcore.vztune.data.prefs.store.LocalPlaylistsStore
 import com.vztechcore.vztune.core.domain.music.Playlist
 import com.vztechcore.vztune.core.domain.music.Source
-import com.vztechcore.vztune.data.youtube.YouTubeRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.data.music.MusicRepository
 import com.vztechcore.vztune.ui.navigation.Routes
@@ -29,7 +28,6 @@ import javax.inject.Inject
 class ArtistViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val ytMusicRepository: YTMusicRepository,
-    private val youTubeRepository: YouTubeRepository,
     private val musicRepository: MusicRepository,
     private val playerController: PlayerController,
     private val followedStore: FollowedArtistsStore,

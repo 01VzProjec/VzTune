@@ -298,6 +298,8 @@ class MusicRepository @Inject constructor(
         val deferred = playlists.map { hit ->
             async<SearchHit.PlaylistHit?> {
                 semaphore.withPermit {
+                    // PART FIX PLAYLIST VALIDATE - Playlist YouTube nao passa pelo YT Music: YT Music nao carrega playlist de usuario do YouTube, entao validar por ele descartava tudo.
+                    if (hit.playlist.source == Source.YOUTUBE) return@withPermit hit
                     val count = hit.playlist.trackCount
                     if (count != null && count > 0) return@withPermit hit
                     val hasTracks = runCatching {

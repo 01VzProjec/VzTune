@@ -248,11 +248,17 @@ class YouTubeRepository @Inject constructor(
         // PART 2+3 - InnerTube first for searchPlaylists
         if (!loadMore) {
             runCatching {
-                val json = InnerTubeYouTube.search(query)
+                val json = InnerTubeYouTube.search(query, "EgIQAw%3D%3D")
                 val items = YouTubeSearchParser.parsePlaylists(json).take(pageSize)
                 val cont = YouTubeSearchParser.parseContinuation(json)
                 ytPlaylistContinuations[searchId] = cont
                 if (items.isNotEmpty() || cont != null) return@withContext items
+                // Fallback: busca sem filtro - as vezes o filtro de playlist volta 0 no YouTube
+                runCatching {
+                    val json2 = InnerTubeYouTube.search(query)
+                    val items2 = YouTubeSearchParser.parsePlaylists(json2).take(pageSize)
+                    if (items2.isNotEmpty()) return@withContext items2
+                }
             }.onFailure { Log.w(TAG, "InnerTube searchPlaylists failed, fallback NewPipe: ${it.message}") }
         } else {
             val cont = ytPlaylistContinuations[searchId]

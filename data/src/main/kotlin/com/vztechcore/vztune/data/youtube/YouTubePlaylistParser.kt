@@ -55,7 +55,31 @@ object YouTubePlaylistParser {
             )
             out += Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE)
         }
-        return out
+                // Fallback YT Music: playlist via youtube.com pode vir como musicResponsiveListItemRenderer
+        runCatching {
+            val musicItems = mutableListOf<JSONObject>()
+            collect(node, "musicResponsiveListItemRenderer", musicItems)
+            for (r in musicItems) {
+                val vid = extractMusicVideoId(r) ?: continue
+                val title = extractMusicTitle(r) ?: continue
+                val artist = extractMusicArtist(r)
+                val thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))
+                out += Track(id = vid, title = title, artist = artist, durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
+            }
+        }
+        // Fallback panel: playlistPanelVideoRenderer
+        runCatching {
+            val panelItems = mutableListOf<JSONObject>()
+            collect(node, "playlistPanelVideoRenderer", panelItems)
+            for (r in panelItems) {
+                val vid = r.optString("videoId").takeIf { it.isNotBlank() } ?: continue
+                val title = YouTubeSearchParser.textOf(r.optJSONObject("title")) ?: continue
+                val artist = YouTubeSearchParser.textOf(r.optJSONObject("shortBylineText")) ?: ""
+                val thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))
+                out += Track(id = vid, title = title, artist = artist, durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
+            }
+        }
+return out
     }
 
     private fun parseHeaderTitle(json: JSONObject): String? {
@@ -96,6 +120,29 @@ object YouTubePlaylistParser {
         return YouTubeSearchParser.textOf(h.optJSONObject("descriptionText"))
     }
 
+    private fun extractMusicVideoId(r: JSONObject): String? {
+        r.optJSONObject("navigationEndpoint")?.optJSONObject("watchEndpoint")?.optString("videoId")?.takeIf { it.isNotBlank() }?.let { return it }
+        val flex = r.optJSONArray("flexColumns")
+        if (flex != null) {
+            for (i in 0 until flex.length()) {
+                val col = flex.optJSONObject(i)?.optJSONObject("musicResponsiveListItemFlexColumnRenderer") ?: continue
+                val nav = col.optJSONObject("text")?.optJSONArray("runs")?.optJSONObject(0)?.optJSONObject("navigationEndpoint")?.optJSONObject("watchEndpoint")?.optString("videoId")
+                if (!nav.isNullOrBlank()) return nav
+            }
+        }
+        return null
+    }
+    private fun extractMusicTitle(r: JSONObject): String? {
+        val flex = r.optJSONArray("flexColumns") ?: return null
+        val first = flex.optJSONObject(0)?.optJSONObject("musicResponsiveListItemFlexColumnRenderer") ?: return null
+        return YouTubeSearchParser.textOf(first.optJSONObject("text"))
+    }
+    private fun extractMusicArtist(r: JSONObject): String {
+        val flex = r.optJSONArray("flexColumns") ?: return ""
+        if (flex.length() < 2) return ""
+        val second = flex.optJSONObject(1)?.optJSONObject("musicResponsiveListItemFlexColumnRenderer") ?: return ""
+        return YouTubeSearchParser.textOf(second.optJSONObject("text")) ?: ""
+    }
     private fun collect(node: Any?, key: String, out: MutableList<JSONObject>) {
         when (node) {
             is JSONObject -> {

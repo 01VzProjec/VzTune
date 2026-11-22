@@ -1477,9 +1477,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                         channelName = channelName.ifBlank { null },
                         avatarUrl = homeParsed.avatarUrl,
                         bannerUrl = homeParsed.bannerUrl,
-                        description = if (playlists.isEmpty() && debugPlV5.isNotBlank()) debugPlV5 + "
-
-" + (homeParsed.description ?: "") else homeParsed.description,
+                        description = if (playlists.isEmpty() && debugPlV5.isNotBlank()) debugPlV5 + "\n\n" + (homeParsed.description ?: "") else homeParsed.description,
                         subscriberCount = homeParsed.subscriberCount,
                         hasMoreVideos = videosCont != null,
                         hasMorePlaylists = playlistsCont != null

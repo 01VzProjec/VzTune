@@ -1658,7 +1658,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
     // V8 - Playlists via ChannelTabExtractor do NewPipe (o que o app NewPipe usa).
     private suspend fun fetchPlaylistsViaChannelTab(channelUrl: String, channelName: String): List<Playlist> {
         return runCatching {
-            val lh = ServiceList.YouTube.getChannelTabsLHFactory().fromUrl(channelUrl + "/playlists")
+            val lh = ServiceList.YouTube.getChannelTabLHFactory().fromUrl(channelUrl + "/playlists")
             val ex = ServiceList.YouTube.getChannelTabExtractor(lh)
             ex.fetchPage()
             val items = ex.initialPage.items

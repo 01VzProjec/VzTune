@@ -1458,16 +1458,16 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 }
                 ytChannelPlaylistContinuations[uc] = playlistsCont
                 ytChannelPlaylistContinuations[input] = playlistsCont
-                // FIX PLAYLISTS V4 - diagnostico NA TELA (Sobre), sem precisar de logcat.
-                var debugPlV4 = ""
+                // FIX PLAYLISTS V5 Path1 - debug NO COMECO, mesmo se falhar mostra o erro.
+                var debugPlV5 = ""
                 if (playlists.isEmpty()) {
                     runCatching {
                         val dbgJson = InnerTubeYouTube.browse(uc, "EglwbGF5bGlzdHPyBgQKAkIA")
                         val dbgWhole = YouTubeChannelParser.parsePlaylistsWholeJson(dbgJson, channelName)
                         val dbgInfo = YouTubeChannelParser.debugLockups(dbgJson)
-                        debugPlV4 = "\n\n[DEBUG playlists V4: whole=${dbgWhole.size} $dbgInfo]"
-                        Log.w(TAG, "Playlists V4 debug $debugPlV4")
-                    }.onFailure { Log.w(TAG, "Playlists V4 debug failed: ${it.message}") }
+                        debugPlV5 = "[DEBUG V5 Path1 whole=${dbgWhole.size} $dbgInfo]"
+                        Log.w(TAG, "Playlists V5 Path1 $debugPlV5")
+                    }.onFailure { debugPlV5 = "[DEBUG V5 Path1 browse falhou: ${it.message}]"; Log.w(TAG, "Playlists V5 Path1 failed: ${it.message}") }
                 }
                 if (videos.isNotEmpty() || shorts.isNotEmpty() || playlists.isNotEmpty()) {
                     return@withContext ChannelPage(
@@ -1477,7 +1477,9 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                         channelName = channelName.ifBlank { null },
                         avatarUrl = homeParsed.avatarUrl,
                         bannerUrl = homeParsed.bannerUrl,
-                        description = (homeParsed.description ?: "") + if (playlists.isEmpty()) debugPlV4 else "",
+                        description = if (playlists.isEmpty() && debugPlV5.isNotBlank()) debugPlV5 + "
+
+" + (homeParsed.description ?: "") else homeParsed.description,
                         subscriberCount = homeParsed.subscriberCount,
                         hasMoreVideos = videosCont != null,
                         hasMorePlaylists = playlistsCont != null
@@ -1610,6 +1612,17 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 collected.distinctBy { it.id }.take(500)
             }.getOrDefault(emptyList())
         }
+        // FIX PLAYLISTS V5 Path2 - debug NO COMECO, cobre quando cai no NewPipe.
+        var debugPlV5Path2 = ""
+        if (channelPlaylists.isEmpty() && uc.startsWith("UC") && uc.length >= 24 && channelName.isNotBlank()) {
+            runCatching {
+                val dbgJson2 = InnerTubeYouTube.browse(uc, "EglwbGF5bGlzdHPyBgQKAkIA")
+                val dbgWhole2 = YouTubeChannelParser.parsePlaylistsWholeJson(dbgJson2, channelName)
+                val dbgInfo2 = YouTubeChannelParser.debugLockups(dbgJson2)
+                debugPlV5Path2 = "[DEBUG V5 Path2 whole=${dbgWhole2.size} $dbgInfo2]"
+                Log.w(TAG, "Playlists V5 Path2 $debugPlV5Path2")
+            }.onFailure { debugPlV5Path2 = "[DEBUG V5 Path2 browse falhou: ${it.message}]"; Log.w(TAG, "Playlists V5 Path2 failed: ${it.message}") }
+        }
         ChannelPage(
             videos = videos,
             shorts = shorts,
@@ -1617,7 +1630,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
             channelName = channelName.takeIf { it.isNotBlank() },
             avatarUrl = header?.avatar,
             bannerUrl = header?.banner,
-            description = header?.description?.takeIf { it.isNotBlank() },
+            description = if (channelPlaylists.isEmpty() && debugPlV5Path2.isNotBlank()) debugPlV5Path2 + "\n\n" + (header?.description ?: "") else header?.description?.takeIf { it.isNotBlank() },
             subscriberCount = header?.subs,
             hasMoreVideos = hasMoreChannelVideos(uc),
             hasMorePlaylists = hasMoreChannelPlaylists(uc),

@@ -1381,7 +1381,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 // FIX PLAYLISTS V2 - param FIXO NewPipe, nao depende de tabParams da Home.
                 // tabParams pode vir null / errado e ai a aba nunca era nem buscada.
                 runCatching {
-                    var jsonV2 = InnerTubeYouTube.browse(uc, "EglwbGF5bGlzdHPyBgQKAkIA")
+                    var jsonV2 = InnerTubeYouTube.browse(uc, "EgZwbGF5bGlzdHPyBgQKAkIA")
                     var parsedV2 = YouTubeChannelParser.parseChannelPage(jsonV2)
                     var fixedAll = parsedV2.playlists.distinctBy { it.id }
                     fixedAll = fixedAll.map { if (it.owner.isNullOrBlank() && channelName.isNotBlank()) it.copy(owner = channelName) else it }
@@ -1428,7 +1428,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 // FIX PLAYLISTS V3 - whole-JSON, ignora aba selecionada. So roda se ainda ta vazio.
                 if (playlists.isEmpty()) {
                     runCatching {
-                        val jsonV3 = InnerTubeYouTube.browse(uc, "EglwbGF5bGlzdHPyBgQKAkIA")
+                        val jsonV3 = InnerTubeYouTube.browse(uc, "EgZwbGF5bGlzdHPyBgQKAkIA")
                         val wholeV3 = YouTubeChannelParser.parsePlaylistsWholeJson(jsonV3, channelName)
                         val idsV3 = playlists.map { it.id }.toSet()
                         playlists += wholeV3.filter { it.id !in idsV3 }
@@ -1461,9 +1461,9 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 ytChannelPlaylistContinuations[input] = playlistsCont
                 // FIX PLAYLISTS V5 Path1 - debug NO COMECO, mesmo se falhar mostra o erro.
                 var debugPlV5 = ""
-                if (playlists.isEmpty()) {
+                if (true) // V7 log sempre {
                     runCatching {
-                        val dbgJson = InnerTubeYouTube.browse(uc, "EglwbGF5bGlzdHPyBgQKAkIA")
+                        val dbgJson = InnerTubeYouTube.browse(uc, "EgZwbGF5bGlzdHPyBgQKAkIA")
                         val dbgWhole = YouTubeChannelParser.parsePlaylistsWholeJson(dbgJson, channelName)
                         val dbgInfo = YouTubeChannelParser.debugLockups(dbgJson)
                         debugPlV5 = "[DEBUG V5 Path1 whole=${dbgWhole.size} $dbgInfo]"
@@ -1569,7 +1569,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
         // FIX PLAYLISTS V2 - Path 2: tenta aba fixa InnerTube ANTES da busca NewPipe.
         if (uc.startsWith("UC") && uc.length >= 24 && channelName.isNotBlank()) {
             runCatching {
-                val tabJson = InnerTubeYouTube.browse(uc, "EglwbGF5bGlzdHPyBgQKAkIA")
+                val tabJson = InnerTubeYouTube.browse(uc, "EgZwbGF5bGlzdHPyBgQKAkIA")
                 val parsedTab = YouTubeChannelParser.parseChannelPage(tabJson)
                 var tabAll = parsedTab.playlists.distinctBy { it.id }
                 tabAll = tabAll.map { if (it.owner.isNullOrBlank()) it.copy(owner = channelName) else it }
@@ -1585,11 +1585,25 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
         // FIX PLAYLISTS V3 Path2 - whole-JSON, ignora aba selecionada.
         if (channelPlaylists.isEmpty() && uc.startsWith("UC") && uc.length >= 24 && channelName.isNotBlank()) {
             runCatching {
-                val tabJsonV3 = InnerTubeYouTube.browse(uc, "EglwbGF5bGlzdHPyBgQKAkIA")
+                val tabJsonV3 = InnerTubeYouTube.browse(uc, "EgZwbGF5bGlzdHPyBgQKAkIA")
                 val wholeV3b = YouTubeChannelParser.parsePlaylistsWholeJson(tabJsonV3, channelName)
                 if (wholeV3b.isNotEmpty()) channelPlaylists = wholeV3b
                 Log.w(TAG, "Playlists V3 Path2 whole: ${wholeV3b.size}")
             }.onFailure { Log.w(TAG, "Playlists V3 Path2 whole failed: ${it.message}") }
+        }
+        // FIX PLAYLISTS V7 - aba direta com UC resolvido, ANTES da busca por nome.
+        var debugV7Path2 = ""
+        if (uc.startsWith("UC") && uc.length >= 24 && channelName.isNotBlank()) {
+            runCatching {
+                val tabJsonV7 = InnerTubeYouTube.browse(uc, "EgZwbGF5bGlzdHPyBgQKAkIA")
+                val wholeV7 = YouTubeChannelParser.parsePlaylistsWholeJson(tabJsonV7, channelName)
+                val infoV7 = YouTubeChannelParser.debugLockups(tabJsonV7)
+                debugV7Path2 = "[V7 tab UC whole=" + wholeV7.size + " " + infoV7 + "]"
+                if (wholeV7.isNotEmpty()) channelPlaylists = wholeV7
+                Log.w(TAG, "Playlists V7 tab " + debugV7Path2)
+            }.onFailure { debugV7Path2 = "[V7 tab falhou: " + it.message + "]"; Log.w(TAG, "Playlists V7 tab failed: " + (it.message ?: "")) }
+        } else {
+            debugV7Path2 = "[V7 tab pulado: uc=" + uc + " nome=" + channelName + "]"
         }
         val playlistQuery = channelName.ifBlank { input.takeIf { it.startsWith("@") }.orEmpty() }
         if (channelPlaylists.isEmpty() && playlistQuery.isNotBlank()) {
@@ -1616,7 +1630,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
         var debugPlV5Path2 = ""
         if (channelPlaylists.isEmpty() && uc.startsWith("UC") && uc.length >= 24 && channelName.isNotBlank()) {
             runCatching {
-                val dbgJson2 = InnerTubeYouTube.browse(uc, "EglwbGF5bGlzdHPyBgQKAkIA")
+                val dbgJson2 = InnerTubeYouTube.browse(uc, "EgZwbGF5bGlzdHPyBgQKAkIA")
                 val dbgWhole2 = YouTubeChannelParser.parsePlaylistsWholeJson(dbgJson2, channelName)
                 val dbgInfo2 = YouTubeChannelParser.debugLockups(dbgJson2)
                 debugPlV5Path2 = "[DEBUG V5 Path2 whole=${dbgWhole2.size} $dbgInfo2]"
@@ -1631,7 +1645,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
             avatarUrl = header?.avatar,
             bannerUrl = header?.banner,
             description = header?.description?.takeIf { it.isNotBlank() },
-            debugLog = debugPlV5Path2.takeIf { it.isNotBlank() },
+            debugLog = (debugV7Path2 + " " + debugPlV5Path2.orEmpty()).trim().takeIf { it.isNotBlank() },
             subscriberCount = header?.subs,
             hasMoreVideos = hasMoreChannelVideos(uc),
             hasMorePlaylists = hasMoreChannelPlaylists(uc),

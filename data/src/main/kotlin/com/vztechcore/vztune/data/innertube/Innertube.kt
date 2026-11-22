@@ -34,7 +34,7 @@ object InnerTube {
     // Usado para search, browse, álbum, playlist, artist
     private val WEB_REMIX = Client(
         name = "WEB_REMIX",
-        version = "1.20220606.03.00",
+        version = "1.20250616.01.00",
         apiKey = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30",
         userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.157 Safari/537.36",
         referer = "https://music.youtube.com/",

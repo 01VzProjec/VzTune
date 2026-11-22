@@ -5,28 +5,13 @@
       "selection": {
         "end": {
           "column": 0,
-          "index": 2550,
-          "line": 46
+          "index": 9998,
+          "line": 59
         },
         "start": {
           "column": 0,
-          "index": 2550,
-          "line": 46
-        }
-      }
-    },
-    {
-      "file": "/storage/emulated/0/AndroidIDE_Projects/VzTune/data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeRepository.kt",
-      "selection": {
-        "end": {
-          "column": 0,
-          "index": 0,
-          "line": 0
-        },
-        "start": {
-          "column": 0,
-          "index": 0,
-          "line": 0
+          "index": 9998,
+          "line": 59
         }
       }
     }

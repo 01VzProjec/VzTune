@@ -168,7 +168,7 @@ internal fun MediaListExpandedHeader(
 
             Spacer(Modifier.height(8.dp))
 
-            val ownerName = state.owner?.takeIf { it.isNotBlank() }
+            val ownerName = (state.owner ?: state.subtitle)?.takeIf { it.isNotBlank() }
             if (!ownerName.isNullOrBlank()) {
                 val isClickableOwner = !state.isLocal && onArtistClick != null
                 Row(

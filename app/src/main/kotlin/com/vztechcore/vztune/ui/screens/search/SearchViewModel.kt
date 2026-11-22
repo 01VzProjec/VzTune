@@ -341,11 +341,8 @@ class SearchViewModel @Inject constructor(
 
     /** FIX9: Clique em artista DENTRO de uma faixa no Search. Igual ao TrackMenuViewModel. */
     fun onOpenArtistForTrack(track: Track, artistName: String) {
-        // Video do YouTube: o "artista" e o CANAL. Nunca resolve por nome no YT Music.
-        if (track.source == Source.YOUTUBE) {
-            onOpenChannelForTrack(track)
-            return
-        }
+        // FIX: um vídeo pode ser clipe, performance ou música de um artista.
+        // Primeiro tenta o artista musical com contexto; se falhar, abre o canal uploader.
         viewModelScope.launch {
             val found = runCatching {
                 ytMusicRepository.resolveArtist(
@@ -356,6 +353,14 @@ class SearchViewModel @Inject constructor(
             }.getOrNull()
             if (found != null) {
                 _navigationEvent.emit(NavigationEvent.OpenArtist(found.id, found.name, found.thumbnailUrl))
+            } else if (track.source == Source.YOUTUBE) {
+                val channel = runCatching { youTubeRepository.getChannelForVideo(track.id) }.getOrNull()
+                if (channel != null) {
+                    _navigationEvent.emit(
+                        NavigationEvent.OpenArtist(channel.channelId, channel.channelName,
+                            channel.avatarUrl, isYouTubeChannel = true)
+                    )
+                }
             }
         }
     }

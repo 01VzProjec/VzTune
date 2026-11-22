@@ -161,11 +161,9 @@ class TrackMenuViewModel @Inject constructor(
 
     /** Clique em artista DENTRO de uma faixa: verifica quem tem ESSA faixa / ESSE álbum no catálogo. */
     fun onOpenArtistForTrack(track: Track, artistName: String) {
-        // Vídeo do YouTube: o "artista" é o CANAL. Nunca resolve por nome no YT Music.
-        if (track.source == Source.YOUTUBE) {
-            onOpenChannelForTrack(track)
-            return
-        }
+        // FIX: vídeo também pode ser conteúdo de um artista musical.
+        // Tenta resolver o artista no YT Music usando título/contexto; se não encontrar,
+        // mantém o fallback para o canal real que publicou o vídeo.
         viewModelScope.launch {
             val found = runCatching {
                 ytMusicRepository.resolveArtist(
@@ -176,6 +174,16 @@ class TrackMenuViewModel @Inject constructor(
             }.getOrNull()
             if (found != null) {
                 _navigationEvent.emit(MenuNavigationEvent.OpenArtist(found))
+            } else if (track.source == Source.YOUTUBE) {
+                val channel = runCatching { youTubeRepository.getChannelForVideo(track.id) }.getOrNull()
+                if (channel != null) {
+                    _navigationEvent.emit(
+                        MenuNavigationEvent.OpenArtist(
+                            Artist(id = channel.channelId, name = channel.channelName,
+                                thumbnailUrl = channel.avatarUrl, source = Source.YOUTUBE)
+                        )
+                    )
+                }
             }
         }
     }

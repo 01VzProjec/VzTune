@@ -184,8 +184,8 @@ private fun loadContent() {
                             it.copy(
                                 isLoading = false, errorMessage = null,
                                 title = ytPage.title?.takeIf { v -> v.isNotBlank() } ?: it.title,
-                                subtitle = ytPage.owner ?: it.subtitle,
-                                owner = ytPage.owner ?: it.owner,
+                                subtitle = ytPage.owner?.takeIf { n -> n.isNotBlank() } ?: ch?.channelName?.takeIf { n -> n.isNotBlank() } ?: it.subtitle,
+                                owner = ytPage.owner?.takeIf { n -> n.isNotBlank() } ?: ch?.channelName?.takeIf { n -> n.isNotBlank() } ?: it.owner,
                                 artistId = ytPage.ownerChannelId ?: ch?.channelId ?: it.artistId,
                                 ownerAvatarUrl = ch?.avatarUrl ?: it.ownerAvatarUrl,
                                 thumbnailUrl = ytPage.coverUrl ?: it.thumbnailUrl,

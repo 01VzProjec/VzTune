@@ -76,6 +76,19 @@ class YouTubeRepository @Inject constructor(
         var nextPage: Page?,
     )
 
+    // Sessao de paginacao dos videos do canal (UU): guarda o extractor + a proxima pagina.
+    // Sem guardar o extractor nao da pra chamar getPage() depois.
+    private data class ChannelVideosSession(
+        val extractor: PlaylistExtractor,
+        var nextPage: Page?,
+        val channelName: String,
+    )
+
+    private val channelVideoSessions = mutableMapOf<String, ChannelVideosSession>()
+    private val videoSearches = mutableMapOf<String, VideoSearchSession>()
+    private val playlistSearches = mutableMapOf<String, PlaylistSearchSession>()
+    private val shortSearches = mutableMapOf<String, VideoSearchSession>()
+
     // Sessao de paginacao do canal: guarda o extractor + a proxima pagina.
     // Sem guardar o extractor nao da pra chamar getPage() depois.
     private fun parseChannelStreamItems(items: List<InfoItem>, channelName: String): List<Track> {
@@ -1031,8 +1044,8 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
             bannerUrl = header?.banner,
             description = header?.description?.takeIf { it.isNotBlank() },
             subscriberCount = header?.subs,
-            hasMoreVideos = hasMoreVideos,
-            hasMorePlaylists = hasMorePlaylists,
+            hasMoreVideos = hasMoreChannelVideos(uc),
+            hasMorePlaylists = hasMoreChannelPlaylists(uc),
         )
     }
 

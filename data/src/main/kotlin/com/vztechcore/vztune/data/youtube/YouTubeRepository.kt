@@ -833,6 +833,10 @@ class YouTubeRepository @Inject constructor(
     // FIX8_CHANNEL_VIDEO - Canal real do video via NewPipe, 3 URLs. Sem busca por nome, sem YT Music.
     suspend fun getChannelForVideo(videoId: String): YouTubeChannelInfo? = withContext(Dispatchers.IO) {
 
+
+        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
+        val cleanId = videoId.trim().substringAfter("v=").substringAfter("/shorts/").substringBefore("?").substringBefore("&").trim()
+        if (cleanId.isBlank()) return@withContext null
         // PART 2+3 - InnerTube first for getChannelForVideo
         runCatching {
             val player = InnerTubeYouTube.player(cleanId)
@@ -848,10 +852,6 @@ class YouTubeRepository @Inject constructor(
                 )
             }
         }.onFailure { Log.w(TAG, "InnerTube getChannelForVideo failed: ${it.message}") }
-
-        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
-        val cleanId = videoId.trim().substringAfter("v=").substringAfter("/shorts/").substringBefore("?").substringBefore("&").trim()
-        if (cleanId.isBlank()) return@withContext null
         val urls = listOf(
             "https://www.youtube.com/watch?v=$cleanId",
             "https://www.youtube.com/shorts/$cleanId",
@@ -885,6 +885,10 @@ class YouTubeRepository @Inject constructor(
     // VL = prefixo do YT Music, tira. UU = playlist de uploads -> UC direto, sem precisar de extractor.
     suspend fun getChannelForPlaylist(playlistId: String): YouTubeChannelInfo? = withContext(Dispatchers.IO) {
 
+
+        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
+        var rawId = playlistId.trim().removePrefix("YT:").removePrefix("VL").trim()
+        if (rawId.isBlank()) return@withContext null
         // PART 2+3 - InnerTube first for getChannelForPlaylist (UC/UU only)
         runCatching {
             val ucFromUu = if (rawId.startsWith("UU") && rawId.length >= 24) "UC" + rawId.drop(2) else null
@@ -902,10 +906,6 @@ class YouTubeRepository @Inject constructor(
                 }
             }
         }.onFailure { Log.w(TAG, "InnerTube getChannelForPlaylist failed: ${it.message}") }
-
-        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
-        var rawId = playlistId.trim().removePrefix("YT:").removePrefix("VL").trim()
-        if (rawId.isBlank()) return@withContext null
         // Radio / mix nao tem dono de canal
         if (rawId.startsWith("OLAK") || rawId.startsWith("RD") || rawId.startsWith("RDAMVM") || rawId.startsWith("RDEM")) {
             return@withContext null
@@ -1083,6 +1083,10 @@ class YouTubeRepository @Inject constructor(
     }
 suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext(Dispatchers.IO) {
 
+
+        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
+        val input = channelIdOrHandle.trim()
+        if (input.isBlank()) return@withContext null
         // PART 2+3 - InnerTube first for browseChannel (UC only, handle falls back to NewPipe)
         runCatching {
             val uc = Regex("UC[\\w-]{22}").find(input)?.value
@@ -1109,10 +1113,6 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 }
             }
         }.onFailure { Log.w(TAG, "InnerTube browseChannel failed, fallback NewPipe: ${it.message}") }
-
-        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
-        val input = channelIdOrHandle.trim()
-        if (input.isBlank()) return@withContext null
         // Normaliza: UC..., @handle, youtube.com/channel/UC, youtube.com/@handle, youtube.com/c/nome
         val channelUrl = when {
             input.startsWith("https://") || input.startsWith("http://") -> input

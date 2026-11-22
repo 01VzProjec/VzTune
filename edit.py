@@ -1,13 +1,6 @@
-SEARCH_PARSER_CODE = 'package com.vztechcore.vztune.data.youtube\n\nimport com.vztechcore.vztune.core.domain.music.Playlist\nimport com.vztechcore.vztune.core.domain.music.Source\nimport com.vztechcore.vztune.core.domain.music.Track\nimport com.vztechcore.vztune.core.domain.search.SearchHit\nimport com.vztechcore.vztune.data.innertube.InnerTubeYouTube\nimport org.json.JSONArray\nimport org.json.JSONObject\n\n/**\n * Parses YouTube InnerTube search JSON (youtube.com).\n * Generic walker: collects renderers anywhere in the tree.\n */\nobject YouTubeSearchParser {\n\n    fun parseVideos(json: JSONObject): List<SearchHit.VideoHit> {\n        val out = mutableListOf<SearchHit.VideoHit>()\n        val renderers = mutableListOf<JSONObject>()\n        collect(json, "videoRenderer", renderers)\n        collect(json, "gridVideoRenderer", renderers)\n        for (r in renderers) {\n            val videoId = r.optString("videoId").takeIf { it.isNotBlank() } ?: continue\n            val title = textOf(r.optJSONObject("title")) ?: continue\n            val thumb = thumbnailOf(r.optJSONObject("thumbnail"))\n            val duration = parseDuration(textOf(r.optJSONObject("lengthText")) ?: r.optString("lengthText"))\n            val channel = textOf(r.optJSONObject("ownerText")) ?: textOf(r.optJSONObject("shortBylineText")) ?: ""\n            val published = textOf(r.optJSONObject("publishedTimeText"))\n            out += SearchHit.VideoHit(\n                Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, publishedText = published)\n            )\n        }\n        return out.distinctBy { it.track.id }\n    }\n\n    fun parsePlaylists(json: JSONObject): List<SearchHit.PlaylistHit> {\n        val out = mutableListOf<SearchHit.PlaylistHit>()\n        val renderers = mutableListOf<JSONObject>()\n        collect(json, "playlistRenderer", renderers)\n        collect(json, "gridPlaylistRenderer", renderers)\n        for (r in renderers) {\n            val pid = r.optString("playlistId").takeIf { it.isNotBlank() } ?: continue\n            val title = textOf(r.optJSONObject("title")) ?: continue\n            val owner = textOf(r.optJSONObject("shortBylineText")) ?: ""\n            val thumb = thumbnailOf(r.optJSONObject("thumbnail"))\n            val countText = r.optString("videoCount").takeIf { it.isNotBlank() } ?: textOf(r.optJSONObject("videoCountText"))\n            val count = countText?.filter { it.isDigit() }?.toIntOrNull()\n            out += SearchHit.PlaylistHit(Playlist(id = pid, title = title, owner = owner.ifBlank { null }, thumbnailUrl = thumb, trackCount = count, source = Source.YOUTUBE))\n        }\n        return out.distinctBy { it.playlist.id }\n    }\n\n    fun parseShorts(json: JSONObject): List<SearchHit.ShortHit> {\n        val out = mutableListOf<SearchHit.ShortHit>()\n        val reels = mutableListOf<JSONObject>()\n        collect(json, "reelItemRenderer", reels)\n        for (r in reels) {\n            val videoId = r.optString("videoId").takeIf { it.isNotBlank() } ?: continue\n            val title = textOf(r.optJSONObject("headline")) ?: textOf(r.optJSONObject("title")) ?: continue\n            val thumb = thumbnailOf(r.optJSONObject("thumbnail"))\n            val channel = textOf(r.optJSONObject("shortBylineText")) ?: ""\n            out += SearchHit.ShortHit(Track(id = videoId, title = title, artist = channel, durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE))\n        }\n        val lockups = mutableListOf<JSONObject>()\n        collect(json, "shortsLockupViewModel", lockups)\n        for (r in lockups) {\n            val videoId = r.optString("contentId").takeIf { it.isNotBlank() } ?: r.optString("videoId").takeIf { it.isNotBlank() } ?: continue\n            val title = r.optString("title").takeIf { it.isNotBlank() } ?: textOf(r.optJSONObject("headline")) ?: continue\n            val thumb = thumbnailOf(r.optJSONObject("thumbnail"))\n            out += SearchHit.ShortHit(Track(id = videoId, title = title, artist = "", durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE))\n        }\n        if (out.isNotEmpty()) return out.distinctBy { it.track.id }\n        val videos = parseVideos(json)\n        return videos.filter { it.track.durationSeconds in 1..65 }.map { SearchHit.ShortHit(it.track) }.distinctBy { it.track.id }\n    }\n\n    fun parseContinuation(json: JSONObject): String? {\n        return InnerTubeYouTube.findContinuationToken(json)\n    }\n\n    fun collect(node: Any?, key: String, out: MutableList<JSONObject>) {\n        when (node) {\n            is JSONObject -> {\n                if (node.has(key)) {\n                    val v = node.opt(key)\n                    if (v is JSONObject) out += v\n                }\n                val keys = node.keys()\n                while (keys.hasNext()) {\n                    val k = keys.next()\n                    if (k == key) continue\n                    collect(node.opt(k), key, out)\n                }\n            }\n            is JSONArray -> {\n                for (i in 0 until node.length()) collect(node.opt(i), key, out)\n            }\n        }\n    }\n\n    fun textOf(obj: JSONObject?): String? {\n        if (obj == null) return null\n        val simple = obj.optString("simpleText").takeIf { it.isNotBlank() && it != "null" }\n        if (simple != null) return simple\n        val runs = obj.optJSONArray("runs") ?: return null\n        val sb = StringBuilder()\n        for (i in 0 until runs.length()) {\n            val run = runs.optJSONObject(i) ?: continue\n            sb.append(run.optString("text"))\n        }\n        val s = sb.toString().trim()\n        return s.ifBlank { null }\n    }\n\n    fun thumbnailOf(obj: JSONObject?): String? {\n        if (obj == null) return null\n        val thumbs = obj.optJSONArray("thumbnails")\n        if (thumbs != null && thumbs.length() > 0) {\n            return thumbs.optJSONObject(thumbs.length() - 1)?.optString("url")\n        }\n        val nested = obj.optJSONObject("thumbnail")?.optJSONArray("thumbnails")\n        if (nested != null && nested.length() > 0) {\n            return nested.optJSONObject(nested.length() - 1)?.optString("url")\n        }\n        return null\n    }\n\n    fun parseDuration(text: String?): Long {\n        if (text.isNullOrBlank()) return 0L\n        val parts = text.trim().split(":").mapNotNull { it.toLongOrNull() }\n        if (parts.isEmpty()) return 0L\n        var total = 0L\n        for (p in parts) total = total * 60 + p\n        return total\n    }\n}\n'
-
-CHANNEL_PARSER_CODE = 'package com.vztechcore.vztune.data.youtube\n\nimport com.vztechcore.vztune.core.domain.music.Playlist\nimport com.vztechcore.vztune.core.domain.music.Source\nimport com.vztechcore.vztune.core.domain.music.Track\nimport com.vztechcore.vztune.data.innertube.InnerTubeYouTube\nimport org.json.JSONArray\nimport org.json.JSONObject\n\n/**\n * Parses YouTube InnerTube browse JSON for a channel (youtube.com).\n * Header + tabs (Videos / Shorts / Playlists). Falls back to whole JSON if no tabs.\n */\nobject YouTubeChannelParser {\n\n    data class ChannelData(\n        val channelName: String,\n        val avatarUrl: String?,\n        val bannerUrl: String?,\n        val description: String?,\n        val subscriberCount: String?,\n        val videos: List<Track>,\n        val shorts: List<Track>,\n        val playlists: List<Playlist>,\n        val videosContinuation: String?,\n        val playlistsContinuation: String?,\n        val shortsContinuation: String?,\n    )\n\n    fun parseChannelPage(json: JSONObject): ChannelData {\n        val header = parseHeader(json)\n        val tabs = findTabs(json)\n        var videos = emptyList<Track>()\n        var shorts = emptyList<Track>()\n        var playlists = emptyList<Playlist>()\n        var videosCont: String? = null\n        var playlistsCont: String? = null\n        var shortsCont: String? = null\n        if (tabs.isEmpty()) {\n            videos = collectVideos(json)\n            shorts = collectShorts(json)\n            playlists = collectPlaylists(json)\n            videosCont = InnerTubeYouTube.findContinuationToken(json)\n        } else {\n            for ((title, tabJson) in tabs) {\n                val low = title.lowercase()\n                when {\n                    low.contains("video") || low.contains("vídeo") -> {\n                        videos = collectVideos(tabJson)\n                        videosCont = InnerTubeYouTube.findContinuationToken(tabJson)\n                    }\n                    low.contains("short") -> {\n                        shorts = collectShorts(tabJson)\n                        shortsCont = InnerTubeYouTube.findContinuationToken(tabJson)\n                    }\n                    low.contains("playlist") -> {\n                        playlists = collectPlaylists(tabJson)\n                        playlistsCont = InnerTubeYouTube.findContinuationToken(tabJson)\n                    }\n                    low.contains("início") || low.contains("inicio") || low.contains("home") -> {\n                        if (videos.isEmpty()) {\n                            val homeVideos = collectVideos(tabJson)\n                            if (homeVideos.isNotEmpty()) videos = homeVideos\n                        }\n                    }\n                }\n            }\n            if (videos.isEmpty()) {\n                val allVideos = collectVideos(json)\n                val shortIds = shorts.map { it.id }.toSet()\n                videos = allVideos.filter { it.id !in shortIds }\n            }\n        }\n        return ChannelData(\n            channelName = header.first,\n            avatarUrl = header.second,\n            bannerUrl = header.third,\n            description = header.fourth,\n            subscriberCount = header.fifth,\n            videos = videos.distinctBy { it.id },\n            shorts = shorts.distinctBy { it.id },\n            playlists = playlists.distinctBy { it.id },\n            videosContinuation = videosCont,\n            playlistsContinuation = playlistsCont,\n            shortsContinuation = shortsCont\n        )\n    }\n\n    fun parseVideosContinuation(json: JSONObject): Pair<List<Track>, String?> {\n        val videos = collectVideos(json)\n        val cont = InnerTubeYouTube.findContinuationToken(json)\n        return videos.distinctBy { it.id } to cont\n    }\n\n    fun parsePlaylistsContinuation(json: JSONObject): Pair<List<Playlist>, String?> {\n        val playlists = collectPlaylists(json)\n        val cont = InnerTubeYouTube.findContinuationToken(json)\n        return playlists.distinctBy { it.id } to cont\n    }\n\n    private fun parseHeader(json: JSONObject): Quint<String, String?, String?, String?, String?> {\n        val headers = mutableListOf<JSONObject>()\n        collect(json, "c4TabbedHeaderRenderer", headers)\n        collect(json, "pageHeaderRenderer", headers)\n        collect(json, "channelHeaderRenderer", headers)\n        val h = headers.firstOrNull()\n        if (h != null) {\n            val name = YouTubeSearchParser.textOf(h.optJSONObject("title"))\n                ?: YouTubeSearchParser.textOf(h.optJSONObject("channelTitle")) ?: ""\n            val avatar = YouTubeSearchParser.thumbnailOf(h.optJSONObject("avatar"))\n            val banner = YouTubeSearchParser.thumbnailOf(h.optJSONObject("banner"))\n            val desc = YouTubeSearchParser.textOf(h.optJSONObject("description"))\n            val subs = YouTubeSearchParser.textOf(h.optJSONObject("subscriberCountText"))\n                ?: YouTubeSearchParser.textOf(h.optJSONObject("subscriberCount"))\n            return Quint(name, avatar, banner, desc, subs)\n        }\n        return Quint("", null, null, null, null)\n    }\n\n    private data class Quint<A, B, C, D, E>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E)\n\n    private fun findTabs(json: JSONObject): List<Pair<String, JSONObject>> {\n        val tabs = mutableListOf<Pair<String, JSONObject>>()\n        val tabRenderers = mutableListOf<JSONObject>()\n        collect(json, "tabRenderer", tabRenderers)\n        for (t in tabRenderers) {\n            val title = YouTubeSearchParser.textOf(t.optJSONObject("title")) ?: continue\n            tabs += title to t\n        }\n        return tabs\n    }\n\n    private fun collectVideos(node: Any?): List<Track> {\n        val out = mutableListOf<Track>()\n        val videoRenderers = mutableListOf<JSONObject>()\n        collect(node, "videoRenderer", videoRenderers)\n        collect(node, "gridVideoRenderer", videoRenderers)\n        for (r in videoRenderers) {\n            val videoId = r.optString("videoId").takeIf { it.isNotBlank() } ?: continue\n            val title = YouTubeSearchParser.textOf(r.optJSONObject("title")) ?: continue\n            val thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))\n            val duration = YouTubeSearchParser.parseDuration(\n                YouTubeSearchParser.textOf(r.optJSONObject("lengthText")) ?: r.optString("lengthText")\n            )\n            val channel = YouTubeSearchParser.textOf(r.optJSONObject("ownerText"))\n                ?: YouTubeSearchParser.textOf(r.optJSONObject("shortBylineText")) ?: ""\n            val published = YouTubeSearchParser.textOf(r.optJSONObject("publishedTimeText"))\n            out += Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, publishedText = published)\n        }\n        return out\n    }\n\n    private fun collectShorts(node: Any?): List<Track> {\n        val out = mutableListOf<Track>()\n        val reels = mutableListOf<JSONObject>()\n        collect(node, "reelItemRenderer", reels)\n        for (r in reels) {\n            val videoId = r.optString("videoId").takeIf { it.isNotBlank() } ?: continue\n            val title = YouTubeSearchParser.textOf(r.optJSONObject("headline"))\n                ?: YouTubeSearchParser.textOf(r.optJSONObject("title")) ?: continue\n            val thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))\n            out += Track(id = videoId, title = title, artist = "", durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)\n        }\n        val lockups = mutableListOf<JSONObject>()\n        collect(node, "shortsLockupViewModel", lockups)\n        for (r in lockups) {\n            val videoId = r.optString("contentId").takeIf { it.isNotBlank() }\n                ?: r.optString("videoId").takeIf { it.isNotBlank() } ?: continue\n            val title = r.optString("title").takeIf { it.isNotBlank() } ?: continue\n            val thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))\n            out += Track(id = videoId, title = title, artist = "", durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)\n        }\n        return out\n    }\n\n    private fun collectPlaylists(node: Any?): List<Playlist> {\n        val out = mutableListOf<Playlist>()\n        val renderers = mutableListOf<JSONObject>()\n        collect(node, "playlistRenderer", renderers)\n        collect(node, "gridPlaylistRenderer", renderers)\n        for (r in renderers) {\n            val pid = r.optString("playlistId").takeIf { it.isNotBlank() } ?: continue\n            val title = YouTubeSearchParser.textOf(r.optJSONObject("title")) ?: continue\n            val owner = YouTubeSearchParser.textOf(r.optJSONObject("shortBylineText")) ?: ""\n            val thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))\n            val countText = r.optString("videoCount").takeIf { it.isNotBlank() }\n                ?: YouTubeSearchParser.textOf(r.optJSONObject("videoCountText"))\n            val count = countText?.filter { it.isDigit() }?.toIntOrNull()\n            out += Playlist(id = pid, title = title, owner = owner.ifBlank { null }, thumbnailUrl = thumb, trackCount = count, source = Source.YOUTUBE)\n        }\n        return out\n    }\n\n    private fun collect(node: Any?, key: String, out: MutableList<JSONObject>) {\n        when (node) {\n            is JSONObject -> {\n                if (node.has(key)) {\n                    val v = node.opt(key)\n                    if (v is JSONObject) out += v\n                }\n                val keys = node.keys()\n                while (keys.hasNext()) {\n                    val k = keys.next()\n                    if (k == key) continue\n                    collect(node.opt(k), key, out)\n                }\n            }\n            is JSONArray -> {\n                for (i in 0 until node.length()) collect(node.opt(i), key, out)\n            }\n        }\n    }\n}\n'
-
-SNIPPETS = {'searchVideos': '\n        // PART 2+3 - InnerTube first for searchVideos\n        if (!loadMore) {\n            runCatching {\n                val json = InnerTubeYouTube.search(query)\n                val items = YouTubeSearchParser.parseVideos(json).take(pageSize)\n                val cont = YouTubeSearchParser.parseContinuation(json)\n                ytVideoContinuations[searchId] = cont\n                if (items.isNotEmpty() || cont != null) return@withContext VideoPage(items, cont != null)\n            }.onFailure { Log.w(TAG, "InnerTube searchVideos failed, fallback NewPipe: ${it.message}") }\n        } else {\n            val cont = ytVideoContinuations[searchId]\n            if (cont != null) {\n                runCatching {\n                    val json = InnerTubeYouTube.searchContinuation(cont)\n                    val items = YouTubeSearchParser.parseVideos(json).take(pageSize)\n                    val next = YouTubeSearchParser.parseContinuation(json)\n                    ytVideoContinuations[searchId] = next\n                    return@withContext VideoPage(items, next != null)\n                }.onFailure { Log.w(TAG, "InnerTube searchVideos continuation failed: ${it.message}") }\n            }\n        }\n', 'searchPlaylists': '\n        // PART 2+3 - InnerTube first for searchPlaylists\n        if (!loadMore) {\n            runCatching {\n                val json = InnerTubeYouTube.search(query)\n                val items = YouTubeSearchParser.parsePlaylists(json).take(pageSize)\n                val cont = YouTubeSearchParser.parseContinuation(json)\n                ytPlaylistContinuations[searchId] = cont\n                if (items.isNotEmpty() || cont != null) return@withContext items\n            }.onFailure { Log.w(TAG, "InnerTube searchPlaylists failed, fallback NewPipe: ${it.message}") }\n        } else {\n            val cont = ytPlaylistContinuations[searchId]\n            if (cont != null) {\n                runCatching {\n                    val json = InnerTubeYouTube.searchContinuation(cont)\n                    val items = YouTubeSearchParser.parsePlaylists(json).take(pageSize)\n                    val next = YouTubeSearchParser.parseContinuation(json)\n                    ytPlaylistContinuations[searchId] = next\n                    return@withContext items\n                }.onFailure { Log.w(TAG, "InnerTube searchPlaylists continuation failed: ${it.message}") }\n            }\n        }\n', 'searchShorts': '\n        // PART 2+3 - InnerTube first for searchShorts\n        if (!loadMore) {\n            runCatching {\n                val json = InnerTubeYouTube.search(query)\n                val items = YouTubeSearchParser.parseShorts(json).take(pageSize)\n                val cont = YouTubeSearchParser.parseContinuation(json)\n                ytShortContinuations[searchId] = cont\n                if (items.isNotEmpty() || cont != null) return@withContext ShortPage(items, cont != null)\n            }.onFailure { Log.w(TAG, "InnerTube searchShorts failed, fallback NewPipe: ${it.message}") }\n        } else {\n            val cont = ytShortContinuations[searchId]\n            if (cont != null) {\n                runCatching {\n                    val json = InnerTubeYouTube.searchContinuation(cont)\n                    val items = YouTubeSearchParser.parseShorts(json).take(pageSize)\n                    val next = YouTubeSearchParser.parseContinuation(json)\n                    ytShortContinuations[searchId] = next\n                    return@withContext ShortPage(items, next != null)\n                }.onFailure { Log.w(TAG, "InnerTube searchShorts continuation failed: ${it.message}") }\n            }\n        }\n', 'browseChannel': '\n        // PART 2+3 - InnerTube first for browseChannel (UC only, handle falls back to NewPipe)\n        runCatching {\n            val uc = Regex("UC[\\\\w-]{22}").find(input)?.value\n            if (uc != null) {\n                val json = InnerTubeYouTube.browse(uc)\n                val parsed = YouTubeChannelParser.parseChannelPage(json)\n                if (parsed.channelName.isNotBlank() || parsed.videos.isNotEmpty() || parsed.playlists.isNotEmpty()) {\n                    ytChannelVideoContinuations[uc] = parsed.videosContinuation\n                    ytChannelVideoContinuations[input] = parsed.videosContinuation\n                    ytChannelPlaylistContinuations[uc] = parsed.playlistsContinuation\n                    ytChannelPlaylistContinuations[input] = parsed.playlistsContinuation\n                    return@withContext ChannelPage(\n                        videos = parsed.videos,\n                        shorts = parsed.shorts,\n                        playlists = parsed.playlists,\n                        channelName = parsed.channelName.ifBlank { null },\n                        avatarUrl = parsed.avatarUrl,\n                        bannerUrl = parsed.bannerUrl,\n                        description = parsed.description,\n                        subscriberCount = parsed.subscriberCount,\n                        hasMoreVideos = parsed.videosContinuation != null,\n                        hasMorePlaylists = parsed.playlistsContinuation != null\n                    )\n                }\n            }\n        }.onFailure { Log.w(TAG, "InnerTube browseChannel failed, fallback NewPipe: ${it.message}") }\n', 'getChannelForVideo': '\n        // PART 2+3 - InnerTube first for getChannelForVideo\n        runCatching {\n            val player = InnerTubeYouTube.player(cleanId)\n            val details = player.optJSONObject("videoDetails")\n            val chId = details?.optString("channelId").orEmpty()\n            val author = details?.optString("author").orEmpty()\n            if (chId.startsWith("UC") && author.isNotBlank()) {\n                return@withContext YouTubeChannelInfo(\n                    channelId = chId,\n                    channelName = cleanChannelName(author),\n                    avatarUrl = null,\n                    channelUrl = "https://www.youtube.com/channel/$chId"\n                )\n            }\n        }.onFailure { Log.w(TAG, "InnerTube getChannelForVideo failed: ${it.message}") }\n', 'getChannelForPlaylist': '\n        // PART 2+3 - InnerTube first for getChannelForPlaylist (UC/UU only)\n        runCatching {\n            val ucFromUu = if (rawId.startsWith("UU") && rawId.length >= 24) "UC" + rawId.drop(2) else null\n            val ucDirect = if (rawId.startsWith("UC") && rawId.length >= 24) rawId else ucFromUu\n            if (ucDirect != null) {\n                val json = InnerTubeYouTube.browse(ucDirect)\n                val parsed = YouTubeChannelParser.parseChannelPage(json)\n                if (parsed.channelName.isNotBlank()) {\n                    return@withContext YouTubeChannelInfo(\n                        channelId = ucDirect,\n                        channelName = cleanChannelName(parsed.channelName),\n                        avatarUrl = parsed.avatarUrl,\n                        channelUrl = "https://www.youtube.com/channel/$ucDirect"\n                    )\n                }\n            }\n        }.onFailure { Log.w(TAG, "InnerTube getChannelForPlaylist failed: ${it.message}") }\n', 'loadMoreChannelVideos': '\n        // PART 2+3 - InnerTube continuation first for loadMoreChannelVideos\n        val ytCont = ytChannelVideoContinuations[channelId]\n            ?: ytChannelVideoContinuations.entries.firstOrNull { (k, v) -> v != null && (channelId.contains(k) || k.contains(channelId)) }?.value\n        if (ytCont != null) {\n            runCatching {\n                val json = InnerTubeYouTube.browseContinuation(ytCont)\n                val (items, next) = YouTubeChannelParser.parseVideosContinuation(json)\n                ytChannelVideoContinuations[channelId] = next\n                if (items.isNotEmpty() || next != null) return@withContext items.distinctBy { it.id }.take(pageSize)\n            }.onFailure { Log.w(TAG, "InnerTube loadMoreChannelVideos failed: ${it.message}") }\n        }\n', 'loadMoreChannelPlaylists': '\n        // PART 2+3 - InnerTube continuation first for loadMoreChannelPlaylists\n        val ytContPl = ytChannelPlaylistContinuations[channelId]\n            ?: ytChannelPlaylistContinuations.entries.firstOrNull { (k, v) -> v != null && (channelId.contains(k) || k.contains(channelId)) }?.value\n        if (ytContPl != null) {\n            runCatching {\n                val json = InnerTubeYouTube.browseContinuation(ytContPl)\n                val (items, next) = YouTubeChannelParser.parsePlaylistsContinuation(json)\n                ytChannelPlaylistContinuations[channelId] = next\n                if (items.isNotEmpty() || next != null) return@withContext items.distinctBy { it.id }.take(pageSize)\n            }.onFailure { Log.w(TAG, "InnerTube loadMoreChannelPlaylists failed: ${it.message}") }\n        }\n'}
-
-# parte2_3.py - Parte 2+3 juntas: Busca + Canal via InnerTube (NewPipe fica como fallback)
-# Rodar na raiz: python3 parte2_3.py
-# Se alguma ancora nao bater, aborta SEM escrever em YouTubeRepository.kt e avisa qual.
-# Nao cria .bak.
+# parte2_3_fix.py - Corrige o erro Unresolved reference cleanId / rawId / input
+# Roda na raiz: python3 parte2_3_fix.py
+# Nao cria .bak. Se ja estiver corrigido, nao faz nada.
 import os, sys
 
 def fail(msg):
@@ -16,111 +9,70 @@ def fail(msg):
 
 ROOT = os.getcwd()
 YT_REPO = os.path.join(ROOT, "data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeRepository.kt")
-INNER_YT = os.path.join(ROOT, "data/src/main/kotlin/com/vztechcore/vztune/data/innertube/InnerTubeYouTube.kt")
-SEARCH_PARSER = os.path.join(ROOT, "data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeSearchParser.kt")
-CHANNEL_PARSER = os.path.join(ROOT, "data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeChannelParser.kt")
-
 if not os.path.isfile(YT_REPO):
     fail(f"nao achei {YT_REPO} - roda na raiz do VzTune")
-if not os.path.isfile(INNER_YT):
-    fail(f"nao achei {INNER_YT} - roda a parte1.py antes")
 
-# 1 - Cria parsers se nao existirem
-if not os.path.isfile(SEARCH_PARSER):
-    with open(SEARCH_PARSER, "w", encoding="utf-8") as out:
-        out.write(SEARCH_PARSER_CODE)
-    print(f"Criado: {SEARCH_PARSER}")
-else:
-    print(f"JA EXISTE: {SEARCH_PARSER} - pulando pra nao sobrescrever")
-
-if not os.path.isfile(CHANNEL_PARSER):
-    with open(CHANNEL_PARSER, "w", encoding="utf-8") as out:
-        out.write(CHANNEL_PARSER_CODE)
-    print(f"Criado: {CHANNEL_PARSER}")
-else:
-    print(f"JA EXISTE: {CHANNEL_PARSER} - pulando pra nao sobrescrever")
-
-# 2 - Patch YouTubeRepository.kt em memoria, so escreve no fim se tudo bater
 with open(YT_REPO, "r", encoding="utf-8") as f:
     text = f.read()
 
-def insert_after_withcontext(orig, func_name, snippet, unique_marker):
-    idx = orig.find(func_name)
-    if idx == -1:
-        fail(f"ancora nao bateu: {func_name}")
-    wc = orig.find("withContext(Dispatchers.IO) {", idx)
-    if wc == -1:
-        fail(f"ancora withContext nao bateu para {func_name}")
-    # Checa so o marcador unico dessa funcao, nao generico PART 2+3,
-    # senao a funcao seguinte ja patchada faz pular a atual por engano
-    if unique_marker in orig[idx:idx+8000]:
-        # Mas garante que esta dentro desta funcao, nao na proxima: olha so ate o proximo suspend fun / fun depois do withContext
-        # Se o marcador esta antes do proximo fun, e desta funcao mesmo
-        next_fun = orig.find("\n    suspend fun ", wc)
-        next_fun2 = orig.find("\n    fun ", wc)
-        limit = wc + 8000
-        if next_fun != -1:
-            limit = min(limit, next_fun)
-        if next_fun2 != -1:
-            limit = min(limit, next_fun2)
-        if unique_marker in orig[idx:limit]:
-            print(f"Pulando {func_name} - ja tem {unique_marker}")
-            return orig
-    insert_pos = wc + len("withContext(Dispatchers.IO) {")
-    return orig[:insert_pos] + "\n" + snippet + orig[insert_pos:]
+def remove_block(orig, marker):
+    # marker = "InnerTube first for browseChannel" etc
+    start = orig.find(f"// PART 2+3 - {marker}")
+    if start == -1:
+        return orig, None
+    line_start = orig.rfind("\n", 0, start)
+    if line_start == -1:
+        line_start = 0
+    onf = orig.find(".onFailure", start)
+    if onf == -1:
+        fail(f"nao achei fim do bloco {marker}")
+    end = orig.find("\n", onf)
+    if end == -1:
+        end = len(orig)
+    block = orig[line_start:end]  # inclui \n do inicio ate fim da linha onFailure
+    new_text = orig[:line_start] + orig[end:]
+    return new_text, block
 
-# import
-if "InnerTubeYouTube" not in text:
-    anchor = "import org.schabi.newpipe.extractor.stream.StreamInfoItem"
-    if anchor not in text:
-        fail(f"ancora import nao bateu: {anchor}")
-    text = text.replace(anchor, anchor + "\nimport com.vztechcore.vztune.data.innertube.InnerTubeYouTube", 1)
-    print("Import InnerTubeYouTube adicionado")
+# Lista: (marker, anchor_unico)
+jobs = [
+    ("InnerTube first for browseChannel", "if (input.isBlank()) return@withContext null"),
+    ("InnerTube first for getChannelForVideo", "if (cleanId.isBlank()) return@withContext null"),
+    ("InnerTube first for getChannelForPlaylist", "if (rawId.isBlank()) return@withContext null"),
+]
 
-# maps
-if "ytVideoContinuations" not in text:
-    anchor2 = "private val channelVideoSessions = mutableMapOf<String, ChannelVideosSession>()"
-    if anchor2 not in text:
-        fail(f"ancora maps nao bateu: {anchor2}")
-    text = text.replace(anchor2, anchor2 + "\n\n    // PART 2+3 - InnerTube continuation tokens (separate from NewPipe Page)\n    private val ytVideoContinuations = mutableMapOf<String, String?>()\n    private val ytPlaylistContinuations = mutableMapOf<String, String?>()\n    private val ytShortContinuations = mutableMapOf<String, String?>()\n    private val ytChannelVideoContinuations = mutableMapOf<String, String?>()\n    private val ytChannelPlaylistContinuations = mutableMapOf<String, String?>()", 1)
-    print("Maps de continuacao adicionados")
+fixed_any = False
+for marker, anchor in jobs:
+    snippet_pos = text.find(f"// PART 2+3 - {marker}")
+    anchor_pos = text.find(anchor)
+    if snippet_pos == -1:
+        print(f"Pulando {marker} - bloco nao encontrado (talvez ja removido?)")
+        continue
+    if anchor_pos == -1:
+        fail(f"ancora nao bateu: {anchor} para {marker}")
+    if snippet_pos > anchor_pos:
+        print(f"OK {marker} - ja esta depois da variavel, nao precisa mexer")
+        continue
+    # Esta antes da variavel = bug: remove e reinsere depois da ancora
+    print(f"Corrigindo {marker} - estava antes da variavel, movendo pra depois")
+    text, block = remove_block(text, marker)
+    if block is None:
+        fail(f"falhou ao remover {marker}")
+    # Reacha ancora depois da remocao (posicao mudou)
+    anchor_pos2 = text.find(anchor)
+    if anchor_pos2 == -1:
+        fail(f"ancora sumiu depois de remover: {anchor}")
+    anchor_end = text.find("\n", anchor_pos2)
+    if anchor_end == -1:
+        anchor_end = len(text)
+    # Insere bloco logo depois da linha da ancora
+    text = text[:anchor_end] + block + text[anchor_end:]
+    fixed_any = True
+    print(f"  -> {marker} movido para depois de: {anchor}")
 
-text = insert_after_withcontext(text, "suspend fun searchVideos(", SNIPPETS["searchVideos"], "InnerTube first for searchVideos")
-text = insert_after_withcontext(text, "suspend fun searchPlaylists(", SNIPPETS["searchPlaylists"], "InnerTube first for searchPlaylists")
-text = insert_after_withcontext(text, "suspend fun searchShorts(", SNIPPETS["searchShorts"], "InnerTube first for searchShorts")
-text = insert_after_withcontext(text, "suspend fun browseChannel(channelIdOrHandle: String): ChannelPage?", SNIPPETS["browseChannel"], "InnerTube first for browseChannel")
-text = insert_after_withcontext(text, "suspend fun getChannelForVideo(videoId: String): YouTubeChannelInfo?", SNIPPETS["getChannelForVideo"], "InnerTube first for getChannelForVideo")
-text = insert_after_withcontext(text, "suspend fun getChannelForPlaylist(playlistId: String): YouTubeChannelInfo?", SNIPPETS["getChannelForPlaylist"], "InnerTube first for getChannelForPlaylist")
-text = insert_after_withcontext(text, "suspend fun loadMoreChannelVideos", SNIPPETS["loadMoreChannelVideos"], "InnerTube continuation first for loadMoreChannelVideos")
-text = insert_after_withcontext(text, "suspend fun loadMoreChannelPlaylists", SNIPPETS["loadMoreChannelPlaylists"], "InnerTube continuation first for loadMoreChannelPlaylists")
-
-# hasMore
-old_has_videos = "    fun hasMoreChannelVideos(channelId: String): Boolean {\n        if (channelVideoSessions[channelId]?.nextPage != null) return true"
-new_has_videos = "    fun hasMoreChannelVideos(channelId: String): Boolean {\n        if (ytChannelVideoContinuations[channelId] != null) return true\n        if (ytChannelVideoContinuations.entries.any { (k, v) -> v != null && (k == channelId || channelId.contains(k) || k.contains(channelId)) }) return true\n        if (channelVideoSessions[channelId]?.nextPage != null) return true"
-if "ytChannelVideoContinuations[channelId] != null" not in text:
-    if old_has_videos not in text:
-        fail("ancora hasMoreChannelVideos nao bateu")
-    text = text.replace(old_has_videos, new_has_videos, 1)
-    print("hasMoreChannelVideos patchado")
-
-old_has_pl = "    fun hasMoreChannelPlaylists(channelId: String): Boolean {\n        if (channelPlaylistSessions[channelId]?.nextPage != null) return true"
-new_has_pl = "    fun hasMoreChannelPlaylists(channelId: String): Boolean {\n        if (ytChannelPlaylistContinuations[channelId] != null) return true\n        if (ytChannelPlaylistContinuations.entries.any { (k, v) -> v != null && (k == channelId || channelId.contains(k) || k.contains(channelId)) }) return true\n        if (channelPlaylistSessions[channelId]?.nextPage != null) return true"
-if "ytChannelPlaylistContinuations[channelId] != null" not in text:
-    if old_has_pl not in text:
-        fail("ancora hasMoreChannelPlaylists nao bateu")
-    text = text.replace(old_has_pl, new_has_pl, 1)
-    print("hasMoreChannelPlaylists patchado")
-
-# resetSession - limpa maps novos tambem
-if "ytVideoContinuations.clear()" not in text:
-    old_reset = "        channelVideoSessions.clear()\n        channelPlaylistSessions.clear()\n        videoSearches.clear()\n        playlistSearches.clear()\n        shortSearches.clear()"
-    if old_reset not in text:
-        fail("ancora resetSession nao bateu")
-    new_reset = old_reset + "\n        ytVideoContinuations.clear()\n        ytPlaylistContinuations.clear()\n        ytShortContinuations.clear()\n        ytChannelVideoContinuations.clear()\n        ytChannelPlaylistContinuations.clear()"
-    text = text.replace(old_reset, new_reset, 1)
-    print("resetSession patchado")
-
-# So agora escreve
-with open(YT_REPO, "w", encoding="utf-8") as f:
-    f.write(text)
-print(f"Parte 2+3 OK - {YT_REPO} atualizado, parsers criados. Comita, push, testa busca + canal.")
+if not fixed_any:
+    print("Nada para corrigir - ja estava certo.")
+else:
+    # So escreve se tudo ok
+    with open(YT_REPO, "w", encoding="utf-8") as f:
+        f.write(text)
+    print(f"Fix OK - {YT_REPO} corrigido. Roda o build de novo.")

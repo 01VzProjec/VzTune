@@ -173,7 +173,7 @@ object YouTubeChannelParser {
         return out
     }
 
-    private fun collectPlaylists(node: Any?): List<Playlist> {
+        private fun collectPlaylists(node: Any?): List<Playlist> {
         val out = mutableListOf<Playlist>()
         val renderers = mutableListOf<JSONObject>()
         collect(node, "playlistRenderer", renderers)
@@ -181,12 +181,28 @@ object YouTubeChannelParser {
         for (r in renderers) {
             val pid = r.optString("playlistId").takeIf { it.isNotBlank() } ?: continue
             val title = YouTubeSearchParser.textOf(r.optJSONObject("title")) ?: continue
-            val owner = YouTubeSearchParser.textOf(r.optJSONObject("shortBylineText")) ?: ""
+            val owner = YouTubeSearchParser.textOf(r.optJSONObject("shortBylineText"))
+                ?: YouTubeSearchParser.textOf(r.optJSONObject("longBylineText"))
+                ?: YouTubeSearchParser.textOf(r.optJSONObject("ownerText")) ?: ""
             val thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))
             val countText = r.optString("videoCount").takeIf { it.isNotBlank() }
                 ?: YouTubeSearchParser.textOf(r.optJSONObject("videoCountText"))
             val count = countText?.filter { it.isDigit() }?.toIntOrNull()
             out += Playlist(id = pid, title = title, owner = owner.ifBlank { null }, thumbnailUrl = thumb, trackCount = count, source = Source.YOUTUBE)
+        }
+        // Layout 2026: lockupViewModel (mesma logica da busca)
+        val lockups = mutableListOf<JSONObject>()
+        collect(node, "lockupViewModel", lockups)
+        for (lvm in lockups) {
+            val type = lvm.optString("contentType")
+            if (type != "LOCKUP_CONTENT_TYPE_PLAYLIST" && type != "LOCKUP_CONTENT_TYPE_PODCAST") continue
+            val pid = YouTubeSearchParser.lockupPlaylistId(lvm) ?: continue
+            if (!pid.startsWith("PL") && !pid.startsWith("UU") && !pid.startsWith("OL") && !pid.startsWith("RD") && !pid.startsWith("FL")) continue
+            val title = YouTubeSearchParser.lockupTitle(lvm) ?: continue
+            val owner = YouTubeSearchParser.lockupOwner(lvm)
+            val thumb = YouTubeSearchParser.lockupThumbnail(lvm)
+            val count = YouTubeSearchParser.lockupCount(lvm)
+            out += Playlist(id = pid, title = title, owner = owner?.ifBlank { null }, thumbnailUrl = thumb, trackCount = count, source = Source.YOUTUBE)
         }
         return out
     }

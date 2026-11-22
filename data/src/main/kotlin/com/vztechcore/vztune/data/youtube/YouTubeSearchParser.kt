@@ -33,21 +33,141 @@ object YouTubeSearchParser {
         return out.distinctBy { it.track.id }
     }
 
-    fun parsePlaylists(json: JSONObject): List<SearchHit.PlaylistHit> {
+        fun parsePlaylists(json: JSONObject): List<SearchHit.PlaylistHit> {
         val out = mutableListOf<SearchHit.PlaylistHit>()
+        // Layout antigo: playlistRenderer / gridPlaylistRenderer (ainda usado em algumas abas)
         val renderers = mutableListOf<JSONObject>()
         collect(json, "playlistRenderer", renderers)
         collect(json, "gridPlaylistRenderer", renderers)
         for (r in renderers) {
             val pid = r.optString("playlistId").takeIf { it.isNotBlank() } ?: continue
             val title = textOf(r.optJSONObject("title")) ?: continue
-            val owner = textOf(r.optJSONObject("shortBylineText")) ?: ""
+            val owner = textOf(r.optJSONObject("shortBylineText"))
+                ?: textOf(r.optJSONObject("longBylineText"))
+                ?: textOf(r.optJSONObject("ownerText")) ?: ""
             val thumb = thumbnailOf(r.optJSONObject("thumbnail"))
             val countText = r.optString("videoCount").takeIf { it.isNotBlank() } ?: textOf(r.optJSONObject("videoCountText"))
             val count = countText?.filter { it.isDigit() }?.toIntOrNull()
             out += SearchHit.PlaylistHit(Playlist(id = pid, title = title, owner = owner.ifBlank { null }, thumbnailUrl = thumb, trackCount = count, source = Source.YOUTUBE))
         }
+        // Layout 2026: lockupViewModel com LOCKUP_CONTENT_TYPE_PLAYLIST / PODCAST
+        // Ex: contentId=PL..., title=metadata.lockupMetadataViewModel.title.content,
+        // dono=metadataRows -> parte com tap pra UC..., thumb=sources[] maior width, count=badge "11 videos"
+        val lockups = mutableListOf<JSONObject>()
+        collect(json, "lockupViewModel", lockups)
+        for (lvm in lockups) {
+            val type = lvm.optString("contentType")
+            if (type != "LOCKUP_CONTENT_TYPE_PLAYLIST" && type != "LOCKUP_CONTENT_TYPE_PODCAST") continue
+            val pid = lockupPlaylistId(lvm) ?: continue
+            if (!pid.startsWith("PL") && !pid.startsWith("UU") && !pid.startsWith("OL") && !pid.startsWith("RD") && !pid.startsWith("FL")) continue
+            val title = lockupTitle(lvm) ?: continue
+            val owner = lockupOwner(lvm)
+            val thumb = lockupThumbnail(lvm)
+            val count = lockupCount(lvm)
+            out += SearchHit.PlaylistHit(Playlist(id = pid, title = title, owner = owner?.ifBlank { null }, thumbnailUrl = thumb, trackCount = count, source = Source.YOUTUBE))
+        }
         return out.distinctBy { it.playlist.id }
+    }
+
+    fun lockupPlaylistId(lvm: JSONObject): String? {
+        val pid = lvm.optJSONObject("rendererContext")?.optJSONObject("commandContext")?.optJSONObject("onTap")?.optJSONObject("innertubeCommand")?.optJSONObject("watchEndpoint")?.optString("playlistId")?.takeIf { it.isNotBlank() }
+        if (pid != null) return pid
+        return lvm.optString("contentId").takeIf { it.isNotBlank() }
+    }
+
+    fun lockupTitle(lvm: JSONObject): String? {
+        val meta = lvm.optJSONObject("metadata")?.optJSONObject("lockupMetadataViewModel") ?: return null
+        val titleObj = meta.optJSONObject("title") ?: return null
+        return titleObj.optString("content").takeIf { it.isNotBlank() } ?: textOf(titleObj)
+    }
+
+    fun lockupOwner(lvm: JSONObject): String? {
+        val meta = lvm.optJSONObject("metadata")?.optJSONObject("lockupMetadataViewModel") ?: return null
+        val rows = meta.optJSONObject("metadata")?.optJSONObject("contentMetadataViewModel")?.optJSONArray("metadataRows") ?: return null
+        var fallback: String? = null
+        for (i in 0 until rows.length()) {
+            val row = rows.optJSONObject(i) ?: continue
+            val parts = row.optJSONArray("metadataParts") ?: continue
+            for (j in 0 until parts.length()) {
+                val part = parts.optJSONObject(j) ?: continue
+                val textObj = part.optJSONObject("text") ?: continue
+                val name = textObj.optString("content").takeIf { it.isNotBlank() } ?: textOf(textObj) ?: continue
+                val trimmed = name.trim()
+                if (trimmed.isBlank()) continue
+                if (isLockupTypeWord(trimmed)) continue
+                if (trimmed.contains("View full", ignoreCase = true)) continue
+                if (trimmed.contains("Ver playlist", ignoreCase = true)) continue
+                if (trimmed.contains("video", ignoreCase = true) || trimmed.contains("episode", ignoreCase = true)) continue
+                val runs = textObj.optJSONArray("commandRuns")
+                var isChannel = false
+                if (runs != null) {
+                    for (k in 0 until runs.length()) {
+                        val browseId = runs.optJSONObject(k)?.optJSONObject("onTap")?.optJSONObject("innertubeCommand")?.optJSONObject("browseEndpoint")?.optString("browseId") ?: continue
+                        if (browseId.startsWith("UC")) isChannel = true
+                    }
+                }
+                if (isChannel) return trimmed
+                if (fallback == null && (runs == null || runs.length() == 0)) fallback = trimmed
+            }
+        }
+        return fallback
+    }
+
+    fun lockupThumbnail(lvm: JSONObject): String? {
+        var bestUrl: String? = null
+        var bestWidth = -1
+        fun walk(node: Any?) {
+            when (node) {
+                is JSONObject -> {
+                    val arr = node.optJSONArray("sources")
+                    if (arr != null) {
+                        for (i in 0 until arr.length()) {
+                            val s = arr.optJSONObject(i) ?: continue
+                            val url = s.optString("url").takeIf { it.isNotBlank() } ?: continue
+                            val w = s.optInt("width", 0)
+                            if (w >= bestWidth) { bestWidth = w; bestUrl = url }
+                        }
+                    }
+                    val keys = node.keys()
+                    while (keys.hasNext()) walk(node.opt(keys.next()))
+                }
+                is JSONArray -> for (i in 0 until node.length()) walk(node.opt(i))
+            }
+        }
+        walk(lvm.optJSONObject("contentImage"))
+        if (bestUrl != null) return bestUrl
+        return thumbnailOf(lvm.optJSONObject("contentImage")) ?: thumbnailOf(lvm.optJSONObject("thumbnail"))
+    }
+
+    fun lockupCount(lvm: JSONObject): Int? {
+        var found: Int? = null
+        fun walk(node: Any?) {
+            if (found != null) return
+            when (node) {
+                is JSONObject -> {
+                    val badge = node.optJSONObject("thumbnailBadgeViewModel")
+                    if (badge != null) {
+                        val txt = badge.optString("text").takeIf { it.isNotBlank() } ?: textOf(badge.optJSONObject("text"))
+                        if (txt != null && (txt.contains("video", ignoreCase = true) || txt.contains("episode", ignoreCase = true) || txt.contains("vídeo", ignoreCase = true))) {
+                            found = txt.filter { it.isDigit() }.toIntOrNull()
+                            if (found != null) return
+                        }
+                    }
+                    val keys = node.keys()
+                    while (keys.hasNext()) walk(node.opt(keys.next()))
+                }
+                is JSONArray -> for (i in 0 until node.length()) walk(node.opt(i))
+            }
+        }
+        walk(lvm.optJSONObject("contentImage"))
+        if (found != null) return found
+        walk(lvm.optJSONObject("metadata"))
+        return found
+    }
+
+    private fun isLockupTypeWord(text: String): Boolean {
+        val low = text.trim().lowercase()
+        return low in setOf("playlist", "podcast", "mix", "video", "videos", "episode", "episodes", "vídeo", "vídeos", "álbum", "album", "música", "music")
     }
 
     fun parseShorts(json: JSONObject): List<SearchHit.ShortHit> {

@@ -180,6 +180,8 @@ class YTMusicEnricher @Inject constructor(
                 async {
                     semaphore.withPermit {
                         val p = hit.playlist
+                        // PART FIX PLAYLIST OWNER YOUTUBE - playlist YouTube ja vem com dono da busca; YT Music nao carrega ela, entao nao tenta enriquecer (apagava o dono)
+                        if (p.source == Source.YOUTUBE) return@withPermit hit
                         val hasViews = !p.views.isNullOrBlank()
                         val hasOwner = !p.owner.isNullOrBlank()
                         if (hasViews && hasOwner) return@withPermit hit

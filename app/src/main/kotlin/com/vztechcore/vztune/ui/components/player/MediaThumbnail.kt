@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -73,7 +74,8 @@ fun MediaThumbnail(
     Box(
         modifier = baseModifier
             .clip(clipShape)
-            .background(Color.Black),
+            .background(Color.Black)
+            .border(1.dp, Color.White.copy(alpha = 0.18f), clipShape),
     ) {
         Image(
             painter = painterResource(holderRes),

@@ -2,6 +2,7 @@ package com.vztechcore.vztune.ui.components.cards
 
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -109,7 +110,7 @@ fun ChannelVideoCard(track: Track, onClick: () -> Unit, onMoreClick: () -> Unit,
 @Composable
 fun ChannelPlaylistCard(playlist: Playlist, onClick: () -> Unit, onMoreClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.Top) {
-        Box(Modifier.width(160.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.08f))) {
+        Box(Modifier.width(160.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(10.dp))) {
             val thumb = playlist.thumbnailUrl ?: playlist.mosaicThumbnails.firstOrNull()
             if (thumb != null) AsyncImage(model = thumb, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             Box(Modifier.align(Alignment.BottomEnd).padding(6.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.78f)).padding(horizontal = 8.dp, vertical = 4.dp)) {
@@ -138,7 +139,7 @@ fun ShortCard(track: Track, onClick: () -> Unit, onMoreClick: () -> Unit, modifi
     val playback = nowPlaying.playbackOf(track)
     val isCurrent = playback.isPlaying || playback.isPaused
     Column(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onClick() }) {
-        Box(Modifier.fillMaxWidth().aspectRatio(9f / 16f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.08f))) {
+        Box(Modifier.fillMaxWidth().aspectRatio(9f / 16f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(12.dp))) {
             if (track.thumbnailUrl != null) AsyncImage(model = track.thumbnailUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             Box(Modifier.fillMaxWidth().height(64.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.78f)))))
             Box(Modifier.align(Alignment.TopEnd).padding(6.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable { onMoreClick() }.padding(6.dp)) {

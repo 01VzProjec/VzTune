@@ -24,7 +24,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,6 +66,7 @@ import com.vztechcore.vztune.ui.components.player.MediaThumbnail
 import com.vztechcore.vztune.ui.components.player.ThumbnailShape
 import com.vztechcore.vztune.R
 import com.vztechcore.vztune.ui.components.layout.SectionHeader
+import com.vztechcore.vztune.ui.components.layout.VzSearchInputBar
 import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
 import com.vztechcore.vztune.ui.components.player.playbackOf
 import com.vztechcore.vztune.ui.screens.medialist.CollapsedHeaderHost
@@ -89,6 +94,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import com.vztechcore.vztune.ui.icons.actions.PersonAdd
 import com.vztechcore.vztune.ui.icons.actions.PersonCheck
 import com.vztechcore.vztune.ui.icons.actions.Share
+import com.vztechcore.vztune.ui.icons.actions.MoreVert
+import com.vztechcore.vztune.ui.icons.navigation.Search
 
 private val RowPadding = PaddingValues(horizontal = 16.dp)
 private val CoverWidth = 160.dp
@@ -139,6 +146,13 @@ fun ArtistScreen(
     var homeVideosVisible by remember { mutableStateOf(4) }
     var homeTopVideosVisible by remember { mutableStateOf(4) }
     var homePlaylistsVisible by remember { mutableStateOf(4) }
+    // Busca dentro do canal (lupa do topo): filtra os videos/playlists ja carregados pelo titulo. Vazio = tudo.
+    var channelSearchOpen by remember { mutableStateOf(false) }
+    var channelSearchQuery by remember { mutableStateOf("") }
+    val displayState = if (channelSearchQuery.isBlank()) state else state.copy(
+        videos = displayState.videos.filter { it.title.contains(channelSearchQuery, ignoreCase = true) },
+        channelPlaylists = displayState.channelPlaylists.filter { it.title.contains(channelSearchQuery, ignoreCase = true) },
+    )
 
     // Fundo sempre preto AMOLED - camaleao desativado por enquanto
 
@@ -182,6 +196,11 @@ fun ArtistScreen(
                         onBackClick = onBackClick,
                         onFollowClick = onFollowClick,
                         onShareClick = onShareClick,
+                        onLoadMoreChannelClick = { onLoadMoreChannelVideos(); onLoadMoreChannelPlaylists() },
+                        searchOpen = channelSearchOpen,
+                        searchQuery = channelSearchQuery,
+                        onSearchQueryChange = { channelSearchQuery = it },
+                        onSearchToggle = { channelSearchOpen = !channelSearchOpen; if (!channelSearchOpen) channelSearchQuery = "" },
                     )
                 } else {
                     ArtistHeader(
@@ -223,13 +242,13 @@ fun ArtistScreen(
                     if (isChannel) {
                         // ---------- CANAL FIX22: Inicio | Videos | Playlists, sem Shorts ----------
                         val sortedVideos = when (channelSort) {
-                            1 -> state.videos.sortedByDescending { it.viewCount ?: 0 }
-                            2 -> state.videos.reversed()
-                            else -> state.videos
+                            1 -> displayState.videos.sortedByDescending { it.viewCount ?: 0 }
+                            2 -> displayState.videos.reversed()
+                            else -> displayState.videos
                         }
-                        val topVideos = state.videos.sortedByDescending { it.viewCount ?: 0 }
+                        val topVideos = displayState.videos.sortedByDescending { it.viewCount ?: 0 }
                         val heroVideo = topVideos.firstOrNull()
-                        val forYouVideos = state.videos.take(50)
+                        val forYouVideos = displayState.videos.take(50)
                         when (selectedChannelTab) {
                             0 -> {
                                 // --- INICIO: Hero mais famoso ---
@@ -240,7 +259,7 @@ fun ArtistScreen(
                                             VzVideoCard(track = heroVideo, isPlaying = pv.isPlaying, isPaused = pv.isPaused, onClick = { onVideoClick(heroVideo) }, onMoreClick = { onTrackInfoClick(heroVideo) }, horizontalPadding = 0.dp)
                                         }
                                     }
-                                } else if (state.videos.isEmpty() && !state.isLoading) {
+                                } else if (displayState.videos.isEmpty() && !state.isLoading) {
                                     item(key = "home_hero_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
                                 }
                                 if (forYouVideos.isNotEmpty()) {
@@ -261,12 +280,12 @@ fun ArtistScreen(
                                 item(key = "home_videos_header") {
                                     SectionHeaderArrow(title = "Vídeos", onArrowClick = { selectedChannelTab = 1; channelSort = 0 })
                                 }
-                                if (state.videos.isNotEmpty()) {
-                                    itemsIndexed(state.videos.take(homeVideosVisible), key = { _, v -> "hv_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
+                                if (displayState.videos.isNotEmpty()) {
+                                    itemsIndexed(displayState.videos.take(homeVideosVisible), key = { _, v -> "hv_" + v.id }) { _, video -> ChannelVideoCard(track = video, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }) }
                                 }
-                                if (homeVideosVisible < state.videos.size || state.channelVideosHasMore) {
+                                if (homeVideosVisible < displayState.videos.size || state.channelVideosHasMore) {
                                     item(key = "home_videos_expand") {
-                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable { if (homeVideosVisible < state.videos.size) homeVideosVisible += 4 else onLoadMoreChannelVideos() }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable { if (homeVideosVisible < displayState.videos.size) homeVideosVisible += 4 else onLoadMoreChannelVideos() }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                                             Icon(imageVector = VzIcons.ExpandMore, contentDescription = "Mostrar mais vídeos", tint = Color.White, modifier = Modifier.size(24.dp))
                                         }
                                     }
@@ -287,14 +306,14 @@ fun ArtistScreen(
                                 item(key = "home_playlists_header") {
                                     SectionHeaderArrow(title = "Playlists", onArrowClick = { selectedChannelTab = 2 })
                                 }
-                                if (state.channelPlaylists.isNotEmpty()) {
-                                    itemsIndexed(state.channelPlaylists.take(homePlaylistsVisible), key = { _, pl -> "hp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
+                                if (displayState.channelPlaylists.isNotEmpty()) {
+                                    itemsIndexed(displayState.channelPlaylists.take(homePlaylistsVisible), key = { _, pl -> "hp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
                                 } else {
                                     item(key = "home_playlists_empty") { Text(text = "Nenhuma playlist ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
                                 }
-                                if (homePlaylistsVisible < state.channelPlaylists.size || state.channelPlaylistsHasMore) {
+                                if (homePlaylistsVisible < displayState.channelPlaylists.size || displayState.channelPlaylistsHasMore) {
                                     item(key = "home_playlists_expand") {
-                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable { if (homePlaylistsVisible < state.channelPlaylists.size) homePlaylistsVisible += 4 else onLoadMoreChannelPlaylists() }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.08f)).clickable { if (homePlaylistsVisible < displayState.channelPlaylists.size) homePlaylistsVisible += 4 else onLoadMoreChannelPlaylists() }.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                                             Icon(imageVector = VzIcons.ExpandMore, contentDescription = "Mostrar mais playlists", tint = Color.White, modifier = Modifier.size(24.dp))
                                         }
                                     }
@@ -330,12 +349,12 @@ fun ArtistScreen(
                             }
                             else -> {
                                 // --- PLAYLISTS ---
-                                if (state.channelPlaylists.isNotEmpty()) {
-                                    itemsIndexed(state.channelPlaylists, key = { _, pl -> "cp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
+                                if (displayState.channelPlaylists.isNotEmpty()) {
+                                    itemsIndexed(displayState.channelPlaylists, key = { _, pl -> "cp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
                                 } else {
                                     item(key = "channel_playlists_empty") { Text(text = "Nenhuma playlist ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
                                 }
-                                if (state.channelPlaylistsHasMore) {
+                                if (displayState.channelPlaylistsHasMore) {
                                     item(key = "channel_playlists_load_more") {
                                         Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.12f)).clickable { onLoadMoreChannelPlaylists() }.padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
                                             Text(text = if (state.isLoadingMoreChannelPlaylists) "Carregando..." else "Buscar mais", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
@@ -395,13 +414,13 @@ fun ArtistScreen(
                             item(key = "playlists_space") { Spacer(Modifier.height(SectionGap)) }
                         }
                         // 4) Videos: fileira 16:9 + > (so videos do artista, do InnerTube)
-                        if (state.videos.isNotEmpty()) {
+                        if (displayState.videos.isNotEmpty()) {
                             item(key = "videos_header") {
-                                SectionHeaderArrow(title = "Vídeos", onArrowClick = seeAll(ArtistListKind.VIDEOS, state.videosMore))
+                                SectionHeaderArrow(title = "Vídeos", onArrowClick = seeAll(ArtistListKind.VIDEOS, displayState.videosMore))
                             }
                             item(key = "videos_row") {
                                 LazyRow(contentPadding = RowPadding, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    items(state.videos, key = { it.id }) { video ->
+                                    items(displayState.videos, key = { it.id }) { video ->
                                         val playback = nowPlaying.playbackOf(video)
                                         MediaListVideoCard(track = video, isPlaying = playback.isPlaying, isPaused = playback.isPaused, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }, modifier = Modifier.width(VideoWidth), horizontalPadding = 0.dp)
                                     }
@@ -563,7 +582,15 @@ private fun ChannelHeader(
     onBackClick: () -> Unit,
     onFollowClick: () -> Unit,
     onShareClick: () -> Unit,
+    onLoadMoreChannelClick: () -> Unit = {},
+    searchOpen: Boolean = false,
+    searchQuery: String = "",
+    onSearchQueryChange: (String) -> Unit = {},
+    onSearchToggle: () -> Unit = {},
 ) {
+    var channelMenuOpen by remember { mutableStateOf(false) }
+    val searchFocus = remember { FocusRequester() }
+    LaunchedEffect(searchOpen) { if (searchOpen) searchFocus.requestFocus() }
     val handle = "@" + state.name.replace(" ", "").lowercase()
     val subsVideos = listOfNotNull(
         state.subscribers?.takeIf { it.isNotBlank() },
@@ -580,7 +607,37 @@ private fun ChannelHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             MediaListCircleButton(VzIcons.ArrowBackIos, "Voltar", onBackClick)
-            MediaListCircleButton(VzIcons.Share, "Compartilhar", onShareClick)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                MediaListCircleButton(VzIcons.Search, "Buscar no canal", onSearchToggle)
+                Box {
+                    MediaListCircleButton(VzIcons.MoreVert, "Mais", { channelMenuOpen = true })
+                    DropdownMenu(
+                        expanded = channelMenuOpen,
+                        onDismissRequest = { channelMenuOpen = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(text = "Buscar mais faixas e playlists") },
+                            onClick = { channelMenuOpen = false; onLoadMoreChannelClick() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(text = "Compartilhar") },
+                            onClick = { channelMenuOpen = false; onShareClick() },
+                        )
+                    }
+                }
+            }
+        }
+        // Lupa: campo de busca dentro do canal, filtra os videos/playlists ja carregados.
+        if (searchOpen) {
+            VzSearchInputBar(
+                query = searchQuery,
+                onQueryChange = onSearchQueryChange,
+                onClose = onSearchToggle,
+                placeholder = "Buscar neste canal",
+                focusRequester = searchFocus,
+                onSearch = {},
+                closeOnStart = true,
+            )
         }
         // FIX18 - Banner: so aparece se o criador tem banner. Sem banner = sem card vazio. Tamanho exato do criador: sem aspectRatio fixo, a imagem manda na altura (FillWidth).
         if (!state.bannerUrl.isNullOrBlank()) {

@@ -1,134 +1,103 @@
-# fix_channel_playlists_v3.py - Playlists do canal sumidas (V3 - whole-JSON, ignora aba selecionada)
-# Roda na raiz: python3 fix_channel_playlists_v3.py
-# Por que V2 nao resolveu em todo canal (ex: jazzghost):
-#  parseChannelPage so le a aba com selected=true. Se o YouTube marcar a aba errada
-#  (Home em vez de Playlists), ele volta 0 mesmo com param fixo certo.
-# V3: collectPlaylists vira publico + parsePlaylistsWholeJson varre o JSON INTEIRO,
-#  sem olhar aba selecionada. Repository usa ele quando ainda ta vazio.
-# Idempotente: se ja tem FIX PLAYLISTS V3, pula.
+# fix_channel_playlists_v4.py - Playlists do canal sumidas (V4 - debug NA TELA, sem logcat)
+# Roda na raiz: python3 fix_channel_playlists_v4.py
+# Por que V3 nao resolveu: ainda nao sabemos o que o YouTube esta devolvendo.
+# V4 nao tenta adivinhar de novo. Ele mostra o diagnostico DENTRO do VzTune,
+# no Sobre do canal, pra tu so tirar print. Ex: [DEBUG playlists V4: whole=0 lockups=12 ...]
+# Se lockups>0 e whole=0, o parser esta filtrando tudo. Se lockups=0, o YouTube nao mandou nada.
+# Idempotente: se ja tem FIX PLAYLISTS V4, pula.
 import os, sys
 def fail(msg):
     print(f"ABORTOU: {msg}"); sys.exit(1)
 ROOT = os.getcwd()
 CHANNEL_PARSER = os.path.join(ROOT, "data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeChannelParser.kt")
-SEARCH_PARSER = os.path.join(ROOT, "data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeSearchParser.kt")
 YT_REPO = os.path.join(ROOT, "data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeRepository.kt")
-for p in [CHANNEL_PARSER, SEARCH_PARSER, YT_REPO]:
+for p in [CHANNEL_PARSER, YT_REPO]:
     if not os.path.isfile(p):
         fail(f"nao achei {p} - roda na raiz do projeto")
 
-# ---------- 1) SearchParser (so se ainda nao tem fix anterior) ----------
-t = open(SEARCH_PARSER, encoding="utf-8").read()
-if "FIX PLAYLIST CANAL" not in t:
-    old_type = '            if (type != "LOCKUP_CONTENT_TYPE_PLAYLIST" && type != "LOCKUP_CONTENT_TYPE_PODCAST") continue'
-    if old_type in t:
-        t = t.replace(old_type, '            if (type == "LOCKUP_CONTENT_TYPE_VIDEO" || type == "LOCKUP_CONTENT_TYPE_SHORTS" || type == "LOCKUP_CONTENT_TYPE_STREAM") continue // FIX PLAYLIST CANAL')
-    open(SEARCH_PARSER, "w", encoding="utf-8").write(t)
-    print("OK SearchParser: tipo vazio")
-else:
-    print("SKIP SearchParser ja tem FIX PLAYLIST CANAL")
-
-# ---------- 2) ChannelParser ----------
+# ---------- 1) ChannelParser: debugLockups ----------
 t = open(CHANNEL_PARSER, encoding="utf-8").read()
-if "FIX PLAYLISTS V3" not in t:
-    if "FIX PLAYLIST CANAL" not in t:
-        old = '            if (type != "LOCKUP_CONTENT_TYPE_PLAYLIST" && type != "LOCKUP_CONTENT_TYPE_PODCAST") continue'
-        if old in t:
-            t = t.replace(old, '            if (type == "LOCKUP_CONTENT_TYPE_VIDEO" || type == "LOCKUP_CONTENT_TYPE_SHORTS" || type == "LOCKUP_CONTENT_TYPE_STREAM") continue // FIX PLAYLIST CANAL')
-        fill16 = "                videos = videos.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }\n                shorts = shorts.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }"
-        fill12 = "            videos = videos.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }\n            shorts = shorts.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }"
-        if t.count(fill16) == 1 and t.count(fill12) == 1:
-            t = t.replace(fill16, fill16 + "\n                // FIX PLAYLIST CANAL - playlist sem dono usa nome do canal.\n                playlists = playlists.map { if (it.owner.isNullOrBlank()) it.copy(owner = channelName) else it }")
-            t = t.replace(fill12, fill12 + "\n            // FIX PLAYLIST CANAL - playlist sem dono usa nome do canal.\n            playlists = playlists.map { if (it.owner.isNullOrBlank()) it.copy(owner = channelName) else it }")
-    # collectPlaylists vira publico pra Repository usar direto
-    if "    private fun collectPlaylists(" in t:
-        t = t.replace("    private fun collectPlaylists(", "    fun collectPlaylists(", 1)
-    # parsePlaylistsWholeJson depois de parsePlaylistsContinuation
-    anchor = "    fun parsePlaylistsContinuation(json: JSONObject): Pair<List<Playlist>, String?> {"
-    pos = t.find(anchor)
-    if pos == -1:
-        fail("ancora parsePlaylistsContinuation nao bateu em YouTubeChannelParser.kt")
-    eol = t.find("\n", pos)
-    # acha o fim da funcao: procura o proximo "\n    }" depois de pos (fim de parsePlaylistsContinuation)
-    end = t.find("\n    }", pos)
-    if end == -1:
-        fail("fim de parsePlaylistsContinuation nao achado")
-    end = end + len("\n    }")
-    block = ""
-    block += "\n\n    // FIX PLAYLISTS V3 - varre o JSON INTEIRO, ignora aba selecionada.\n"
-    block += "    // parseChannelPage so le a aba selected=true. Se o YouTube marcar a errada, volta 0.\n"
-    block += "    fun parsePlaylistsWholeJson(json: JSONObject, channelName: String): List<Playlist> {\n"
-    block += "        val all = collectPlaylists(json).distinctBy { it.id }\n"
-    block += "        return all.map { if (it.owner.isNullOrBlank() && channelName.isNotBlank()) it.copy(owner = channelName) else it }\n"
-    block += "    }\n"
-    t = t[:end] + block + t[end:]
+if "FIX PLAYLISTS V4" not in t:
+    # garante que V3 existe (collect publico + whole). Se nao tiver, aplica o minimo.
+    if "parsePlaylistsWholeJson" not in t:
+        if "    private fun collectPlaylists(" in t:
+            t = t.replace("    private fun collectPlaylists(", "    fun collectPlaylists(", 1)
+        anchor = "    fun parsePlaylistsContinuation(json: JSONObject): Pair<List<Playlist>, String?> {"
+        pos = t.find(anchor)
+        if pos == -1:
+            fail("ancora parsePlaylistsContinuation nao bateu")
+        end = t.find("\n    }", pos)
+        if end == -1:
+            fail("fim parsePlaylistsContinuation nao achado")
+        end = end + len("\n    }")
+        block = ""
+        block += "\n\n    fun parsePlaylistsWholeJson(json: JSONObject, channelName: String): List<Playlist> {\n"
+        block += "        val all = collectPlaylists(json).distinctBy { it.id }\n"
+        block += "        return all.map { if (it.owner.isNullOrBlank() && channelName.isNotBlank()) it.copy(owner = channelName) else it }\n"
+        block += "    }\n"
+        t = t[:end] + block + t[end:]
+    # debugLockups depois de parsePlaylistsWholeJson
+    anchor2 = "    fun parsePlaylistsWholeJson"
+    pos2 = t.find(anchor2)
+    if pos2 == -1:
+        fail("ancora parsePlaylistsWholeJson nao bateu para V4")
+    end2 = t.find("\n    }", pos2)
+    if end2 == -1:
+        fail("fim parsePlaylistsWholeJson nao achado")
+    end2 = end2 + len("\n    }")
+    block2 = ""
+    block2 += "\n\n    // FIX PLAYLISTS V4 - diagnostico: quantos lockups vieram e como sao os 3 primeiros.\n"
+    block2 += "    fun debugLockups(json: JSONObject): String {\n"
+    block2 += "        val lockups = mutableListOf<JSONObject>()\n"
+    block2 += "        collect(json, \"lockupViewModel\", lockups)\n"
+    block2 += "        val renderers = mutableListOf<JSONObject>()\n"
+    block2 += "        collect(json, \"playlistRenderer\", renderers)\n"
+    block2 += "        collect(json, \"gridPlaylistRenderer\", renderers)\n"
+    block2 += "        val samples = lockups.take(3).joinToString(\" | \") { lvm ->\n"
+    block2 += "            val type = lvm.optString(\"contentType\").takeIf { it.isNotBlank() } ?: \"(sem tipo)\"\n"
+    block2 += "            val rawId = lvm.optString(\"contentId\").takeIf { it.isNotBlank() } ?: \"(sem contentId)\"\n"
+    block2 += "            val title = YouTubeSearchParser.lockupTitle(lvm) ?: \"(sem titulo)\"\n"
+    block2 += "            val pid = YouTubeSearchParser.lockupPlaylistId(lvm) ?: \"(pid null)\"\n"
+    block2 += "            \"type=$type raw=$rawId pid=$pid titulo=$title\"\n"
+    block2 += "        }\n"
+    block2 += "        return \"lockups=${lockups.size} renderers=${renderers.size} amostras=[$samples]\"\n"
+    block2 += "    }\n"
+    t = t[:end2] + block2 + t[end2:]
     open(CHANNEL_PARSER, "w", encoding="utf-8").write(t)
-    print("OK ChannelParser: collectPlaylists publico + parsePlaylistsWholeJson (FIX PLAYLISTS V3)")
+    print("OK ChannelParser: debugLockups (FIX PLAYLISTS V4)")
 else:
-    print("SKIP ChannelParser ja tem FIX PLAYLISTS V3")
+    print("SKIP ChannelParser ja tem FIX PLAYLISTS V4")
 
-# ---------- 3) Repository ----------
+# ---------- 2) Repository Path 1: debug na descricao ----------
 t = open(YT_REPO, encoding="utf-8").read()
-if "FIX PLAYLISTS V3" in t:
-    print("SKIP Repo ja tem FIX PLAYLISTS V3")
+if "FIX PLAYLISTS V4" in t:
+    print("SKIP Repo ja tem FIX PLAYLISTS V4")
 else:
-    # Path 1: insere ANTES de ytChannelPlaylistContinuations[uc] = playlistsCont (depois do V2)
-    anchorB = "ytChannelPlaylistContinuations[uc] = playlistsCont"
-    posB = t.find(anchorB)
-    if posB == -1:
-        fail("ancora Path1 ytChannelPlaylistContinuations nao bateu em YouTubeRepository.kt")
-    solB = t.rfind("\n", 0, posB) + 1
-    blockB = ""
-    blockB += "                // FIX PLAYLISTS V3 - whole-JSON, ignora aba selecionada. So roda se ainda ta vazio.\n"
-    blockB += "                if (playlists.isEmpty()) {\n"
-    blockB += "                    runCatching {\n"
-    blockB += "                        val jsonV3 = InnerTubeYouTube.browse(uc, \"EglwbGF5bGlzdHPyBgQKAkIA\")\n"
-    blockB += "                        val wholeV3 = YouTubeChannelParser.parsePlaylistsWholeJson(jsonV3, channelName)\n"
-    blockB += "                        val idsV3 = playlists.map { it.id }.toSet()\n"
-    blockB += "                        playlists += wholeV3.filter { it.id !in idsV3 }\n"
-    blockB += "                        Log.w(TAG, \"Playlists V3 whole fixed-param: ${wholeV3.size}, total agora ${playlists.size}\")\n"
-    blockB += "                    }.onFailure { Log.w(TAG, \"Playlists V3 whole fixed failed: ${it.message}\") }\n"
-    blockB += "                }\n"
-    blockB += "                if (playlists.isEmpty()) {\n"
-    blockB += "                    runCatching {\n"
-    blockB += "                        val tpV3 = YouTubeChannelParser.tabParams(homeJson, \"playlists\")\n"
-    blockB += "                        if (tpV3 != null) {\n"
-    blockB += "                            val jsonTpV3 = InnerTubeYouTube.browse(uc, tpV3)\n"
-    blockB += "                            val wholeTpV3 = YouTubeChannelParser.parsePlaylistsWholeJson(jsonTpV3, channelName)\n"
-    blockB += "                            val idsTpV3 = playlists.map { it.id }.toSet()\n"
-    blockB += "                            playlists += wholeTpV3.filter { it.id !in idsTpV3 }\n"
-    blockB += "                            Log.w(TAG, \"Playlists V3 whole tabParams: ${wholeTpV3.size}, total agora ${playlists.size}\")\n"
-    blockB += "                        } else {\n"
-    blockB += "                            Log.w(TAG, \"Playlists V3 tabParams veio null pra $channelName\")\n"
-    blockB += "                        }\n"
-    blockB += "                    }.onFailure { Log.w(TAG, \"Playlists V3 whole tabParams failed: ${it.message}\") }\n"
-    blockB += "                }\n"
-    blockB += "                if (playlists.isEmpty()) {\n"
-    blockB += "                    runCatching {\n"
-    blockB += "                        val homeWholeV3 = YouTubeChannelParser.parsePlaylistsWholeJson(homeJson, channelName)\n"
-    blockB += "                        val idsHomeV3 = playlists.map { it.id }.toSet()\n"
-    blockB += "                        playlists += homeWholeV3.filter { it.id !in idsHomeV3 }\n"
-    blockB += "                        Log.w(TAG, \"Playlists V3 whole home: ${homeWholeV3.size}, total agora ${playlists.size}\")\n"
-    blockB += "                    }.onFailure { Log.w(TAG, \"Playlists V3 whole home failed: ${it.message}\") }\n"
-    blockB += "                }\n"
-    t = t[:solB] + blockB + t[solB:]
-    # Path 2: insere DEPOIS do bloco V2 Path2, ANTES de val playlistQuery
-    anchorQ = "        val playlistQuery = channelName.ifBlank"
-    posQ = t.find(anchorQ)
-    if posQ == -1:
-        fail("ancora Path2 playlistQuery nao bateu em YouTubeRepository.kt")
-    solQ = t.rfind("\n", 0, posQ) + 1
-    blockQ = ""
-    blockQ += "        // FIX PLAYLISTS V3 Path2 - whole-JSON, ignora aba selecionada.\n"
-    blockQ += "        if (channelPlaylists.isEmpty() && uc.startsWith(\"UC\") && uc.length >= 24 && channelName.isNotBlank()) {\n"
-    blockQ += "            runCatching {\n"
-    blockQ += "                val tabJsonV3 = InnerTubeYouTube.browse(uc, \"EglwbGF5bGlzdHPyBgQKAkIA\")\n"
-    blockQ += "                val wholeV3b = YouTubeChannelParser.parsePlaylistsWholeJson(tabJsonV3, channelName)\n"
-    blockQ += "                if (wholeV3b.isNotEmpty()) channelPlaylists = wholeV3b\n"
-    blockQ += "                Log.w(TAG, \"Playlists V3 Path2 whole: ${wholeV3b.size}\")\n"
-    blockQ += "            }.onFailure { Log.w(TAG, \"Playlists V3 Path2 whole failed: ${it.message}\") }\n"
-    blockQ += "        }\n"
-    t = t[:solQ] + blockQ + t[solQ:]
+    # Acha o return do Path1: if (videos.isNotEmpty() ... ) { return@withContext ChannelPage(
+    anchorRet = "                if (videos.isNotEmpty() || shorts.isNotEmpty() || playlists.isNotEmpty()) {"
+    posRet = t.find(anchorRet)
+    if posRet == -1:
+        fail("ancora return Path1 nao bateu em YouTubeRepository.kt")
+    block = ""
+    block += "                // FIX PLAYLISTS V4 - diagnostico NA TELA (Sobre), sem precisar de logcat.\n"
+    block += "                var debugPlV4 = \"\"\n"
+    block += "                if (playlists.isEmpty()) {\n"
+    block += "                    runCatching {\n"
+    block += "                        val dbgJson = InnerTubeYouTube.browse(uc, \"EglwbGF5bGlzdHPyBgQKAkIA\")\n"
+    block += "                        val dbgWhole = YouTubeChannelParser.parsePlaylistsWholeJson(dbgJson, channelName)\n"
+    block += "                        val dbgInfo = YouTubeChannelParser.debugLockups(dbgJson)\n"
+    block += "                        debugPlV4 = \"\\n\\n[DEBUG playlists V4: whole=${dbgWhole.size} $dbgInfo]\"\n"
+    block += "                        Log.w(TAG, \"Playlists V4 debug $debugPlV4\")\n"
+    block += "                    }.onFailure { Log.w(TAG, \"Playlists V4 debug failed: ${it.message}\") }\n"
+    block += "                }\n"
+    t = t[:posRet] + block + t[posRet:]
+    # Agora troca a descricao do return Path1 para incluir o debug quando playlists vazio.
+    # O return Path1 usa description = homeParsed.description, o Path2 usa header?.description, entao e unico.
+    old_desc = "                        description = homeParsed.description,"
+    if old_desc not in t:
+        fail("ancora description Path1 nao bateu")
+    new_desc = "                        description = (homeParsed.description ?: \"\") + if (playlists.isEmpty()) debugPlV4 else \"\","
+    t = t.replace(old_desc, new_desc, 1)
     open(YT_REPO, "w", encoding="utf-8").write(t)
-    print("OK Repo: Path1 + Path2 whole-JSON (FIX PLAYLISTS V3)")
-print("PRONTO - limpa e builda, abre o jazzghost de novo.")
+    print("OK Repo: debug no Sobre quando playlists vazio (FIX PLAYLISTS V4)")
+print("PRONTO - limpa e builda, abre jazzghost, desce ate Sobre e tira print.")

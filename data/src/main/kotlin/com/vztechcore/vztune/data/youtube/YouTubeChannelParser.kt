@@ -167,6 +167,24 @@ object YouTubeChannelParser {
         return all.map { if (it.owner.isNullOrBlank() && channelName.isNotBlank()) it.copy(owner = channelName) else it }
     }
 
+    // FIX PLAYLISTS V4 - diagnostico: quantos lockups vieram e como sao os 3 primeiros.
+    fun debugLockups(json: JSONObject): String {
+        val lockups = mutableListOf<JSONObject>()
+        collect(json, "lockupViewModel", lockups)
+        val renderers = mutableListOf<JSONObject>()
+        collect(json, "playlistRenderer", renderers)
+        collect(json, "gridPlaylistRenderer", renderers)
+        val samples = lockups.take(3).joinToString(" | ") { lvm ->
+            val type = lvm.optString("contentType").takeIf { it.isNotBlank() } ?: "(sem tipo)"
+            val rawId = lvm.optString("contentId").takeIf { it.isNotBlank() } ?: "(sem contentId)"
+            val title = YouTubeSearchParser.lockupTitle(lvm) ?: "(sem titulo)"
+            val pid = YouTubeSearchParser.lockupPlaylistId(lvm) ?: "(pid null)"
+            "type=$type raw=$rawId pid=$pid titulo=$title"
+        }
+        return "lockups=${lockups.size} renderers=${renderers.size} amostras=[$samples]"
+    }
+
+
 
     private fun parseHeader(json: JSONObject): Quint<String, String?, String?, String?, String?> {
         val headers = mutableListOf<JSONObject>()

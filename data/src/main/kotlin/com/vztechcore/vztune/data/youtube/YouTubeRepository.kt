@@ -1458,6 +1458,17 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 }
                 ytChannelPlaylistContinuations[uc] = playlistsCont
                 ytChannelPlaylistContinuations[input] = playlistsCont
+                // FIX PLAYLISTS V4 - diagnostico NA TELA (Sobre), sem precisar de logcat.
+                var debugPlV4 = ""
+                if (playlists.isEmpty()) {
+                    runCatching {
+                        val dbgJson = InnerTubeYouTube.browse(uc, "EglwbGF5bGlzdHPyBgQKAkIA")
+                        val dbgWhole = YouTubeChannelParser.parsePlaylistsWholeJson(dbgJson, channelName)
+                        val dbgInfo = YouTubeChannelParser.debugLockups(dbgJson)
+                        debugPlV4 = "\n\n[DEBUG playlists V4: whole=${dbgWhole.size} $dbgInfo]"
+                        Log.w(TAG, "Playlists V4 debug $debugPlV4")
+                    }.onFailure { Log.w(TAG, "Playlists V4 debug failed: ${it.message}") }
+                }
                 if (videos.isNotEmpty() || shorts.isNotEmpty() || playlists.isNotEmpty()) {
                     return@withContext ChannelPage(
                         videos = videos.distinctBy { it.id },
@@ -1466,7 +1477,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                         channelName = channelName.ifBlank { null },
                         avatarUrl = homeParsed.avatarUrl,
                         bannerUrl = homeParsed.bannerUrl,
-                        description = homeParsed.description,
+                        description = (homeParsed.description ?: "") + if (playlists.isEmpty()) debugPlV4 else "",
                         subscriberCount = homeParsed.subscriberCount,
                         hasMoreVideos = videosCont != null,
                         hasMorePlaylists = playlistsCont != null

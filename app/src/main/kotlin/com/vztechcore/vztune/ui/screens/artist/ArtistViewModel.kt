@@ -75,6 +75,7 @@ class ArtistViewModel @Inject constructor(
                             thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl,
                             subscribers = channel.subscriberCount ?: it.subscribers,
                             description = channel.description ?: it.description,
+                            debugLog = channel.debugLog,
                             topSongs = emptyList(), songsMore = null,
                             albums = emptyList(), albumsMore = null,
                             singles = emptyList(), singlesMore = null,

@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
@@ -26,6 +28,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -589,6 +593,7 @@ private fun ChannelHeader(
     onSearchToggle: () -> Unit = {},
 ) {
     var channelMenuOpen by remember { mutableStateOf(false) }
+    var showTempLog by remember { mutableStateOf(false) }
     val searchFocus = remember { FocusRequester() }
     LaunchedEffect(searchOpen) { if (searchOpen) searchFocus.requestFocus() }
     val handle = "@" + state.name.replace(" ", "").lowercase()
@@ -622,6 +627,18 @@ private fun ChannelHeader(
                         DropdownMenuItem(
                             text = { Text(text = "Compartilhar") },
                             onClick = { channelMenuOpen = false; onShareClick() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(text = "Ver Log temporário") },
+                            onClick = { channelMenuOpen = false; showTempLog = true },
+                        )
+                    }
+                    if (showTempLog) {
+                        AlertDialog(
+                            onDismissRequest = { showTempLog = false },
+                            title = { Text(text = "Log temporário") },
+                            text = { Text(text = state.debugLog ?: "Sem log ainda. Reabre o canal.", modifier = Modifier.verticalScroll(rememberScrollState())) },
+                            confirmButton = { TextButton(onClick = { showTempLog = false }) { Text(text = "Fechar") } },
                         )
                     }
                 }

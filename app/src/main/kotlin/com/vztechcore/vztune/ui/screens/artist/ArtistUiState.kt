@@ -15,6 +15,7 @@ data class ArtistUiState(
     val subscribers: String? = null,
     val views: String? = null,
     val description: String? = null,
+    val debugLog: String? = null,
     val topSongs: List<Track> = emptyList(),
     val songsMore: BrowseRef? = null,
     val albums: List<Album> = emptyList(),

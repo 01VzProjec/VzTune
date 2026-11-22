@@ -32,6 +32,9 @@ internal object YTMusicPlaylistParser {
             ?: YTMusicTextUtils.findFirst(json, "musicResponsiveHeaderRenderer")
             ?: YTMusicTextUtils.findFirst(json, "musicEditablePlaylistDetailHeaderRenderer")
             ?: YTMusicTextUtils.findFirst(json, "playlistHeaderRenderer")
+            // FIX OWNER PLAYLIST DETALHE - 2026 pode vir pageHeaderRenderer / pageHeaderViewModel
+            ?: YTMusicTextUtils.findFirst(json, "pageHeaderRenderer")
+            ?: YTMusicTextUtils.findFirst(json, "pageHeaderViewModel")
 
         val title = YTMusicArtistParser.extractHeaderTitle(header) ?: "Playlist"
         val coverUrl = header?.let { YTMusicThumbnailUtils.extractHeaderCover(it) }
@@ -141,6 +144,23 @@ internal object YTMusicPlaylistParser {
                         !YTMusicTextUtils.isDuration(text) &&
                         !YTMusicTextUtils.isDate(text) -> {
                         owner = cleanOwner(text)
+                    }
+                }
+            }
+        }
+
+        // ---- 3b. METADATA ROWS (pageHeaderRenderer) - dono em metadataParts[].text.content ----
+        if (owner == null) {
+            YTMusicTextUtils.walk(header) { node ->
+                if (owner != null) return@walk
+                val rows = node.optJSONArray("metadataRows") ?: return@walk
+                for (i in 0 until rows.length()) {
+                    val parts = rows.optJSONObject(i)?.optJSONArray("metadataParts") ?: continue
+                    for (j in 0 until parts.length()) {
+                        val txtObj = parts.optJSONObject(j)?.optJSONObject("text") ?: continue
+                        val cand = txtObj.optString("content").takeIf { it.isNotBlank() } ?: YTMusicTextUtils.runsText(txtObj)
+                        val cleaned = cleanOwner(cand)
+                        if (cleaned != null) { owner = cleaned; break }
                     }
                 }
             }

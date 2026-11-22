@@ -1,339 +1,324 @@
-# fix_channel_completo.py - Canal COMPLETO: todos os videos + todas as playlists
-# Roda na raiz: python3 fix_channel_completo.py
-# POR QUE VINHA INCOMPLETO (pesquisado):
-#  1) browseChannel so pegava a 1a pagina de cada aba (30 na aba, 100 no UU) e guardava o token pro loadMore.
-#     Se a tela nao chama loadMore, o usuario so ve 100. Numero redondo = bug de paginacao (dev.to 15/nov/2026).
-#     Playlist responde com os 100 primeiros + token, tem que mandar o token de volta pro browse pra pegar os proximos 100, e assim por diante.
-#  2) Home com 5 videos em destaque fazia o codigo PULAR a aba Videos inteira (if videos.isEmpty()).
-#     Destaque != lista completa. Tem que buscar a aba cheia SEMPRE, mesmo que a Home ja tenha alguma coisa.
-#  3) Token novo e continuationItemViewModel com token aninhado (continuationCommand.innertubeCommand.continuationCommand.token).
-#     E quando tem varias prateleiras, o 1o token do DFS pode ser de uma prateleira pequena, nao da grade principal.
-#     Regra do dev.to / invio: o ULTIMO token vence.
-#  4) UUSH (shorts via UU) vinha 0 porque YouTubePlaylistParser.collectTracks nao entendia shortsLockupViewModel.
-#     Shorts usa shortsLockupViewModel, id em onTap.reelWatchEndpoint.videoId, titulo em overlayMetadata.primaryText.content.
-#  5) Shorts via aba nao tinha parseShortsContinuation, entao nem dava pra paginar shorts da aba.
-# SNAP TUBE:
-#  SnapTube e proprietario, nao open source (Uptodown: License Proprietary, Wikipedia: app proprietario).
-#  Nao tem codigo pra copiar. O que se sabe publicamente: ele usa WebView / servidor proprio + youtubei (mesmo InnerTube),
-#  e parece completo porque pagina UU + continuation ate o fim, nao porque usa um API secreta.
-#  O equivalente aberto disso e o que esse fix faz: UU (UULF/UUSH) + loop de continuation ate acabar ou bater o teto.
+# fix_playlists_canal_owner.py - Playlists do canal sumidas + dono sumido dentro da playlist
+# Roda na raiz: python3 fix_playlists_canal_owner.py
 import os, sys
 def fail(msg):
     print(f"ABORTOU: {msg}"); sys.exit(1)
 ROOT = os.getcwd()
-INNER = os.path.join(ROOT, "data/src/main/kotlin/com/vztechcore/vztune/data/innertube/Innertube.kt")
+SEARCH_PARSER = os.path.join(ROOT, "data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeSearchParser.kt")
 CHANNEL_PARSER = os.path.join(ROOT, "data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeChannelParser.kt")
-YT_REPO = os.path.join(ROOT, "data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeRepository.kt")
 PLAYLIST_PARSER = os.path.join(ROOT, "data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubePlaylistParser.kt")
-for p in [INNER, CHANNEL_PARSER, YT_REPO, PLAYLIST_PARSER]:
+YT_REPO = os.path.join(ROOT, "data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeRepository.kt")
+YTM_PLAYLIST_PARSER = os.path.join(ROOT, "data/src/main/kotlin/com/vztechcore/vztune/data/ytmusic/YTMusicPlaylistParser.kt")
+for p in [SEARCH_PARSER, CHANNEL_PARSER, PLAYLIST_PARSER, YT_REPO, YTM_PLAYLIST_PARSER]:
     if not os.path.isfile(p):
-        fail(f"nao achei {p} - roda parte1 + parte2_3 + fix_channels_ytmusic_owner antes")
+        fail(f"nao achei {p} - roda na raiz do projeto")
 
-# ---------- 1) Innertube.findContinuationToken -> ULTIMO token vence + ViewModel ----------
-t = open(INNER, encoding="utf-8").read()
-if "FIX CONTINUATION LAST WINS" not in t:
-    start = t.find("fun findContinuationToken")
-    if start == -1: fail("ancora findContinuationToken nao bateu em Innertube.kt")
-    # fim: proxima "    fun " ou fim do object ( "}\n}" ) - procura "    }\n}" apos start ou proximo fun
-    end = t.find("\n    fun ", start + 10)
-    if end == -1:
-        # ultimo fun do arquivo, vai ate o penultimo } (fecha object)
-        end = t.rfind("\n}")
-        if end == -1: fail("fim findContinuationToken nao bateu")
-    new_fn = """    fun findContinuationToken(node: Any?): String? {
-        // FIX CONTINUATION LAST WINS - playlist responde 100 + token, tem que paginar ate o fim.
-        // Token novo e continuationItemViewModel com token aninhado:
-        // continuationCommand.innertubeCommand.continuationCommand.token (dev.to 15/nov/2026).
-        // E quando tem varias prateleiras, o 1o token do DFS pode ser de prateleira pequena, nao da grade principal.
-        // Regra: coleta TODOS os tokens e devolve o ULTIMO (grade principal vem por ultimo).
-        val tokens = mutableListOf<String>()
-        fun walk(n: Any?) {
-            when (n) {
-                is JSONObject -> {
-                    n.optJSONObject("continuationCommand")?.optString("token")?.takeIf { it.isNotBlank() && it != "null" && it.length > 10 }?.let { tokens += it }
-                    n.optJSONObject("nextContinuationData")?.optString("continuation")?.takeIf { it.isNotBlank() && it != "null" && it.length > 10 }?.let { tokens += it }
-                    // nextContinuationData tambem pode vir como { nextContinuationData: { continuation: ... } } dentro de continuationItemRenderer
-                    n.optJSONObject("continuationEndpoint")?.optJSONObject("continuationCommand")?.optString("token")?.takeIf { it.isNotBlank() && it != "null" && it.length > 10 }?.let { tokens += it }
-                    val keys = n.keys()
-                    while (keys.hasNext()) walk(n.opt(keys.next()))
-                }
-                is JSONArray -> for (i in 0 until n.length()) walk(n.opt(i))
-            }
-        }
-        walk(node)
-        return tokens.lastOrNull()
-    }
-"""
-    t = t[:start] + new_fn + t[end:]
-    open(INNER, "w", encoding="utf-8").write(t)
-    print("1) findContinuationToken agora entende ViewModel aninhado e devolve o ULTIMO token")
+# ---------- 1) YouTubeSearchParser ----------
+t = open(SEARCH_PARSER, encoding="utf-8").read()
+if "FIX PLAYLIST CANAL" not in t:
+    s = t.find("    fun lockupPlaylistId")
+    e = t.find("\n    fun lockupTitle", s)
+    if s == -1 or e == -1: fail("ancora lockupPlaylistId/lockupTitle nao bateu em YouTubeSearchParser.kt")
+    new_id = "    fun lockupPlaylistId(lvm: JSONObject): String? {\n"
+    new_id += "        // FIX PLAYLIST CANAL - aba Playlists usa browseEndpoint (VLPL...), nao watchEndpoint.\n"
+    new_id += "        // Busca usa watchEndpoint (PL...). Tenta os dois + contentId, normaliza VL.\n"
+    new_id += "        fun normalize(raw: String?): String? {\n"
+    new_id += "            var v = raw?.trim()?.takeIf { it.isNotBlank() } ?: return null\n"
+    new_id += "            if (v.startsWith(\"VL\")) v = v.removePrefix(\"VL\")\n"
+    new_id += "            if (v.startsWith(\"PL\") || v.startsWith(\"UU\") || v.startsWith(\"OL\") || v.startsWith(\"RD\") || v.startsWith(\"FL\")) return v\n"
+    new_id += "            return null\n"
+    new_id += "        }\n"
+    new_id += "        val cmd = lvm.optJSONObject(\"rendererContext\")?.optJSONObject(\"commandContext\")?.optJSONObject(\"onTap\")?.optJSONObject(\"innertubeCommand\")\n"
+    new_id += "        normalize(cmd?.optJSONObject(\"watchEndpoint\")?.optString(\"playlistId\"))?.let { return it }\n"
+    new_id += "        normalize(cmd?.optJSONObject(\"browseEndpoint\")?.optString(\"browseId\"))?.let { return it }\n"
+    new_id += "        normalize(cmd?.optJSONObject(\"browseEndpoint\")?.optString(\"playlistId\"))?.let { return it }\n"
+    new_id += "        var found: String? = null\n"
+    new_id += "        fun walk(n: Any?) {\n"
+    new_id += "            if (found != null) return\n"
+    new_id += "            when (n) {\n"
+    new_id += "                is JSONObject -> {\n"
+    new_id += "                    val browse = n.optJSONObject(\"browseEndpoint\")\n"
+    new_id += "                    if (browse != null) {\n"
+    new_id += "                        normalize(browse.optString(\"browseId\"))?.let { found = it; return }\n"
+    new_id += "                        normalize(browse.optString(\"playlistId\"))?.let { found = it; return }\n"
+    new_id += "                    }\n"
+    new_id += "                    val watch = n.optJSONObject(\"watchEndpoint\")\n"
+    new_id += "                    if (watch != null) {\n"
+    new_id += "                        normalize(watch.optString(\"playlistId\"))?.let { found = it; return }\n"
+    new_id += "                    }\n"
+    new_id += "                    val keys = n.keys()\n"
+    new_id += "                    while (keys.hasNext()) walk(n.opt(keys.next()))\n"
+    new_id += "                }\n"
+    new_id += "                is JSONArray -> for (i in 0 until n.length()) walk(n.opt(i))\n"
+    new_id += "            }\n"
+    new_id += "        }\n"
+    new_id += "        walk(lvm)\n"
+    new_id += "        if (found != null) return found\n"
+    new_id += "        return normalize(lvm.optString(\"contentId\"))\n"
+    new_id += "    }\n"
+    t = t[:s] + new_id + t[e:]
+    s = t.find("    fun lockupOwner")
+    e = t.find("\n    fun lockupThumbnail", s)
+    if s == -1 or e == -1: fail("ancora lockupOwner/lockupThumbnail nao bateu")
+    new_owner = "    fun lockupOwner(lvm: JSONObject): String? {\n"
+    new_owner += "        // FIX OWNER LOCKUP - metadataRows pode estar em 3 lugares, runs pode ser commandRuns OU runs com navigationEndpoint.\n"
+    new_owner += "        val meta = lvm.optJSONObject(\"metadata\")?.optJSONObject(\"lockupMetadataViewModel\") ?: return null\n"
+    new_owner += "        val rowSets = mutableListOf<JSONArray>()\n"
+    new_owner += "        meta.optJSONObject(\"metadata\")?.optJSONObject(\"contentMetadataViewModel\")?.optJSONArray(\"metadataRows\")?.let { rowSets += it }\n"
+    new_owner += "        meta.optJSONObject(\"metadata\")?.optJSONArray(\"metadataRows\")?.let { rowSets += it }\n"
+    new_owner += "        meta.optJSONObject(\"contentMetadataViewModel\")?.optJSONArray(\"metadataRows\")?.let { rowSets += it }\n"
+    new_owner += "        meta.optJSONArray(\"metadataRows\")?.let { rowSets += it }\n"
+    new_owner += "        fun walkRows(n: Any?) {\n"
+    new_owner += "            when (n) {\n"
+    new_owner += "                is JSONObject -> {\n"
+    new_owner += "                    val arr = n.optJSONArray(\"metadataRows\")\n"
+    new_owner += "                    if (arr != null && !rowSets.contains(arr)) rowSets += arr\n"
+    new_owner += "                    val keys = n.keys()\n"
+    new_owner += "                    while (keys.hasNext()) walkRows(n.opt(keys.next()))\n"
+    new_owner += "                }\n"
+    new_owner += "                is JSONArray -> for (i in 0 until n.length()) walkRows(n.opt(i))\n"
+    new_owner += "            }\n"
+    new_owner += "        }\n"
+    new_owner += "        walkRows(meta)\n"
+    new_owner += "        var fallback: String? = null\n"
+    new_owner += "        for (rows in rowSets) {\n"
+    new_owner += "            for (i in 0 until rows.length()) {\n"
+    new_owner += "                val row = rows.optJSONObject(i) ?: continue\n"
+    new_owner += "                val parts = row.optJSONArray(\"metadataParts\") ?: continue\n"
+    new_owner += "                for (j in 0 until parts.length()) {\n"
+    new_owner += "                    val part = parts.optJSONObject(j) ?: continue\n"
+    new_owner += "                    val textObj = part.optJSONObject(\"text\") ?: continue\n"
+    new_owner += "                    val name = textObj.optString(\"content\").takeIf { it.isNotBlank() } ?: textOf(textObj) ?: continue\n"
+    new_owner += "                    val trimmed = name.trim()\n"
+    new_owner += "                    if (trimmed.isBlank()) continue\n"
+    new_owner += "                    if (isLockupTypeWord(trimmed)) continue\n"
+    new_owner += "                    if (trimmed.contains(\"View full\", ignoreCase = true)) continue\n"
+    new_owner += "                    if (trimmed.contains(\"Ver playlist\", ignoreCase = true)) continue\n"
+    new_owner += "                    if (trimmed.contains(\"video\", ignoreCase = true) || trimmed.contains(\"episode\", ignoreCase = true)) continue\n"
+    new_owner += "                    var isChannel = false\n"
+    new_owner += "                    val cmdRuns = textObj.optJSONArray(\"commandRuns\")\n"
+    new_owner += "                    if (cmdRuns != null) {\n"
+    new_owner += "                        for (k in 0 until cmdRuns.length()) {\n"
+    new_owner += "                            val run = cmdRuns.optJSONObject(k) ?: continue\n"
+    new_owner += "                            val b1 = run.optJSONObject(\"onTap\")?.optJSONObject(\"innertubeCommand\")?.optJSONObject(\"browseEndpoint\")?.optString(\"browseId\")\n"
+    new_owner += "                            val b2 = run.optJSONObject(\"navigationEndpoint\")?.optJSONObject(\"browseEndpoint\")?.optString(\"browseId\")\n"
+    new_owner += "                            if (b1?.startsWith(\"UC\") == true || b2?.startsWith(\"UC\") == true) isChannel = true\n"
+    new_owner += "                        }\n"
+    new_owner += "                    }\n"
+    new_owner += "                    val runs = textObj.optJSONArray(\"runs\")\n"
+    new_owner += "                    if (runs != null) {\n"
+    new_owner += "                        for (k in 0 until runs.length()) {\n"
+    new_owner += "                            val run = runs.optJSONObject(k) ?: continue\n"
+    new_owner += "                            val b = run.optJSONObject(\"navigationEndpoint\")?.optJSONObject(\"browseEndpoint\")?.optString(\"browseId\")\n"
+    new_owner += "                            if (b?.startsWith(\"UC\") == true) isChannel = true\n"
+    new_owner += "                        }\n"
+    new_owner += "                    }\n"
+    new_owner += "                    if (isChannel) return trimmed\n"
+    new_owner += "                    if (fallback == null) fallback = trimmed\n"
+    new_owner += "                }\n"
+    new_owner += "            }\n"
+    new_owner += "        }\n"
+    new_owner += "        return fallback\n"
+    new_owner += "    }\n"
+    t = t[:s] + new_owner + t[e:]
+    old_type = '            if (type != "LOCKUP_CONTENT_TYPE_PLAYLIST" && type != "LOCKUP_CONTENT_TYPE_PODCAST") continue'
+    if old_type not in t: fail("ancora parsePlaylists type check nao bateu")
+    t = t.replace(old_type, '            if (type == "LOCKUP_CONTENT_TYPE_VIDEO" || type == "LOCKUP_CONTENT_TYPE_SHORTS" || type == "LOCKUP_CONTENT_TYPE_STREAM") continue')
+    open(SEARCH_PARSER, "w", encoding="utf-8").write(t)
+    print("OK SearchParser: lockupPlaylistId browseEndpoint + lockupOwner multi-layout + parsePlaylists aceita tipo vazio")
 else:
-    print("1) findContinuationToken ja e LAST WINS - pulando")
+    print("SKIP SearchParser ja tem FIX PLAYLIST CANAL")
 
-# ---------- 2) YouTubeChannelParser: parseShortsContinuation ----------
-c = open(CHANNEL_PARSER, encoding="utf-8").read()
-if "parseShortsContinuation" not in c:
-    anchor = "fun parsePlaylistsContinuation"
-    if anchor not in c: fail("ancora parsePlaylistsContinuation nao bateu")
-    helper = """    fun parseShortsContinuation(json: JSONObject): Pair<List<Track>, String?> {
-        // FIX SHORTS CONTINUATION - shorts via aba nao tinha como paginar, agora tem igual videos/playlists
-        val shorts = collectShorts(json)
-        val cont = InnerTubeYouTube.findContinuationToken(json)
-        return shorts.distinctBy { it.id } to cont
-    }
-
-    """
-    c = c.replace(anchor, helper + anchor, 1)
-    open(CHANNEL_PARSER, "w", encoding="utf-8").write(c)
-    print("2) parseShortsContinuation adicionado")
+# ---------- 2) YouTubeChannelParser ----------
+t = open(CHANNEL_PARSER, encoding="utf-8").read()
+if "FIX PLAYLIST CANAL" not in t:
+    old = '            if (type != "LOCKUP_CONTENT_TYPE_PLAYLIST" && type != "LOCKUP_CONTENT_TYPE_PODCAST") continue'
+    if old not in t: fail("ancora collectPlaylists type check nao bateu")
+    t = t.replace(old, '            if (type == "LOCKUP_CONTENT_TYPE_VIDEO" || type == "LOCKUP_CONTENT_TYPE_SHORTS" || type == "LOCKUP_CONTENT_TYPE_STREAM") continue')
+    # 2 blocos em parseChannelPage: 1o com indent 16, 2o (fallback) com indent 12
+    fill16 = "                videos = videos.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }\n                shorts = shorts.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }"
+    fill12 = "            videos = videos.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }\n            shorts = shorts.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }"
+    if t.count(fill16) != 1 or t.count(fill12) != 1: fail(f"ancora parseChannelPage owner fill: fill16={t.count(fill16)} fill12={t.count(fill12)} (esperava 1+1)")
+    t = t.replace(fill16, fill16 + "\n                // FIX PLAYLIST CANAL - playlist sem dono mostra so Playlist no card; usa nome do canal.\n                playlists = playlists.map { if (it.owner.isNullOrBlank()) it.copy(owner = channelName) else it }")
+    t = t.replace(fill12, fill12 + "\n            // FIX PLAYLIST CANAL - playlist sem dono mostra so Playlist no card; usa nome do canal.\n            playlists = playlists.map { if (it.owner.isNullOrBlank()) it.copy(owner = channelName) else it }")
+    t = t.replace("    fun collectPlaylists(", "    // FIX PLAYLIST CANAL - aceita contentType vazio + dono = canal\n    fun collectPlaylists(", 1)
+    open(CHANNEL_PARSER, "w", encoding="utf-8").write(t)
+    print("OK ChannelParser: collectPlaylists aceita tipo vazio + owner = nome do canal")
 else:
-    print("2) parseShortsContinuation ja existe - pulando")
+    print("SKIP ChannelParser ja tem FIX PLAYLIST CANAL")
 
-# ---------- 3) YouTubePlaylistParser.collectTracks -> shortsLockup ----------
-pp = open(PLAYLIST_PARSER, encoding="utf-8").read()
-if "shortsLockupViewModel" not in pp:
-    # Insere depois do loop de lockup VIDEO, antes do return out
-    anchor = "        return out\n    }\n\n    private fun parseHeaderTitle"
-    if anchor not in pp: fail("ancora collectTracks return nao bateu em YouTubePlaylistParser")
-    shorts_block = """        // UUSH / Shorts via UU: shortsLockupViewModel (id em onTap.reelWatchEndpoint.videoId, titulo em overlayMetadata.primaryText.content)
-        // Sem isso, UUSH vinha 0 e shorts do canal ficava incompleto.
-        val slvms = mutableListOf<JSONObject>()
-        collect(node, "shortsLockupViewModel", slvms)
-        for (r in slvms) {
-            val videoId = r.optJSONObject("onTap")?.optJSONObject("innertubeCommand")?.optJSONObject("reelWatchEndpoint")?.optString("videoId")?.takeIf { it.isNotBlank() }
-                ?: r.optString("entityId").removePrefix("shorts-shelf-item-").takeIf { it.isNotBlank() }
-                ?: r.optString("contentId").takeIf { it.isNotBlank() } ?: continue
-            val title = r.optJSONObject("overlayMetadata")?.optJSONObject("primaryText")?.optString("content")?.takeIf { it.isNotBlank() }
-                ?: r.optString("title").takeIf { it.isNotBlank() } ?: continue
-            // Thumb: thumbnail.sources maior width (best effort via walk)
-            var thumb: String? = null
-            var bestW = -1
-            fun walkThumb(n: Any?) {
-                when (n) {
-                    is JSONObject -> {
-                        val arr = n.optJSONArray("sources")
-                        if (arr != null) {
-                            for (i in 0 until arr.length()) {
-                                val s = arr.optJSONObject(i) ?: continue
-                                val url = s.optString("url").takeIf { it.isNotBlank() } ?: continue
-                                val w = s.optInt("width", 0)
-                                if (w >= bestW) { bestW = w; thumb = url }
-                            }
-                        }
-                        val keys = n.keys()
-                        while (keys.hasNext()) walkThumb(n.opt(keys.next()))
-                    }
-                    is JSONArray -> for (i in 0 until n.length()) walkThumb(n.opt(i))
-                }
-            }
-            walkThumb(r.optJSONObject("thumbnail"))
-            if (thumb == null) thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))
-            out += Track(id = videoId, title = title, artist = "", durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
-        }
-        return out
-    }
-
-    private fun parseHeaderTitle"""
-    pp = pp.replace(anchor, shorts_block, 1)
-    open(PLAYLIST_PARSER, "w", encoding="utf-8").write(pp)
-    print("3) YouTubePlaylistParser.collectTracks agora entende shortsLockup (UUSH funciona)")
+# ---------- 3) YouTubePlaylistParser ----------
+t = open(PLAYLIST_PARSER, encoding="utf-8").read()
+if "FIX OWNER PLAYLIST DETALHE" not in t:
+    s = t.find("    private fun parseHeaderOwner(")
+    e = t.find("\n    private fun parseHeaderOwnerId", s)
+    if s == -1 or e == -1: fail("ancora parseHeaderOwner nao bateu")
+    new_owner = "    private fun parseHeaderOwner(json: JSONObject): String? {\n"
+    new_owner += "        // FIX OWNER PLAYLIST DETALHE - 2026 o header e pageHeaderRenderer, nao playlistHeaderRenderer.\n"
+    new_owner += "        val headers = mutableListOf<JSONObject>()\n"
+    new_owner += "        collect(json, \"playlistHeaderRenderer\", headers)\n"
+    new_owner += "        collect(json, \"pageHeaderRenderer\", headers)\n"
+    new_owner += "        for (h in headers) {\n"
+    new_owner += "            YouTubeSearchParser.textOf(h.optJSONObject(\"ownerText\"))?.takeIf { it.isNotBlank() && !isHeaderMetaWord(it) }?.let { return it }\n"
+    new_owner += "            YouTubeSearchParser.textOf(h.optJSONObject(\"byline\"))?.takeIf { it.isNotBlank() && !isHeaderMetaWord(it) }?.let { return it }\n"
+    new_owner += "            YouTubeSearchParser.textOf(h.optJSONObject(\"shortBylineText\"))?.takeIf { it.isNotBlank() && !isHeaderMetaWord(it) }?.let { return it }\n"
+    new_owner += "            YouTubeSearchParser.textOf(h.optJSONObject(\"straplineTextOne\"))?.takeIf { it.isNotBlank() && !isHeaderMetaWord(it) }?.let { return it }\n"
+    new_owner += "            val rows = h.optJSONObject(\"content\")?.optJSONObject(\"pageHeaderViewModel\")?.optJSONObject(\"contentMetadataViewModel\")?.optJSONArray(\"metadataRows\")\n"
+    new_owner += "                ?: h.optJSONObject(\"contentMetadataViewModel\")?.optJSONArray(\"metadataRows\")\n"
+    new_owner += "                ?: h.optJSONObject(\"metadata\")?.optJSONObject(\"contentMetadataViewModel\")?.optJSONArray(\"metadataRows\")\n"
+    new_owner += "            if (rows != null) {\n"
+    new_owner += "                for (i in 0 until rows.length()) {\n"
+    new_owner += "                    val parts = rows.optJSONObject(i)?.optJSONArray(\"metadataParts\") ?: continue\n"
+    new_owner += "                    for (j in 0 until parts.length()) {\n"
+    new_owner += "                        val txtObj = parts.optJSONObject(j)?.optJSONObject(\"text\") ?: continue\n"
+    new_owner += "                        val txt = txtObj.optString(\"content\").takeIf { it.isNotBlank() } ?: YouTubeSearchParser.textOf(txtObj) ?: continue\n"
+    new_owner += "                        val clean = txt.trim()\n"
+    new_owner += "                        if (clean.isBlank() || isHeaderMetaWord(clean)) continue\n"
+    new_owner += "                        return clean\n"
+    new_owner += "                    }\n"
+    new_owner += "                }\n"
+    new_owner += "            }\n"
+    new_owner += "            val sub = YouTubeSearchParser.textOf(h.optJSONObject(\"subtitle\")) ?: YouTubeSearchParser.textOf(h.optJSONObject(\"straplineTextOne\"))\n"
+    new_owner += "            if (!sub.isNullOrBlank()) {\n"
+    new_owner += "                val parts = sub.split(\"\\u2022\", \"\\u00b7\", \"|\").map { it.trim() }.filter { it.isNotBlank() && !isHeaderMetaWord(it) }\n"
+    new_owner += "                if (parts.isNotEmpty()) return parts.first()\n"
+    new_owner += "            }\n"
+    new_owner += "        }\n"
+    new_owner += "        return null\n"
+    new_owner += "    }\n"
+    new_owner += "\n"
+    new_owner += "    private fun isHeaderMetaWord(text: String): Boolean {\n"
+    new_owner += "        val low = text.trim().lowercase()\n"
+    new_owner += "        if (low in setOf(\"playlist\", \"podcast\", \"mix\", \"\\u00e1lbum\", \"album\", \"video\", \"v\\u00eddeo\", \"v\\u00eddeos\", \"videos\")) return true\n"
+    new_owner += "        if (low.contains(\"video\") || low.contains(\"v\\u00eddeo\") || low.contains(\"episode\") || low.contains(\"epis\\u00f3dio\")) return true\n"
+    new_owner += "        if (low.contains(\"view\") || low.contains(\"visualiza\") || low.contains(\"exibi\")) return true\n"
+    new_owner += "        if (low.contains(\"song\") || low.contains(\"faixa\") || low.contains(\"m\\u00fasica\") || low.contains(\"musica\")) return true\n"
+    new_owner += "        if (low.matches(Regex(\"^\\\\d+\\\\s*(songs|faixas|videos|v\\u00eddeos|views|visualiza\\u00e7\\u00f5es).*\"))) return true\n"
+    new_owner += "        return false\n"
+    new_owner += "    }\n"
+    t = t[:s] + new_owner + t[e:]
+    s = t.find("    private fun parseHeaderOwnerId(")
+    e = t.find("\n    private fun parseHeaderDescription", s)
+    if s == -1 or e == -1: fail("ancora parseHeaderOwnerId nao bateu")
+    new_id = "    private fun parseHeaderOwnerId(json: JSONObject): String? {\n"
+    new_id += "        // FIX OWNER PLAYLIST DETALHE - UC pode estar em pageHeaderRenderer.contentMetadataViewModel.\n"
+    new_id += "        val headers = mutableListOf<JSONObject>()\n"
+    new_id += "        collect(json, \"playlistHeaderRenderer\", headers)\n"
+    new_id += "        collect(json, \"pageHeaderRenderer\", headers)\n"
+    new_id += "        for (h in headers) {\n"
+    new_id += "            val runs = h.optJSONObject(\"ownerText\")?.optJSONArray(\"runs\")\n"
+    new_id += "            if (runs != null) {\n"
+    new_id += "                for (i in 0 until runs.length()) {\n"
+    new_id += "                    val cid = runs.optJSONObject(i)?.optJSONObject(\"navigationEndpoint\")?.optJSONObject(\"browseEndpoint\")?.optString(\"browseId\")\n"
+    new_id += "                    if (!cid.isNullOrBlank() && cid.startsWith(\"UC\")) return cid\n"
+    new_id += "                }\n"
+    new_id += "            }\n"
+    new_id += "            val nav = h.optJSONObject(\"ownerText\")?.optJSONArray(\"runs\")?.optJSONObject(0)?.optJSONObject(\"navigationEndpoint\") ?: h.optJSONObject(\"ownerEndpoint\")\n"
+    new_id += "            val cid0 = nav?.optJSONObject(\"browseEndpoint\")?.optString(\"browseId\")\n"
+    new_id += "            if (!cid0.isNullOrBlank() && cid0.startsWith(\"UC\")) return cid0\n"
+    new_id += "            val rows = h.optJSONObject(\"content\")?.optJSONObject(\"pageHeaderViewModel\")?.optJSONObject(\"contentMetadataViewModel\")?.optJSONArray(\"metadataRows\") ?: h.optJSONObject(\"contentMetadataViewModel\")?.optJSONArray(\"metadataRows\")\n"
+    new_id += "            if (rows != null) {\n"
+    new_id += "                for (i in 0 until rows.length()) {\n"
+    new_id += "                    val parts = rows.optJSONObject(i)?.optJSONArray(\"metadataParts\") ?: continue\n"
+    new_id += "                    for (j in 0 until parts.length()) {\n"
+    new_id += "                        val txtObj = parts.optJSONObject(j)?.optJSONObject(\"text\") ?: continue\n"
+    new_id += "                        val cmdRuns = txtObj.optJSONArray(\"commandRuns\")\n"
+    new_id += "                        if (cmdRuns != null) {\n"
+    new_id += "                            for (k in 0 until cmdRuns.length()) {\n"
+    new_id += "                                val cid = cmdRuns.optJSONObject(k)?.optJSONObject(\"onTap\")?.optJSONObject(\"innertubeCommand\")?.optJSONObject(\"browseEndpoint\")?.optString(\"browseId\") ?: cmdRuns.optJSONObject(k)?.optJSONObject(\"navigationEndpoint\")?.optJSONObject(\"browseEndpoint\")?.optString(\"browseId\")\n"
+    new_id += "                                if (!cid.isNullOrBlank() && cid.startsWith(\"UC\")) return cid\n"
+    new_id += "                            }\n"
+    new_id += "                        }\n"
+    new_id += "                        val r = txtObj.optJSONArray(\"runs\")\n"
+    new_id += "                        if (r != null) {\n"
+    new_id += "                            for (k in 0 until r.length()) {\n"
+    new_id += "                                val cid = r.optJSONObject(k)?.optJSONObject(\"navigationEndpoint\")?.optJSONObject(\"browseEndpoint\")?.optString(\"browseId\")\n"
+    new_id += "                                if (!cid.isNullOrBlank() && cid.startsWith(\"UC\")) return cid\n"
+    new_id += "                            }\n"
+    new_id += "                        }\n"
+    new_id += "                    }\n"
+    new_id += "                }\n"
+    new_id += "            }\n"
+    new_id += "        }\n"
+    new_id += "        return null\n"
+    new_id += "    }\n"
+    t = t[:s] + new_id + t[e:]
+    open(PLAYLIST_PARSER, "w", encoding="utf-8").write(t)
+    print("OK PlaylistParser: parseHeaderOwner/Id com pageHeaderRenderer + metadataRows")
 else:
-    print("3) YouTubePlaylistParser ja entende shortsLockup - pulando")
+    print("SKIP PlaylistParser ja tem FIX OWNER PLAYLIST DETALHE")
 
-# ---------- 4) YouTubeRepository.browseChannel COMPLETO ----------
-yt = open(YT_REPO, encoding="utf-8").read()
-if "FIX CHANNEL COMPLETO" not in yt:
-    start = yt.find("// FIX CHANNEL TABS")
-    if start == -1:
-        start = yt.find("// PART 2+3 - InnerTube first for browseChannel")
-    if start == -1: fail("ancora browseChannel InnerTube nao bateu (roda fix_channels_ytmusic_owner antes)")
-    onf = yt.find(".onFailure", start)
-    if onf == -1: fail("fim browseChannel InnerTube nao bateu")
-    end = yt.find("\n", onf)
-    if end == -1: end = len(yt)
-    new_block = """        // FIX CHANNEL COMPLETO - busca COMPLETA, nao so a 1a pagina.
-        // Antes: pegava 1 pagina (100 no UU, ~30 na aba) e guardava token pro loadMore. Se a tela nao chama loadMore, vinha incompleto.
-        // Agora: pagina UU + aba ate acabar ou bater o teto (1000 videos, 500 shorts, 200 playlists, 10 paginas cada).
-        // E SEMPRE busca a aba cheia, mesmo que a Home ja tenha 5 videos em destaque (destaque != lista completa).
-        // Fonte primaria pra videos/shorts e UU (ordem estavel, 100/pagina): UULF = videos, UUSH = shorts. Aba e fallback.
-        // Playlists nao tem UU, entao pagina a aba Playlists com continuation ate o fim.
-        runCatching {
-            val uc = Regex("UC[\\\\w-]{22}").find(input)?.value
-            if (uc != null) {
-                val homeJson = InnerTubeYouTube.browse(uc)
-                val homeParsed = YouTubeChannelParser.parseChannelPage(homeJson)
-                val channelName = homeParsed.channelName
-                // ---- VIDEOS via UULF loop ----
-                var videos = mutableListOf<com.vztechcore.vztune.core.domain.music.Track>()
-                var videosCont: String? = null
-                runCatching {
-                    var seenTokens = mutableSetOf<String>()
-                    var json = InnerTubeYouTube.browse("VL" + "UULF" + uc.drop(2))
-                    var parsed = YouTubePlaylistParser.parsePlaylistPage(json, channelName)
-                    videos += parsed.tracks
-                    videosCont = parsed.continuation
-                    var pages = 1
-                    while (videos.size < 1000 && videosCont != null && pages < 10) {
-                        val token = videosCont ?: break
-                        if (!seenTokens.add(token)) break
-                        val cj = InnerTubeYouTube.browseContinuation(token)
-                        val (more, next) = YouTubePlaylistParser.parsePlaylistContinuation(cj)
-                        if (more.isEmpty() && next == null) { videosCont = null; break }
-                        videos += more
-                        videosCont = next
-                        pages++
-                    }
-                }.onFailure { Log.w(TAG, "UULF loop failed: ${it.message}") }
-                // Se UULF deu 0, tenta UU (tudo) e depois aba Videos
-                if (videos.isEmpty()) {
-                    runCatching {
-                        var seenTokens = mutableSetOf<String>()
-                        var json = InnerTubeYouTube.browse("VL" + "UU" + uc.drop(2))
-                        var parsed = YouTubePlaylistParser.parsePlaylistPage(json, channelName)
-                        videos += parsed.tracks
-                        videosCont = parsed.continuation
-                        var pages = 1
-                        while (videos.size < 1000 && videosCont != null && pages < 10) {
-                            val token = videosCont ?: break
-                            if (!seenTokens.add(token)) break
-                            val cj = InnerTubeYouTube.browseContinuation(token)
-                            val (more, next) = YouTubePlaylistParser.parsePlaylistContinuation(cj)
-                            if (more.isEmpty() && next == null) { videosCont = null; break }
-                            videos += more
-                            videosCont = next
-                            pages++
-                        }
-                    }.onFailure { Log.w(TAG, "UU loop failed: ${it.message}") }
-                }
-                if (videos.isEmpty()) {
-                    val videosParams = YouTubeChannelParser.tabParams(homeJson, "videos")
-                    if (videosParams != null) {
-                        runCatching {
-                            var seenTokens = mutableSetOf<String>()
-                            var json = InnerTubeYouTube.browse(uc, videosParams)
-                            var parsed = YouTubeChannelParser.parseChannelPage(json)
-                            videos += parsed.videos
-                            videosCont = parsed.videosContinuation
-                            var pages = 1
-                            while (videos.size < 1000 && videosCont != null && pages < 10) {
-                                val token = videosCont ?: break
-                                if (!seenTokens.add(token)) break
-                                val cj = InnerTubeYouTube.browseContinuation(token)
-                                val (more, next) = YouTubeChannelParser.parseVideosContinuation(cj)
-                                if (more.isEmpty() && next == null) { videosCont = null; break }
-                                videos += more
-                                videosCont = next
-                                pages++
-                            }
-                        }.onFailure { Log.w(TAG, "Videos tab loop failed: ${it.message}") }
-                    }
-                }
-                // ---- SHORTS via UUSH loop ----
-                var shorts = mutableListOf<com.vztechcore.vztune.core.domain.music.Track>()
-                var shortsCont: String? = null
-                runCatching {
-                    var seenTokens = mutableSetOf<String>()
-                    var json = InnerTubeYouTube.browse("VL" + "UUSH" + uc.drop(2))
-                    var parsed = YouTubePlaylistParser.parsePlaylistPage(json, channelName)
-                    shorts += parsed.tracks
-                    shortsCont = parsed.continuation
-                    var pages = 1
-                    while (shorts.size < 500 && shortsCont != null && pages < 10) {
-                        val token = shortsCont ?: break
-                        if (!seenTokens.add(token)) break
-                        val cj = InnerTubeYouTube.browseContinuation(token)
-                        val (more, next) = YouTubePlaylistParser.parsePlaylistContinuation(cj)
-                        if (more.isEmpty() && next == null) { shortsCont = null; break }
-                        shorts += more
-                        shortsCont = next
-                        pages++
-                    }
-                }.onFailure { Log.w(TAG, "UUSH loop failed: ${it.message}") }
-                if (shorts.isEmpty()) {
-                    val shortsParams = YouTubeChannelParser.tabParams(homeJson, "shorts")
-                    if (shortsParams != null) {
-                        runCatching {
-                            var seenTokens = mutableSetOf<String>()
-                            var json = InnerTubeYouTube.browse(uc, shortsParams)
-                            var parsed = YouTubeChannelParser.parseChannelPage(json)
-                            shorts += parsed.shorts
-                            shortsCont = parsed.shortsContinuation
-                            var pages = 1
-                            while (shorts.size < 500 && shortsCont != null && pages < 10) {
-                                val token = shortsCont ?: break
-                                if (!seenTokens.add(token)) break
-                                val cj = InnerTubeYouTube.browseContinuation(token)
-                                val (more, next) = YouTubeChannelParser.parseShortsContinuation(cj)
-                                if (more.isEmpty() && next == null) { shortsCont = null; break }
-                                shorts += more
-                                shortsCont = next
-                                pages++
-                            }
-                            // Shorts tab as vezes devolve videos longos no campo videos - junta se shorts ainda vazio
-                            if (shorts.isEmpty() && parsed.videos.isNotEmpty()) shorts += parsed.videos
-                        }.onFailure { Log.w(TAG, "Shorts tab loop failed: ${it.message}") }
-                    }
-                }
-                // Se videos vieram de UU (tudo), tira os que sao shorts
-                if (shorts.isNotEmpty() && videos.isNotEmpty()) {
-                    val shortIds = shorts.map { it.id }.toSet()
-                    videos = videos.filter { it.id !in shortIds }.toMutableList()
-                }
-                // Preenche artista em branco com nome do canal (lockup nao traz autor)
-                if (channelName.isNotBlank()) {
-                    videos = videos.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }.toMutableList()
-                    shorts = shorts.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }.toMutableList()
-                }
-                // ---- PLAYLISTS via aba Playlists loop (SEMPRE, mesmo que Home tenha destaque) ----
-                var playlists = mutableListOf<com.vztechcore.vztune.core.domain.music.Playlist>()
-                var playlistsCont: String? = null
-                val playlistsParams = YouTubeChannelParser.tabParams(homeJson, "playlists")
-                if (playlistsParams != null) {
-                    runCatching {
-                        var seenTokens = mutableSetOf<String>()
-                        var json = InnerTubeYouTube.browse(uc, playlistsParams)
-                        var parsed = YouTubeChannelParser.parseChannelPage(json)
-                        playlists += parsed.playlists
-                        playlistsCont = parsed.playlistsContinuation
-                        var pages = 1
-                        while (playlists.size < 200 && playlistsCont != null && pages < 5) {
-                            val token = playlistsCont ?: break
-                            if (!seenTokens.add(token)) break
-                            val cj = InnerTubeYouTube.browseContinuation(token)
-                            val (more, next) = YouTubeChannelParser.parsePlaylistsContinuation(cj)
-                            if (more.isEmpty() && next == null) { playlistsCont = null; break }
-                            playlists += more
-                            playlistsCont = next
-                            pages++
-                        }
-                    }.onFailure { Log.w(TAG, "Playlists tab loop failed: ${it.message}") }
-                }
-                // Guarda token restante pro loadMore (se bateu o teto, ainda tem mais)
-                ytChannelVideoContinuations[uc] = videosCont
-                ytChannelVideoContinuations[input] = videosCont
-                ytChannelPlaylistContinuations[uc] = playlistsCont
-                ytChannelPlaylistContinuations[input] = playlistsCont
-                if (videos.isNotEmpty() || shorts.isNotEmpty() || playlists.isNotEmpty()) {
-                    return@withContext ChannelPage(
-                        videos = videos.distinctBy { it.id },
-                        shorts = shorts.distinctBy { it.id },
-                        playlists = playlists.distinctBy { it.id },
-                        channelName = channelName.ifBlank { null },
-                        avatarUrl = homeParsed.avatarUrl,
-                        bannerUrl = homeParsed.bannerUrl,
-                        description = homeParsed.description,
-                        subscriberCount = homeParsed.subscriberCount,
-                        hasMoreVideos = videosCont != null,
-                        hasMorePlaylists = playlistsCont != null
-                    )
-                }
-                // Tudo vazio via InnerTube: nao retorna, deixa o NewPipe abaixo tentar.
-            }
-        }.onFailure { Log.w(TAG, "InnerTube browseChannel failed, fallback NewPipe: ${it.message}") }"""
-    yt = yt[:start] + new_block + yt[end:]
-    open(YT_REPO, "w", encoding="utf-8").write(yt)
-    print("4) browseChannel agora pagina UULF/UUSH + aba Playlists ate o fim (1000/500/200), sempre busca aba cheia")
+# ---------- 4) YTMusicPlaylistParser ----------
+t = open(YTM_PLAYLIST_PARSER, encoding="utf-8").read()
+if "FIX OWNER PLAYLIST DETALHE" not in t:
+    old_header = "        val header = YTMusicTextUtils.findFirst(json, \"musicDetailHeaderRenderer\")\n            ?: YTMusicTextUtils.findFirst(json, \"musicResponsiveHeaderRenderer\")\n            ?: YTMusicTextUtils.findFirst(json, \"musicEditablePlaylistDetailHeaderRenderer\")\n            ?: YTMusicTextUtils.findFirst(json, \"playlistHeaderRenderer\")"
+    if old_header not in t: fail("ancora YTMusic header nao bateu")
+    t = t.replace(old_header, old_header + "\n            // FIX OWNER PLAYLIST DETALHE - 2026 pode vir pageHeaderRenderer / pageHeaderViewModel\n            ?: YTMusicTextUtils.findFirst(json, \"pageHeaderRenderer\")\n            ?: YTMusicTextUtils.findFirst(json, \"pageHeaderViewModel\")")
+    anchor = "        // ---- 4. VIEWS FALLBACK ----"
+    if anchor not in t: fail("ancora YTMusic VIEWS FALLBACK nao bateu")
+    insert = "        // ---- 3b. METADATA ROWS (pageHeaderRenderer) - dono em metadataParts[].text.content ----\n"
+    insert += "        if (owner == null) {\n"
+    insert += "            YTMusicTextUtils.walk(header) { node ->\n"
+    insert += "                if (owner != null) return@walk\n"
+    insert += "                val rows = node.optJSONArray(\"metadataRows\") ?: return@walk\n"
+    insert += "                for (i in 0 until rows.length()) {\n"
+    insert += "                    val parts = rows.optJSONObject(i)?.optJSONArray(\"metadataParts\") ?: continue\n"
+    insert += "                    for (j in 0 until parts.length()) {\n"
+    insert += "                        val txtObj = parts.optJSONObject(j)?.optJSONObject(\"text\") ?: continue\n"
+    insert += "                        val cand = txtObj.optString(\"content\").takeIf { it.isNotBlank() } ?: YTMusicTextUtils.runsText(txtObj)\n"
+    insert += "                        val cleaned = cleanOwner(cand)\n"
+    insert += "                        if (cleaned != null) { owner = cleaned; break }\n"
+    insert += "                    }\n"
+    insert += "                }\n"
+    insert += "            }\n"
+    insert += "        }\n"
+    insert += "\n"
+    t = t.replace(anchor, insert + anchor, 1)
+    open(YTM_PLAYLIST_PARSER, "w", encoding="utf-8").write(t)
+    print("OK YTMusicPlaylistParser: pageHeaderRenderer + metadataRows fallback")
 else:
-    print("4) browseChannel ja e COMPLETO - pulando")
+    print("SKIP YTMusicPlaylistParser ja tem FIX OWNER PLAYLIST DETALHE")
 
-print("Fix canal completo OK.")
+# ---------- 5) YouTubeRepository.browseChannel fallback ----------
+t = open(YT_REPO, encoding="utf-8").read()
+if "FIX PLAYLIST CANAL VAZIA" not in t:
+    anchor = "                // Guarda token restante pro loadMore (se bateu o teto, ainda tem mais)"
+    if anchor not in t: fail("ancora browseChannel guarda token nao bateu")
+    fallback = "                // FIX PLAYLIST CANAL VAZIA - se aba Playlists voltou 0, usa Home + busca NewPipe antes de devolver vazio.\n"
+    fallback += "                if (playlists.isEmpty()) {\n"
+    fallback += "                    if (homeParsed.playlists.isNotEmpty()) {\n"
+    fallback += "                        playlists += homeParsed.playlists\n"
+    fallback += "                        if (playlistsCont == null) playlistsCont = homeParsed.playlistsContinuation\n"
+    fallback += "                    }\n"
+    fallback += "                }\n"
+    fallback += "                if (playlists.isEmpty() && channelName.isNotBlank()) {\n"
+    fallback += "                    runCatching {\n"
+    fallback += "                        val q = channelName.ifBlank { input.takeIf { it.startsWith(\"@\") }.orEmpty() }\n"
+    fallback += "                        if (q.isNotBlank()) {\n"
+    fallback += "                            val ex = ServiceList.YouTube.getSearchExtractor(q, listOf(\"playlists\"), null)\n"
+    fallback += "                            ex.fetchPage()\n"
+    fallback += "                            val collected = parseChannelPlaylistItems(ex.initialPage.items, channelName).toMutableList()\n"
+    fallback += "                            var np: Page? = ex.initialPage.nextPage\n"
+    fallback += "                            var pg = 0\n"
+    fallback += "                            while (collected.size < 100 && np != null && pg < 2) {\n"
+    fallback += "                                val nxt = ex.getPage(np!!)\n"
+    fallback += "                                collected += parseChannelPlaylistItems(nxt.items, channelName)\n"
+    fallback += "                                np = nxt.nextPage\n"
+    fallback += "                                pg++\n"
+    fallback += "                            }\n"
+    fallback += "                            if (collected.isNotEmpty()) {\n"
+    fallback += "                                playlists += collected\n"
+    fallback += "                                val sess = ChannelPlaylistsSession(ex, np, channelName)\n"
+    fallback += "                                channelPlaylistSessions[uc] = sess\n"
+    fallback += "                                channelPlaylistSessions[input] = sess\n"
+    fallback += "                            }\n"
+    fallback += "                        }\n"
+    fallback += "                    }.onFailure { Log.w(TAG, \"Playlists NewPipe fallback failed: ${it.message}\") }\n"
+    fallback += "                }\n"
+    t = t.replace(anchor, fallback + anchor, 1)
+    open(YT_REPO, "w", encoding="utf-8").write(t)
+    print("OK YouTubeRepository: browseChannel fallback playlists Home + NewPipe")
+else:
+    print("SKIP YouTubeRepository ja tem FIX PLAYLIST CANAL VAZIA")
+
+print("PRONTO - playlists do canal + dono dentro da playlist")

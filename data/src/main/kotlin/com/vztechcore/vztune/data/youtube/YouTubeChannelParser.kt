@@ -60,6 +60,8 @@ object YouTubeChannelParser {
             if (channelName.isNotBlank()) {
                 videos = videos.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }
                 shorts = shorts.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }
+                // FIX PLAYLIST CANAL - playlist sem dono mostra so Playlist no card; usa nome do canal.
+                playlists = playlists.map { if (it.owner.isNullOrBlank()) it.copy(owner = channelName) else it }
             }
             return ChannelData(
                 channelName = channelName,
@@ -121,6 +123,8 @@ object YouTubeChannelParser {
         if (channelName.isNotBlank()) {
             videos = videos.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }
             shorts = shorts.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }
+            // FIX PLAYLIST CANAL - playlist sem dono mostra so Playlist no card; usa nome do canal.
+            playlists = playlists.map { if (it.owner.isNullOrBlank()) it.copy(owner = channelName) else it }
         }
         return ChannelData(
             channelName = channelName,
@@ -398,7 +402,7 @@ object YouTubeChannelParser {
         collect(node, "lockupViewModel", lockups)
         for (lvm in lockups) {
             val type = lvm.optString("contentType")
-            if (type != "LOCKUP_CONTENT_TYPE_PLAYLIST" && type != "LOCKUP_CONTENT_TYPE_PODCAST") continue
+            if (type == "LOCKUP_CONTENT_TYPE_VIDEO" || type == "LOCKUP_CONTENT_TYPE_SHORTS" || type == "LOCKUP_CONTENT_TYPE_STREAM") continue
             val pid = YouTubeSearchParser.lockupPlaylistId(lvm) ?: continue
             if (!pid.startsWith("PL") && !pid.startsWith("UU") && !pid.startsWith("OL") && !pid.startsWith("RD") && !pid.startsWith("FL")) continue
             val title = YouTubeSearchParser.lockupTitle(lvm) ?: continue

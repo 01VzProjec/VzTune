@@ -147,25 +147,89 @@ object YouTubePlaylistParser {
     }
 
     private fun parseHeaderOwner(json: JSONObject): String? {
+        // FIX OWNER PLAYLIST DETALHE - 2026 o header e pageHeaderRenderer, nao playlistHeaderRenderer.
         val headers = mutableListOf<JSONObject>()
         collect(json, "playlistHeaderRenderer", headers)
-        val h = headers.firstOrNull() ?: return null
-        // ownerText or byline
-        return YouTubeSearchParser.textOf(h.optJSONObject("ownerText"))
-            ?: YouTubeSearchParser.textOf(h.optJSONObject("byline"))
-            ?: YouTubeSearchParser.textOf(h.optJSONObject("shortBylineText"))
+        collect(json, "pageHeaderRenderer", headers)
+        for (h in headers) {
+            YouTubeSearchParser.textOf(h.optJSONObject("ownerText"))?.takeIf { it.isNotBlank() && !isHeaderMetaWord(it) }?.let { return it }
+            YouTubeSearchParser.textOf(h.optJSONObject("byline"))?.takeIf { it.isNotBlank() && !isHeaderMetaWord(it) }?.let { return it }
+            YouTubeSearchParser.textOf(h.optJSONObject("shortBylineText"))?.takeIf { it.isNotBlank() && !isHeaderMetaWord(it) }?.let { return it }
+            YouTubeSearchParser.textOf(h.optJSONObject("straplineTextOne"))?.takeIf { it.isNotBlank() && !isHeaderMetaWord(it) }?.let { return it }
+            val rows = h.optJSONObject("content")?.optJSONObject("pageHeaderViewModel")?.optJSONObject("contentMetadataViewModel")?.optJSONArray("metadataRows")
+                ?: h.optJSONObject("contentMetadataViewModel")?.optJSONArray("metadataRows")
+                ?: h.optJSONObject("metadata")?.optJSONObject("contentMetadataViewModel")?.optJSONArray("metadataRows")
+            if (rows != null) {
+                for (i in 0 until rows.length()) {
+                    val parts = rows.optJSONObject(i)?.optJSONArray("metadataParts") ?: continue
+                    for (j in 0 until parts.length()) {
+                        val txtObj = parts.optJSONObject(j)?.optJSONObject("text") ?: continue
+                        val txt = txtObj.optString("content").takeIf { it.isNotBlank() } ?: YouTubeSearchParser.textOf(txtObj) ?: continue
+                        val clean = txt.trim()
+                        if (clean.isBlank() || isHeaderMetaWord(clean)) continue
+                        return clean
+                    }
+                }
+            }
+            val sub = YouTubeSearchParser.textOf(h.optJSONObject("subtitle")) ?: YouTubeSearchParser.textOf(h.optJSONObject("straplineTextOne"))
+            if (!sub.isNullOrBlank()) {
+                val parts = sub.split("\u2022", "\u00b7", "|").map { it.trim() }.filter { it.isNotBlank() && !isHeaderMetaWord(it) }
+                if (parts.isNotEmpty()) return parts.first()
+            }
+        }
+        return null
+    }
+
+    private fun isHeaderMetaWord(text: String): Boolean {
+        val low = text.trim().lowercase()
+        if (low in setOf("playlist", "podcast", "mix", "\u00e1lbum", "album", "video", "v\u00eddeo", "v\u00eddeos", "videos")) return true
+        if (low.contains("video") || low.contains("v\u00eddeo") || low.contains("episode") || low.contains("epis\u00f3dio")) return true
+        if (low.contains("view") || low.contains("visualiza") || low.contains("exibi")) return true
+        if (low.contains("song") || low.contains("faixa") || low.contains("m\u00fasica") || low.contains("musica")) return true
+        if (low.matches(Regex("^\\d+\\s*(songs|faixas|videos|v\u00eddeos|views|visualiza\u00e7\u00f5es).*"))) return true
+        return false
     }
 
     private fun parseHeaderOwnerId(json: JSONObject): String? {
-        // Try to find channelId in owner navigationEndpoint
+        // FIX OWNER PLAYLIST DETALHE - UC pode estar em pageHeaderRenderer.contentMetadataViewModel.
         val headers = mutableListOf<JSONObject>()
         collect(json, "playlistHeaderRenderer", headers)
-        val h = headers.firstOrNull() ?: return null
-        val nav = h.optJSONObject("ownerText")?.optJSONArray("runs")?.optJSONObject(0)?.optJSONObject("navigationEndpoint")
-            ?: h.optJSONObject("ownerEndpoint")
-        val browse = nav?.optJSONObject("browseEndpoint")
-        val cid = browse?.optString("browseId")
-        if (!cid.isNullOrBlank() && cid.startsWith("UC")) return cid
+        collect(json, "pageHeaderRenderer", headers)
+        for (h in headers) {
+            val runs = h.optJSONObject("ownerText")?.optJSONArray("runs")
+            if (runs != null) {
+                for (i in 0 until runs.length()) {
+                    val cid = runs.optJSONObject(i)?.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")?.optString("browseId")
+                    if (!cid.isNullOrBlank() && cid.startsWith("UC")) return cid
+                }
+            }
+            val nav = h.optJSONObject("ownerText")?.optJSONArray("runs")?.optJSONObject(0)?.optJSONObject("navigationEndpoint") ?: h.optJSONObject("ownerEndpoint")
+            val cid0 = nav?.optJSONObject("browseEndpoint")?.optString("browseId")
+            if (!cid0.isNullOrBlank() && cid0.startsWith("UC")) return cid0
+            val rows = h.optJSONObject("content")?.optJSONObject("pageHeaderViewModel")?.optJSONObject("contentMetadataViewModel")?.optJSONArray("metadataRows") ?: h.optJSONObject("contentMetadataViewModel")?.optJSONArray("metadataRows")
+            if (rows != null) {
+                for (i in 0 until rows.length()) {
+                    val parts = rows.optJSONObject(i)?.optJSONArray("metadataParts") ?: continue
+                    for (j in 0 until parts.length()) {
+                        val txtObj = parts.optJSONObject(j)?.optJSONObject("text") ?: continue
+                        val cmdRuns = txtObj.optJSONArray("commandRuns")
+                        if (cmdRuns != null) {
+                            for (k in 0 until cmdRuns.length()) {
+                                val cid = cmdRuns.optJSONObject(k)?.optJSONObject("onTap")?.optJSONObject("innertubeCommand")?.optJSONObject("browseEndpoint")?.optString("browseId") ?: cmdRuns.optJSONObject(k)?.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")?.optString("browseId")
+                                if (!cid.isNullOrBlank() && cid.startsWith("UC")) return cid
+                            }
+                        }
+                        val r = txtObj.optJSONArray("runs")
+                        if (r != null) {
+                            for (k in 0 until r.length()) {
+                                val cid = r.optJSONObject(k)?.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")?.optString("browseId")
+                                if (!cid.isNullOrBlank() && cid.startsWith("UC")) return cid
+                            }
+                        }
+                    }
+                }
+            }
+        }
         return null
     }
 

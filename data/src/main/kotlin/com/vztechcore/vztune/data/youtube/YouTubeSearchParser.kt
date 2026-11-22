@@ -57,7 +57,7 @@ object YouTubeSearchParser {
         collect(json, "lockupViewModel", lockups)
         for (lvm in lockups) {
             val type = lvm.optString("contentType")
-            if (type != "LOCKUP_CONTENT_TYPE_PLAYLIST" && type != "LOCKUP_CONTENT_TYPE_PODCAST") continue
+            if (type == "LOCKUP_CONTENT_TYPE_VIDEO" || type == "LOCKUP_CONTENT_TYPE_SHORTS" || type == "LOCKUP_CONTENT_TYPE_STREAM") continue
             val pid = lockupPlaylistId(lvm) ?: continue
             if (!pid.startsWith("PL") && !pid.startsWith("UU") && !pid.startsWith("OL") && !pid.startsWith("RD") && !pid.startsWith("FL")) continue
             val title = lockupTitle(lvm) ?: continue
@@ -70,9 +70,41 @@ object YouTubeSearchParser {
     }
 
     fun lockupPlaylistId(lvm: JSONObject): String? {
-        val pid = lvm.optJSONObject("rendererContext")?.optJSONObject("commandContext")?.optJSONObject("onTap")?.optJSONObject("innertubeCommand")?.optJSONObject("watchEndpoint")?.optString("playlistId")?.takeIf { it.isNotBlank() }
-        if (pid != null) return pid
-        return lvm.optString("contentId").takeIf { it.isNotBlank() }
+        // FIX PLAYLIST CANAL - aba Playlists usa browseEndpoint (VLPL...), nao watchEndpoint.
+        // Busca usa watchEndpoint (PL...). Tenta os dois + contentId, normaliza VL.
+        fun normalize(raw: String?): String? {
+            var v = raw?.trim()?.takeIf { it.isNotBlank() } ?: return null
+            if (v.startsWith("VL")) v = v.removePrefix("VL")
+            if (v.startsWith("PL") || v.startsWith("UU") || v.startsWith("OL") || v.startsWith("RD") || v.startsWith("FL")) return v
+            return null
+        }
+        val cmd = lvm.optJSONObject("rendererContext")?.optJSONObject("commandContext")?.optJSONObject("onTap")?.optJSONObject("innertubeCommand")
+        normalize(cmd?.optJSONObject("watchEndpoint")?.optString("playlistId"))?.let { return it }
+        normalize(cmd?.optJSONObject("browseEndpoint")?.optString("browseId"))?.let { return it }
+        normalize(cmd?.optJSONObject("browseEndpoint")?.optString("playlistId"))?.let { return it }
+        var found: String? = null
+        fun walk(n: Any?) {
+            if (found != null) return
+            when (n) {
+                is JSONObject -> {
+                    val browse = n.optJSONObject("browseEndpoint")
+                    if (browse != null) {
+                        normalize(browse.optString("browseId"))?.let { found = it; return }
+                        normalize(browse.optString("playlistId"))?.let { found = it; return }
+                    }
+                    val watch = n.optJSONObject("watchEndpoint")
+                    if (watch != null) {
+                        normalize(watch.optString("playlistId"))?.let { found = it; return }
+                    }
+                    val keys = n.keys()
+                    while (keys.hasNext()) walk(n.opt(keys.next()))
+                }
+                is JSONArray -> for (i in 0 until n.length()) walk(n.opt(i))
+            }
+        }
+        walk(lvm)
+        if (found != null) return found
+        return normalize(lvm.optString("contentId"))
     }
 
     fun lockupTitle(lvm: JSONObject): String? {
@@ -82,32 +114,61 @@ object YouTubeSearchParser {
     }
 
     fun lockupOwner(lvm: JSONObject): String? {
+        // FIX OWNER LOCKUP - metadataRows pode estar em 3 lugares, runs pode ser commandRuns OU runs com navigationEndpoint.
         val meta = lvm.optJSONObject("metadata")?.optJSONObject("lockupMetadataViewModel") ?: return null
-        val rows = meta.optJSONObject("metadata")?.optJSONObject("contentMetadataViewModel")?.optJSONArray("metadataRows") ?: return null
-        var fallback: String? = null
-        for (i in 0 until rows.length()) {
-            val row = rows.optJSONObject(i) ?: continue
-            val parts = row.optJSONArray("metadataParts") ?: continue
-            for (j in 0 until parts.length()) {
-                val part = parts.optJSONObject(j) ?: continue
-                val textObj = part.optJSONObject("text") ?: continue
-                val name = textObj.optString("content").takeIf { it.isNotBlank() } ?: textOf(textObj) ?: continue
-                val trimmed = name.trim()
-                if (trimmed.isBlank()) continue
-                if (isLockupTypeWord(trimmed)) continue
-                if (trimmed.contains("View full", ignoreCase = true)) continue
-                if (trimmed.contains("Ver playlist", ignoreCase = true)) continue
-                if (trimmed.contains("video", ignoreCase = true) || trimmed.contains("episode", ignoreCase = true)) continue
-                val runs = textObj.optJSONArray("commandRuns")
-                var isChannel = false
-                if (runs != null) {
-                    for (k in 0 until runs.length()) {
-                        val browseId = runs.optJSONObject(k)?.optJSONObject("onTap")?.optJSONObject("innertubeCommand")?.optJSONObject("browseEndpoint")?.optString("browseId") ?: continue
-                        if (browseId.startsWith("UC")) isChannel = true
-                    }
+        val rowSets = mutableListOf<JSONArray>()
+        meta.optJSONObject("metadata")?.optJSONObject("contentMetadataViewModel")?.optJSONArray("metadataRows")?.let { rowSets += it }
+        meta.optJSONObject("metadata")?.optJSONArray("metadataRows")?.let { rowSets += it }
+        meta.optJSONObject("contentMetadataViewModel")?.optJSONArray("metadataRows")?.let { rowSets += it }
+        meta.optJSONArray("metadataRows")?.let { rowSets += it }
+        fun walkRows(n: Any?) {
+            when (n) {
+                is JSONObject -> {
+                    val arr = n.optJSONArray("metadataRows")
+                    if (arr != null && !rowSets.contains(arr)) rowSets += arr
+                    val keys = n.keys()
+                    while (keys.hasNext()) walkRows(n.opt(keys.next()))
                 }
-                if (isChannel) return trimmed
-                if (fallback == null && (runs == null || runs.length() == 0)) fallback = trimmed
+                is JSONArray -> for (i in 0 until n.length()) walkRows(n.opt(i))
+            }
+        }
+        walkRows(meta)
+        var fallback: String? = null
+        for (rows in rowSets) {
+            for (i in 0 until rows.length()) {
+                val row = rows.optJSONObject(i) ?: continue
+                val parts = row.optJSONArray("metadataParts") ?: continue
+                for (j in 0 until parts.length()) {
+                    val part = parts.optJSONObject(j) ?: continue
+                    val textObj = part.optJSONObject("text") ?: continue
+                    val name = textObj.optString("content").takeIf { it.isNotBlank() } ?: textOf(textObj) ?: continue
+                    val trimmed = name.trim()
+                    if (trimmed.isBlank()) continue
+                    if (isLockupTypeWord(trimmed)) continue
+                    if (trimmed.contains("View full", ignoreCase = true)) continue
+                    if (trimmed.contains("Ver playlist", ignoreCase = true)) continue
+                    if (trimmed.contains("video", ignoreCase = true) || trimmed.contains("episode", ignoreCase = true)) continue
+                    var isChannel = false
+                    val cmdRuns = textObj.optJSONArray("commandRuns")
+                    if (cmdRuns != null) {
+                        for (k in 0 until cmdRuns.length()) {
+                            val run = cmdRuns.optJSONObject(k) ?: continue
+                            val b1 = run.optJSONObject("onTap")?.optJSONObject("innertubeCommand")?.optJSONObject("browseEndpoint")?.optString("browseId")
+                            val b2 = run.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")?.optString("browseId")
+                            if (b1?.startsWith("UC") == true || b2?.startsWith("UC") == true) isChannel = true
+                        }
+                    }
+                    val runs = textObj.optJSONArray("runs")
+                    if (runs != null) {
+                        for (k in 0 until runs.length()) {
+                            val run = runs.optJSONObject(k) ?: continue
+                            val b = run.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")?.optString("browseId")
+                            if (b?.startsWith("UC") == true) isChannel = true
+                        }
+                    }
+                    if (isChannel) return trimmed
+                    if (fallback == null) fallback = trimmed
+                }
             }
         }
         return fallback

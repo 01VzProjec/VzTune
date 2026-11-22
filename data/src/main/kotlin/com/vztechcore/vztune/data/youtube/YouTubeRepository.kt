@@ -1343,6 +1343,37 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                         }
                     }.onFailure { Log.w(TAG, "Playlists tab loop failed: ${it.message}") }
                 }
+                // FIX PLAYLIST CANAL VAZIA - se aba Playlists voltou 0, usa Home + busca NewPipe antes de devolver vazio.
+                if (playlists.isEmpty()) {
+                    if (homeParsed.playlists.isNotEmpty()) {
+                        playlists += homeParsed.playlists
+                        if (playlistsCont == null) playlistsCont = homeParsed.playlistsContinuation
+                    }
+                }
+                if (playlists.isEmpty() && channelName.isNotBlank()) {
+                    runCatching {
+                        val q = channelName.ifBlank { input.takeIf { it.startsWith("@") }.orEmpty() }
+                        if (q.isNotBlank()) {
+                            val ex = ServiceList.YouTube.getSearchExtractor(q, listOf("playlists"), null)
+                            ex.fetchPage()
+                            val collected = parseChannelPlaylistItems(ex.initialPage.items, channelName).toMutableList()
+                            var np: Page? = ex.initialPage.nextPage
+                            var pg = 0
+                            while (collected.size < 100 && np != null && pg < 2) {
+                                val nxt = ex.getPage(np!!)
+                                collected += parseChannelPlaylistItems(nxt.items, channelName)
+                                np = nxt.nextPage
+                                pg++
+                            }
+                            if (collected.isNotEmpty()) {
+                                playlists += collected
+                                val sess = ChannelPlaylistsSession(ex, np, channelName)
+                                channelPlaylistSessions[uc] = sess
+                                channelPlaylistSessions[input] = sess
+                            }
+                        }
+                    }.onFailure { Log.w(TAG, "Playlists NewPipe fallback failed: ${it.message}") }
+                }
                 // Guarda token restante pro loadMore (se bateu o teto, ainda tem mais)
                 ytChannelVideoContinuations[uc] = videosCont
                 ytChannelVideoContinuations[input] = videosCont

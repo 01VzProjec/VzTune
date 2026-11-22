@@ -1,13 +1,13 @@
-# fix_v7_compile.py - desfaz o V7 que quebrou o build e reaplica de forma minima e segura
-# Roda na raiz: python3 fix_v7_compile.py
-# O que o V7 fez que pode ter quebrado:
-#  - inseriu bloco de 14 linhas antes de val playlistQuery
-#  - trocou a linha debugLog do Path2 pra referenciar debugV7Path2
-#  - trocou if (playlists.isEmpty()) do debug pra if (true)
-# Este script desfaz os 3 e reaplica o fix de playlists de outro jeito:
-#  - helper fetchPlaylistsTabV7() fora do browseChannel (nao mexe nas chaves dele)
-#  - 1 linha so dentro do Path2: if (channelPlaylists.isEmpty()) channelPlaylists = fetchPlaylistsTabV7(uc, channelName)
-# Sem .bak, sem arquivo temp. Aborta sem escrever se a ancora nao bater.
+# fix_playlists_busca_v8.py - tenta outra busca: ChannelTabExtractor do NewPipe + log singleton que nao se perde
+# Roda na raiz: python3 fix_playlists_busca_v8.py
+# Por que V7 nao mostrou log: debugLog viajava dentro do ChannelPage e se perdia se o Path1 retornava antes ou o ViewModel sobrescrevia.
+# V8:
+#  - object ChannelDebugLog { var last } no mesmo arquivo, qualquer lugar do Repo pode escrever, o dialogo le ele no return do Path2.
+#  - helper fetchPlaylistsViaChannelTab() fora do browseChannel (mesmo padrao seguro do V7-compile):
+#    usa ServiceList.YouTube.getChannelTabsLHFactory().fromUrl(channelUrl + "/playlists")
+#    + getChannelTabExtractor(lh) -> e o que o app NewPipe usa pra aba Playlists. Se vier algo, usa.
+#  - 1 linha no Path2 ANTES do helper InnerTube: tenta ChannelTab primeiro.
+# Sem .bak, sem temp. Aborta sem escrever se ancora nao bater.
 import os, sys
 def fail(m):
     print(f"ABORTOU: {m}"); sys.exit(1)
@@ -15,104 +15,79 @@ ROOT=os.getcwd()
 RP=os.path.join(ROOT,"data/src/main/kotlin/com/vztechcore/vztune/data/youtube/YouTubeRepository.kt")
 if not os.path.isfile(RP): fail(f"nao achei {RP} - roda na raiz")
 t=open(RP,encoding="utf-8").read()
-orig=t
-# 1) Remove TODOS os blocos V7 (14 linhas a partir do comentario)
-# Bloco V7 tem marcadores: comeca em "// FIX PLAYLISTS V7" e termina no "}" do else, antes de val playlistQuery
-# Remocao por linhas: se linha tem FIX PLAYLISTS V7, pula ela + proximas 13 linhas se elas forem do bloco
-lines=t.splitlines()
-out=[]
-i=0
-removed=0
-while i < len(lines):
-    if "FIX PLAYLISTS V7" in lines[i]:
-        # Pula o bloco: comentario + 13 linhas (var, if, runCatching, 5 dentro, onFailure, } else {, debug else, })
-        # Confere se as proximas linhas batem com o bloco V7, se nao, pula so o comentario pra nao apagar codigo alheio
-        chunk="\n".join(lines[i:i+14])
-        if "debugV7Path2" in chunk and "val playlistQuery" not in chunk:
-            i+=14
-            removed+=1
-            continue
-        else:
-            # Bloco com formato diferente: pula ate a linha que tem "val playlistQuery" (exclusivo), max 30 linhas
-            j=i
-            while j < len(lines) and j < i+30 and "val playlistQuery" not in lines[j]:
-                j+=1
-            if j < len(lines) and "val playlistQuery" in lines[j]:
-                i=j
-                removed+=1
-                continue
-            else:
-                out.append(lines[i]); i+=1; continue
-    else:
-        out.append(lines[i]); i+=1
-t="\n".join(out)+"\n"
-print(f"OK: removidos {removed} bloco(s) V7")
-# 2) Reverte debugLog que referencia debugV7Path2
-lines=t.splitlines()
-out=[]
-reverted_log=0
-for line in lines:
-    if "debugV7Path2" in line and "debugLog =" in line:
-        indent=line[:len(line)-len(line.lstrip())]
-        if "debugPlV5Path2" in line:
-            out.append(indent+"debugLog = debugPlV5Path2.takeIf { it.isNotBlank() },")
-            reverted_log+=1
-        elif "debugPlV6Path2" in line:
-            out.append(indent+"debugLog = debugPlV6Path2.takeIf { it.isNotBlank() },")
-            reverted_log+=1
-        else:
-            # Era debugLog = debugV7Path2... sozinho (caso limpo): remove a linha, o ChannelPage ja tem debugLog default null
-            reverted_log+=1
-            continue
-    elif "debugV7Path2" in line:
-        # Qualquer outra linha solta com debugV7Path2 (nao deveria sobrar): remove
-        reverted_log+=1
-        continue
-    else:
-        out.append(line)
-t="\n".join(out)+"\n"
-print(f"OK: revertidas {reverted_log} linha(s) debugLog/debugV7")
-# 3) Reverte if (true) // V7 log sempre -> if (playlists.isEmpty())
-if "V7 log sempre" in t:
-    t=t.replace("if (true) // V7 log sempre", "if (playlists.isEmpty())")
-    print("OK: revertido if (true) V7")
-# 4) Se ainda tem debugV7Path2, aborta (nao deixa referencia quebrada)
-if "debugV7Path2" in t:
-    fail("ainda tem debugV7Path2 no arquivo, nao vou escrever pra nao quebrar de novo. Me manda as linhas com debugV7Path2")
-# 5) Reaplica de forma minima: helper fora do browseChannel + 1 linha no Path2
-if "fetchPlaylistsTabV7" in t:
-    print("SKIP helper ja existe")
+_v8_exists = "fetchPlaylistsViaChannelTab" in t
+if _v8_exists:
+    print("SKIP helper V8 ja existe, vou so garantir o debugLog")
 else:
-    anchor="    private fun parseChannelStreams"
-    if anchor not in t: fail("ancora parseChannelStreams nao bateu")
+    # 1) Singleton no topo do arquivo, antes da classe YouTubeRepository
+    anchor_class="class YouTubeRepository"
+    if anchor_class not in t: fail("ancora class YouTubeRepository nao bateu")
+    singleton=""
+    singleton+="// V8 - log que nao se perde: qualquer ponto do Repo escreve, o return do Path2 le.\n"
+    singleton+="object ChannelDebugLog { @Volatile var last: String = \"\" }\n\n"
+    t=t.replace(anchor_class, singleton+anchor_class, 1)
+    print("OK: ChannelDebugLog")
+    # 2) Helper fora do browseChannel, antes de parseChannelStreams (mesma ancora segura do V7-compile)
+    anchor2="    private fun parseChannelStreams"
+    if anchor2 not in t: fail("ancora parseChannelStreams nao bateu")
     helper=""
-    helper+="    // FIX V7-COMPILE - helper fora do browseChannel, nao mexe nas chaves dele.\n"
-    helper+="    private suspend fun fetchPlaylistsTabV7(uc: String, channelName: String): List<Playlist> {\n"
-    helper+="        if (!uc.startsWith(\"UC\") || uc.length < 24 || channelName.isBlank()) return emptyList()\n"
+    helper+="    // V8 - Playlists via ChannelTabExtractor do NewPipe (o que o app NewPipe usa).\n"
+    helper+="    private suspend fun fetchPlaylistsViaChannelTab(channelUrl: String, channelName: String): List<Playlist> {\n"
     helper+="        return runCatching {\n"
-    helper+="            val tabJson = InnerTubeYouTube.browse(uc, \"EgZwbGF5bGlzdHPyBgQKAkIA\")\n"
-    helper+="            val whole = YouTubeChannelParser.parsePlaylistsWholeJson(tabJson, channelName)\n"
-    helper+="            Log.w(TAG, \"Playlists V7 helper whole=\" + whole.size)\n"
-    helper+="            whole\n"
-    helper+="        }.getOrDefault(emptyList())\n"
+    helper+="            val lh = ServiceList.YouTube.getChannelTabsLHFactory().fromUrl(channelUrl + \"/playlists\")\n"
+    helper+="            val ex = ServiceList.YouTube.getChannelTabExtractor(lh)\n"
+    helper+="            ex.fetchPage()\n"
+    helper+="            val items = ex.initialPage.items\n"
+    helper+="            ChannelDebugLog.last = \"[V8 tabExtractor items=\" + items.size + \"]\"\n"
+    helper+="            val all = parseChannelPlaylistItems(items, channelName).toMutableList()\n"
+    helper+="            var next = ex.initialPage.nextPage\n"
+    helper+="            var pages = 0\n"
+    helper+="            while (all.size < 200 && next != null && pages < 2) {\n"
+    helper+="                val p = ex.getPage(next!!)\n"
+    helper+="                all += parseChannelPlaylistItems(p.items, channelName)\n"
+    helper+="                next = p.nextPage\n"
+    helper+="                pages++\n"
+    helper+="            }\n"
+    helper+="            ChannelDebugLog.last = ChannelDebugLog.last + \" parsed=\" + all.size\n"
+    helper+="            all.distinctBy { it.id }\n"
+    helper+="        }.onFailure { ChannelDebugLog.last = \"[V8 tabExtractor falhou: \" + (it.message ?: \"\") + \"]\" }.getOrDefault(emptyList())\n"
     helper+="    }\n\n"
-    t=t.replace(anchor, helper+anchor, 1)
-    print("OK: helper fetchPlaylistsTabV7 adicionado")
-if "fetchPlaylistsTabV7(uc, channelName)" in t:
-    print("SKIP chamada Path2 ja existe")
+    t=t.replace(anchor2, helper+anchor2, 1)
+    print("OK: helper fetchPlaylistsViaChannelTab")
+    # 3) 1 linha no Path2 ANTES do helper InnerTube (que ja existe do V7-compile) ou antes de val playlistQuery
+    # Procura a linha do V7-compile; se nao existir, usa playlistQuery
+    if "fetchPlaylistsTabV7(uc, channelName)" in t:
+        t=t.replace("        if (channelPlaylists.isEmpty()) channelPlaylists = fetchPlaylistsTabV7(uc, channelName)",
+                    "        if (channelPlaylists.isEmpty()) channelPlaylists = fetchPlaylistsViaChannelTab(channelUrl, channelName)\n        if (channelPlaylists.isEmpty()) channelPlaylists = fetchPlaylistsTabV7(uc, channelName)", 1)
+        print("OK: chamada V8 antes do V7-compile")
+    else:
+        anchor3="        val playlistQuery = channelName.ifBlank"
+        if anchor3 not in t: fail("ancora playlistQuery nao bateu V8")
+        t=t.replace(anchor3, "        if (channelPlaylists.isEmpty()) channelPlaylists = fetchPlaylistsViaChannelTab(channelUrl, channelName)\n"+anchor3, 1)
+        print("OK: chamada V8 antes da busca")
+    # 4) Path2 return: debugLog inclui singleton - roda mesmo se helper ja existia
+    pass
+# --- Sempre garante debugLog Path2 com singleton (mesmo se V8 ja aplicado) ---
+if "ChannelDebugLog.last" not in t or "debugLog = (ChannelDebugLog.last" not in t:
+    _lines2 = t.splitlines()
+    _out2 = []
+    _fixed_dbg = False
+    for _ln in _lines2:
+        if "debugLog =" in _ln and "debugPlV5Path2" in _ln and "ChannelDebugLog" not in _ln:
+            _ind = _ln[:len(_ln)-len(_ln.lstrip())]
+            if "debugV7Path2" in _ln:
+                _out2.append(_ind + "debugLog = (ChannelDebugLog.last + \" \" + debugV7Path2 + \" \" + debugPlV5Path2.orEmpty()).trim().takeIf { it.isNotBlank() },")
+            else:
+                _out2.append(_ind + "debugLog = (ChannelDebugLog.last + \" \" + debugPlV5Path2.orEmpty()).trim().takeIf { it.isNotBlank() },")
+            _fixed_dbg = True
+        else:
+            _out2.append(_ln)
+    t = "\n".join(_out2) + "\n"
+    print("OK: debugLog Path2 le singleton" if _fixed_dbg else "SKIP debugLog Path2 ja tem singleton ou nao achado")
 else:
-    anchor2="        val playlistQuery = channelName.ifBlank"
-    if anchor2 not in t: fail("ancora playlistQuery nao bateu (V7-compile)")
-    call="        if (channelPlaylists.isEmpty()) channelPlaylists = fetchPlaylistsTabV7(uc, channelName)\n"
-    t=t.replace(anchor2, call+anchor2, 1)
-    print("OK: chamada de 1 linha no Path2")
-# 6) Checagem basica de chaves (ignora strings simples): so avisa, nao aborta por causa de { em texto
+    print("SKIP debugLog Path2 ja tem singleton")
 opens=t.count("{"); closes=t.count("}")
 print(f"CHAVES: abre={opens} fecha={closes} diff={opens-closes}")
-if opens!=closes:
-    fail(f"chaves desbalanceadas diff={opens-closes} - nao escrevi, me manda o log de novo")
-if t==orig:
-    print("NADA MUDOU")
-else:
-    open(RP,"w",encoding="utf-8").write(t)
-    print("PRONTO - limpa e builda. Abre jazzghost, olha Playlists.")
+if opens!=closes: fail(f"chaves desbalanceadas diff={opens-closes} - nao escrevi")
+open(RP,"w",encoding="utf-8").write(t)
+print("PRONTO - limpa e builda. Abre jazzghost, olha Playlists. Se vier 0, 3 pontinhos, Ver Log temporario, agora tem que aparecer [V8 ...].")

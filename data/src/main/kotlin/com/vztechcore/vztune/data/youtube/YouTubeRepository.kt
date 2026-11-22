@@ -51,6 +51,9 @@ data class AudioStreamInfo(
 )
 
 @Singleton
+// V8 - log que nao se perde: qualquer ponto do Repo escreve, o return do Path2 le.
+object ChannelDebugLog { @Volatile var last: String = "" }
+
 class YouTubeRepository @Inject constructor(
     private val downloader: NewPipeDownloader,
 ) {
@@ -1591,6 +1594,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 Log.w(TAG, "Playlists V3 Path2 whole: ${wholeV3b.size}")
             }.onFailure { Log.w(TAG, "Playlists V3 Path2 whole failed: ${it.message}") }
         }
+        if (channelPlaylists.isEmpty()) channelPlaylists = fetchPlaylistsViaChannelTab(channelUrl, channelName)
         if (channelPlaylists.isEmpty()) channelPlaylists = fetchPlaylistsTabV7(uc, channelName)
         val playlistQuery = channelName.ifBlank { input.takeIf { it.startsWith("@") }.orEmpty() }
         if (channelPlaylists.isEmpty() && playlistQuery.isNotBlank()) {
@@ -1632,7 +1636,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
             avatarUrl = header?.avatar,
             bannerUrl = header?.banner,
             description = header?.description?.takeIf { it.isNotBlank() },
-            debugLog = debugPlV5Path2.takeIf { it.isNotBlank() },
+            debugLog = (ChannelDebugLog.last + " " + debugPlV5Path2.orEmpty()).trim().takeIf { it.isNotBlank() },
             subscriberCount = header?.subs,
             hasMoreVideos = hasMoreChannelVideos(uc),
             hasMorePlaylists = hasMoreChannelPlaylists(uc),
@@ -1649,6 +1653,28 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
             Log.w(TAG, "Playlists V7 helper whole=" + whole.size)
             whole
         }.getOrDefault(emptyList())
+    }
+
+    // V8 - Playlists via ChannelTabExtractor do NewPipe (o que o app NewPipe usa).
+    private suspend fun fetchPlaylistsViaChannelTab(channelUrl: String, channelName: String): List<Playlist> {
+        return runCatching {
+            val lh = ServiceList.YouTube.getChannelTabsLHFactory().fromUrl(channelUrl + "/playlists")
+            val ex = ServiceList.YouTube.getChannelTabExtractor(lh)
+            ex.fetchPage()
+            val items = ex.initialPage.items
+            ChannelDebugLog.last = "[V8 tabExtractor items=" + items.size + "]"
+            val all = parseChannelPlaylistItems(items, channelName).toMutableList()
+            var next = ex.initialPage.nextPage
+            var pages = 0
+            while (all.size < 200 && next != null && pages < 2) {
+                val p = ex.getPage(next!!)
+                all += parseChannelPlaylistItems(p.items, channelName)
+                next = p.nextPage
+                pages++
+            }
+            ChannelDebugLog.last = ChannelDebugLog.last + " parsed=" + all.size
+            all.distinctBy { it.id }
+        }.onFailure { ChannelDebugLog.last = "[V8 tabExtractor falhou: " + (it.message ?: "") + "]" }.getOrDefault(emptyList())
     }
 
     private fun parseChannelStreams(items: List<*>, channelName: String): List<Track> {

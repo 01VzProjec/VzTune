@@ -143,6 +143,13 @@ object YouTubeChannelParser {
         return videos.distinctBy { it.id } to cont
     }
 
+        fun parseShortsContinuation(json: JSONObject): Pair<List<Track>, String?> {
+        // FIX SHORTS CONTINUATION - shorts via aba nao tinha como paginar, agora tem igual videos/playlists
+        val shorts = collectShorts(json)
+        val cont = InnerTubeYouTube.findContinuationToken(json)
+        return shorts.distinctBy { it.id } to cont
+    }
+
     fun parsePlaylistsContinuation(json: JSONObject): Pair<List<Playlist>, String?> {
         val playlists = collectPlaylists(json)
         val cont = InnerTubeYouTube.findContinuationToken(json)

@@ -132,26 +132,28 @@ object InnerTube {
     fun isPlayable(playerJson: JSONObject): Boolean =
         playerJson.optJSONObject("playabilityStatus")?.optString("status") == "OK"
 
-    fun findContinuationToken(node: Any?): String? {
-        when (node) {
-            is JSONObject -> {
-                node.optJSONObject("continuationCommand")
-                    ?.optString("token")
-                    ?.takeIf { it.isNotBlank() && it != "null" }
-                    ?.let { return it }
-                node.optJSONObject("nextContinuationData")
-                    ?.optString("continuation")
-                    ?.takeIf { it.isNotBlank() && it != "null" }
-                    ?.let { return it }
-                val keys = node.keys()
-                while (keys.hasNext()) {
-                    findContinuationToken(node.opt(keys.next()))?.let { return it }
+        fun findContinuationToken(node: Any?): String? {
+        // FIX CONTINUATION LAST WINS - playlist responde 100 + token, tem que paginar ate o fim.
+        // Token novo e continuationItemViewModel com token aninhado:
+        // continuationCommand.innertubeCommand.continuationCommand.token (dev.to 15/nov/2026).
+        // E quando tem varias prateleiras, o 1o token do DFS pode ser de prateleira pequena, nao da grade principal.
+        // Regra: coleta TODOS os tokens e devolve o ULTIMO (grade principal vem por ultimo).
+        val tokens = mutableListOf<String>()
+        fun walk(n: Any?) {
+            when (n) {
+                is JSONObject -> {
+                    n.optJSONObject("continuationCommand")?.optString("token")?.takeIf { it.isNotBlank() && it != "null" && it.length > 10 }?.let { tokens += it }
+                    n.optJSONObject("nextContinuationData")?.optString("continuation")?.takeIf { it.isNotBlank() && it != "null" && it.length > 10 }?.let { tokens += it }
+                    // nextContinuationData tambem pode vir como { nextContinuationData: { continuation: ... } } dentro de continuationItemRenderer
+                    n.optJSONObject("continuationEndpoint")?.optJSONObject("continuationCommand")?.optString("token")?.takeIf { it.isNotBlank() && it != "null" && it.length > 10 }?.let { tokens += it }
+                    val keys = n.keys()
+                    while (keys.hasNext()) walk(n.opt(keys.next()))
                 }
-            }
-            is JSONArray -> for (i in 0 until node.length()) {
-                findContinuationToken(node.opt(i))?.let { return it }
+                is JSONArray -> for (i in 0 until n.length()) walk(n.opt(i))
             }
         }
-        return null
+        walk(node)
+        return tokens.lastOrNull()
     }
+
 }

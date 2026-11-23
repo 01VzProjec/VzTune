@@ -482,7 +482,7 @@ fun ArtistScreen(
                 thumbnailUrl = state.thumbnailUrl,
                 onBackClick = onBackClick,
                 dominantColor = Color.Black,
-                onSearchClick = if (state.isYouTubeChannel) ({ onSearchToggle(); scope.launch { listState.animateScrollToItem(0) } }) else null,
+                onSearchClick = if (state.isYouTubeChannel) ({ channelSearchOpen = !channelSearchOpen; if (!channelSearchOpen) channelSearchQuery = ""; scope.launch { listState.animateScrollToItem(0) } }) else null,
                 onShareClick = if (state.isYouTubeChannel) onShareClick else null,
                 circularThumbnail = true,
             )

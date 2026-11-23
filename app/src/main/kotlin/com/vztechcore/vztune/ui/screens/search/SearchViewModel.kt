@@ -291,6 +291,7 @@ class SearchViewModel @Inject constructor(
                             hit.artist.id,
                             hit.artist.name,
                             hit.artist.thumbnailUrl,
+                            isYouTubeChannel = hit.artist.source == Source.YOUTUBE,
                         )
                     )
                 }
@@ -339,29 +340,19 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    /** FIX9: Clique em artista DENTRO de uma faixa no Search. Igual ao TrackMenuViewModel. */
+    /**
+     * Clique em artista/canal DENTRO de uma faixa no Search.
+     * Video: o canal do YouTube tem preferencia (fallback: artista do YT Music). Musica: artista do YT Music.
+     */
     fun onOpenArtistForTrack(track: Track, artistName: String) {
-        // FIX: um vídeo pode ser clipe, performance ou música de um artista.
-        // Primeiro tenta o artista musical com contexto; se falhar, abre o canal uploader.
         viewModelScope.launch {
-            val found = runCatching {
-                ytMusicRepository.resolveArtist(
-                    artistName,
-                    trackTitle = track.title,
-                    albumTitle = track.album?.takeIf { it.isNotBlank() },
+            val profile = musicRepository.resolveProfileForTrack(track, artistName) ?: return@launch
+            _navigationEvent.emit(
+                NavigationEvent.OpenArtist(
+                    profile.id, profile.name, profile.thumbnailUrl,
+                    isYouTubeChannel = profile.source == Source.YOUTUBE,
                 )
-            }.getOrNull()
-            if (found != null) {
-                _navigationEvent.emit(NavigationEvent.OpenArtist(found.id, found.name, found.thumbnailUrl))
-            } else if (track.source == Source.YOUTUBE) {
-                val channel = runCatching { youTubeRepository.getChannelForVideo(track.id) }.getOrNull()
-                if (channel != null) {
-                    _navigationEvent.emit(
-                        NavigationEvent.OpenArtist(channel.channelId, channel.channelName,
-                            channel.avatarUrl, isYouTubeChannel = true)
-                    )
-                }
-            }
+            )
         }
     }
 

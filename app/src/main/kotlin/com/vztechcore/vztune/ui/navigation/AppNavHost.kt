@@ -441,6 +441,16 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                                 )
                             },
                             onLoadMoreChannelVideos = vm::loadMoreChannelVideos,
+                            onLoadMoreChannelPlaylists = vm::loadMoreChannelPlaylists,
+                            onPlaylistPlayNext = vm::onPlaylistPlayNext,
+                            onPlaylistAddToQueue = vm::onPlaylistAddToQueue,
+                            onSavePlaylistToLibrary = vm::onSavePlaylistToLibrary,
+                            // Trocar canal <-> artista com o mesmo nome: substitui a tela atual (voltar nao passa pela errada).
+                            onProfileClick = { profile ->
+                                navController.navigate(
+                                    Routes.Artist(profile.id, profile.name, profile.thumbnailUrl, isYouTubeChannel = profile.source == Source.YOUTUBE)
+                                ) { popUpTo<Routes.Artist> { inclusive = true } }
+                            },
                         )
                     }
                 }

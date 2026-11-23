@@ -159,32 +159,14 @@ class TrackMenuViewModel @Inject constructor(
         }
     }
 
-    /** Clique em artista DENTRO de uma faixa: verifica quem tem ESSA faixa / ESSE álbum no catálogo. */
+    /**
+     * Clique em artista/canal DENTRO de uma faixa.
+     * Video: o canal do YouTube tem preferencia (fallback: artista do YT Music). Musica: artista do YT Music.
+     */
     fun onOpenArtistForTrack(track: Track, artistName: String) {
-        // FIX: vídeo também pode ser conteúdo de um artista musical.
-        // Tenta resolver o artista no YT Music usando título/contexto; se não encontrar,
-        // mantém o fallback para o canal real que publicou o vídeo.
         viewModelScope.launch {
-            val found = runCatching {
-                ytMusicRepository.resolveArtist(
-                    artistName,
-                    trackTitle = track.title,
-                    albumTitle = track.album?.takeIf { it.isNotBlank() },
-                )
-            }.getOrNull()
-            if (found != null) {
-                _navigationEvent.emit(MenuNavigationEvent.OpenArtist(found))
-            } else if (track.source == Source.YOUTUBE) {
-                val channel = runCatching { youTubeRepository.getChannelForVideo(track.id) }.getOrNull()
-                if (channel != null) {
-                    _navigationEvent.emit(
-                        MenuNavigationEvent.OpenArtist(
-                            Artist(id = channel.channelId, name = channel.channelName,
-                                thumbnailUrl = channel.avatarUrl, source = Source.YOUTUBE)
-                        )
-                    )
-                }
-            }
+            val profile = musicRepository.resolveProfileForTrack(track, artistName) ?: return@launch
+            _navigationEvent.emit(MenuNavigationEvent.OpenArtist(profile))
         }
     }
 

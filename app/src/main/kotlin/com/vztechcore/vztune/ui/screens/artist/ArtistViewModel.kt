@@ -48,6 +48,7 @@ class ArtistViewModel @Inject constructor(
 
     init {
         loadContent()
+        loadFoundProfiles()
         viewModelScope.launch {
             followedStore.isFollowing(route.id).collect { following ->
                 _uiState.update { it.copy(isFollowing = following) }
@@ -131,6 +132,17 @@ class ArtistViewModel @Inject constructor(
         val pool = state.topSongs.ifEmpty { state.videos }
         if (pool.isEmpty()) return
         playerController.playQueue(pool.shuffled(), 0)
+    }
+
+    // Perfis com o MESMO nome no outro mundo: canal do YouTube -> artistas do YT Music; artista -> canais do YouTube.
+    private fun loadFoundProfiles() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingFoundProfiles = true) }
+            val found = runCatching {
+                musicRepository.findSameNameProfiles(route.name, wantYouTubeChannels = !route.isYouTubeChannel)
+            }.getOrDefault(emptyList())
+            _uiState.update { it.copy(foundProfiles = found, isLoadingFoundProfiles = false) }
+        }
     }
 
     fun onFollowClick() {

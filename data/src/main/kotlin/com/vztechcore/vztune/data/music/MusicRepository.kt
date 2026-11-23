@@ -1,6 +1,7 @@
 package com.vztechcore.vztune.data.music
 
 import android.util.Log
+import com.vztechcore.vztune.core.domain.music.Artist
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchFilter
@@ -9,6 +10,7 @@ import com.vztechcore.vztune.core.domain.search.SearchResult
 import com.vztechcore.vztune.core.domain.search.SearchSuggestions
 import com.vztechcore.vztune.data.youtube.YouTubeChannelInfo
 import com.vztechcore.vztune.data.youtube.YouTubeRepository
+import com.vztechcore.vztune.data.ytmusic.ArtistResolver
 import com.vztechcore.vztune.data.ytmusic.YTMusicRepository
 import com.vztechcore.vztune.data.ytmusic.YTMusicTextUtils
 import kotlinx.coroutines.async
@@ -345,6 +347,58 @@ class MusicRepository @Inject constructor(
     fun hasMoreChannelPlaylists(channelId: String): Boolean = youTubeRepository.hasMoreChannelPlaylists(channelId)
     suspend fun loadMoreChannelVideos(channelId: String, pageSize: Int = 500): List<Track> = runCatching { youTubeRepository.loadMoreChannelVideos(channelId, pageSize) }.getOrDefault(emptyList())
     suspend fun loadMoreChannelPlaylists(channelId: String, pageSize: Int = 500): List<com.vztechcore.vztune.core.domain.music.Playlist> = runCatching { youTubeRepository.loadMoreChannelPlaylists(channelId, pageSize) }.getOrDefault(emptyList())
+
+    // =====================================================================
+    //  Perfis: canal do YouTube x artista do YT Music
+    // =====================================================================
+
+    /**
+     * Perfil que abre quando o usuario clica no artista/canal de uma faixa.
+     * Video (Source.YOUTUBE): o canal do YouTube que postou tem PREFERENCIA; sem canal, tenta o artista do YT Music.
+     * Musica (Source.YOUTUBE_MUSIC): so artista do YT Music (nunca vira canal).
+     */
+    suspend fun resolveProfileForTrack(track: Track, artistName: String): Artist? {
+        if (track.source == Source.YOUTUBE) {
+            val channel = runCatching { youTubeRepository.getChannelForVideo(track.id) }.getOrNull()
+            if (channel != null) {
+                return Artist(
+                    id = channel.channelId,
+                    name = channel.channelName.ifBlank { artistName },
+                    thumbnailUrl = channel.avatarUrl,
+                    source = Source.YOUTUBE,
+                )
+            }
+        }
+        return runCatching {
+            ytMusicRepository.resolveArtist(
+                artistName,
+                trackTitle = track.title,
+                albumTitle = track.album?.takeIf { it.isNotBlank() },
+            )
+        }.getOrNull()
+    }
+
+    /**
+     * Perfis com o MESMO nome no outro mundo, pro usuario trocar quando o app abriu o errado.
+     * [wantYouTubeChannels] = true -> canais do YouTube; false -> artistas/contas do YT Music.
+     * Como a busca e sempre no outro mundo, o perfil atual nunca aparece na lista.
+     */
+    suspend fun findSameNameProfiles(name: String, wantYouTubeChannels: Boolean): List<Artist> {
+        val clean = name.trim()
+        if (clean.isBlank()) return emptyList()
+        val candidates = runCatching {
+            if (wantYouTubeChannels) youTubeRepository.searchChannels(clean) else ytMusicRepository.searchArtists(clean)
+        }.getOrDefault(emptyList())
+        return candidates.filter { sameProfileName(it.name, clean) }.distinctBy { it.id }
+    }
+
+    /** Mesmo nome = igual depois de normalizar (sem acento, sem " - Topic", sem pontuacao). Nome so com simbolos compara cru. */
+    private fun sameProfileName(a: String, b: String): Boolean {
+        val na = ArtistResolver.normalize(a)
+        val nb = ArtistResolver.normalize(b)
+        if (na.isNotBlank() && nb.isNotBlank()) return na == nb
+        return a.trim().equals(b.trim(), ignoreCase = true)
+    }
 
     private companion object { const val TAG = "VzTuneMusic" }
 }

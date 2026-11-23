@@ -1,5 +1,6 @@
 package com.vztechcore.vztune.data.youtube
 
+import com.vztechcore.vztune.core.domain.music.Artist
 import com.vztechcore.vztune.core.domain.music.Playlist
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
@@ -229,6 +230,28 @@ object YouTubeSearchParser {
     private fun isLockupTypeWord(text: String): Boolean {
         val low = text.trim().lowercase()
         return low in setOf("playlist", "podcast", "mix", "video", "videos", "episode", "episodes", "vídeo", "vídeos", "álbum", "album", "música", "music")
+    }
+
+    /**
+     * Canais do YouTube numa busca com filtro de canais.
+     * Devolve [Artist] com source = YOUTUBE (o app trata como canal, nunca como artista do YT Music).
+     */
+    fun parseChannels(json: JSONObject): List<Artist> {
+        val out = mutableListOf<Artist>()
+        val renderers = mutableListOf<JSONObject>()
+        collect(json, "channelRenderer", renderers)
+        for (r in renderers) {
+            val id = r.optString("channelId").takeIf { it.startsWith("UC") } ?: continue
+            val name = textOf(r.optJSONObject("title")) ?: continue
+            val thumb = thumbnailOf(r.optJSONObject("thumbnail"))
+                ?.let { if (it.startsWith("//")) "https:$it" else it }
+            // O YouTube troca os campos: o @handle costuma vir em subscriberCountText e os inscritos em videoCountText.
+            val subs = listOf(r.optJSONObject("subscriberCountText"), r.optJSONObject("videoCountText"))
+                .mapNotNull { textOf(it) }
+                .firstOrNull { it.contains("inscrit", ignoreCase = true) || it.contains("subscriber", ignoreCase = true) }
+            out += Artist(id = id, name = name, thumbnailUrl = thumb, source = Source.YOUTUBE, subscribers = subs)
+        }
+        return out.distinctBy { it.id }
     }
 
     fun parseShorts(json: JSONObject): List<SearchHit.ShortHit> {

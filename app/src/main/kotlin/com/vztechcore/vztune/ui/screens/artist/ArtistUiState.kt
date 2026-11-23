@@ -39,6 +39,9 @@ data class ArtistUiState(
     val featuredMore: BrowseRef? = null,
     val relatedArtists: List<Artist> = emptyList(),
     val isFollowing: Boolean = false,
+    // Perfis com o MESMO nome no outro mundo (canal <-> artista), usados no menu de 3 pontinhos.
+    val foundProfiles: List<Artist> = emptyList(),
+    val isLoadingFoundProfiles: Boolean = true,
     // Canal: ainda tem video/playlist la no YouTube que nao foi carregado.
     val hasMoreVideos: Boolean = false,
     val hasMorePlaylists: Boolean = false,

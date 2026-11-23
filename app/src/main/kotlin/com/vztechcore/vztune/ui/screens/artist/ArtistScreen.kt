@@ -97,9 +97,10 @@ import com.vztechcore.vztune.ui.screens.medialist.MediaListCircleButton
 import androidx.compose.foundation.layout.statusBarsPadding
 import com.vztechcore.vztune.ui.icons.actions.PersonAdd
 import com.vztechcore.vztune.ui.icons.actions.PersonCheck
-import com.vztechcore.vztune.ui.icons.actions.Share
 import com.vztechcore.vztune.ui.icons.actions.MoreVert
 import com.vztechcore.vztune.ui.icons.navigation.Search
+import com.vztechcore.vztune.ui.components.sheets.FoundProfilesSheet
+import com.vztechcore.vztune.ui.components.sheets.ProfileOptionsSheet
 
 private val RowPadding = PaddingValues(horizontal = 16.dp)
 private val CoverWidth = 160.dp
@@ -135,6 +136,7 @@ fun ArtistScreen(
     onSavePlaylistToLibrary: (Playlist) -> Unit = {},
     onLoadMoreChannelVideos: () -> Unit = {},
     onLoadMoreChannelPlaylists: () -> Unit = {},
+    onProfileClick: (Artist) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -145,6 +147,9 @@ fun ArtistScreen(
     var channelSort by remember { mutableStateOf(0) } // 0 = Mais recentes, 1 = Em alta, 2 = Mais antigos
     var channelDescExpanded by remember { mutableStateOf(false) }
     var playlistMenu by remember { mutableStateOf<Playlist?>(null) }
+    // Menu de 3 pontinhos (Canais/Contas encontradas + Compartilhar) e a lista de perfis com o mesmo nome.
+    var profileMenuOpen by remember { mutableStateOf(false) }
+    var foundProfilesOpen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     // FIX20 - Inicio: quantos mostrar em cada secao (4+4 infinito). Comeca em 4.
     var homeVideosVisible by remember { mutableStateOf(4) }
@@ -168,17 +173,38 @@ fun ArtistScreen(
     // Compartilhar artista: abre a barra de compartilhar do Android com link do YouTube Music
     val onShareClick: () -> Unit = {
         val url = if (state.isYouTubeChannel) "https://www.youtube.com/channel/${state.artistId}" else "https://music.youtube.com/browse/${state.artistId}"
-        val shareText = "Confere esse artista no VzTune 🎧\n${state.name}\n$url"
+        val kindLabel = if (state.isYouTubeChannel) "esse canal" else "esse artista"
+        val shareText = "Confere $kindLabel no VzTune 🎧\n${state.name}\n$url"
         val sendIntent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_SUBJECT, state.name)
             putExtra(Intent.EXTRA_TEXT, shareText)
         }
-        context.startActivity(Intent.createChooser(sendIntent, "Compartilhar artista"))
+        context.startActivity(Intent.createChooser(sendIntent, if (state.isYouTubeChannel) "Compartilhar canal" else "Compartilhar artista"))
     }
 
     playlistMenu?.let { pl ->
         PlaylistOptionsSheet(playlist = pl, onDismiss = { playlistMenu = null }, onPlayNext = { onPlaylistPlayNext(it); playlistMenu = null }, onAddToQueue = { onPlaylistAddToQueue(it); playlistMenu = null }, onSaveToLibrary = { onSavePlaylistToLibrary(it); playlistMenu = null }, onShare = { p -> val url = "https://www.youtube.com/playlist?list=" + p.id; val si = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, p.title + "\n" + url) }; context.startActivity(Intent.createChooser(si, "Compartilhar playlist")); playlistMenu = null })
+    }
+    // Menu de 3 pontinhos: "Canais/Contas encontradas" + Compartilhar. O primeiro abre a lista de perfis com o mesmo nome.
+    if (profileMenuOpen) {
+        ProfileOptionsSheet(
+            isYouTubeChannel = state.isYouTubeChannel,
+            foundCount = state.foundProfiles.size,
+            isLoadingFound = state.isLoadingFoundProfiles,
+            onFoundProfilesClick = { profileMenuOpen = false; foundProfilesOpen = true },
+            onShareClick = onShareClick,
+            onDismiss = { profileMenuOpen = false },
+        )
+    }
+    if (foundProfilesOpen) {
+        FoundProfilesSheet(
+            isYouTubeChannel = state.isYouTubeChannel,
+            profiles = state.foundProfiles,
+            isLoading = state.isLoadingFoundProfiles,
+            onProfileClick = { profile -> foundProfilesOpen = false; onProfileClick(profile) },
+            onDismiss = { foundProfilesOpen = false },
+        )
     }
     Box(
         modifier
@@ -200,7 +226,7 @@ fun ArtistScreen(
                         onDescClick = { channelDescExpanded = !channelDescExpanded },
                         onBackClick = onBackClick,
                         onFollowClick = onFollowClick,
-                        onShareClick = onShareClick,
+                        onMoreClick = { profileMenuOpen = true },
                         onLoadMoreChannelClick = { onLoadMoreChannelVideos(); onLoadMoreChannelPlaylists() },
                         searchOpen = channelSearchOpen,
                         searchQuery = channelSearchQuery,
@@ -214,7 +240,7 @@ fun ArtistScreen(
                         onBackClick = onBackClick,
                         onRandomClick = onRandomClick,
                         onFollowClick = onFollowClick,
-                        onShareClick = onShareClick,
+                        onMoreClick = { profileMenuOpen = true },
                     )
                 }
             }
@@ -240,9 +266,8 @@ fun ArtistScreen(
                 }
 
                 else -> {
-                    // FIX14 REBUILD - Regra: tem musica = ARTISTA (so Home, sem abas). Sem musica = CANAL (abas Videos | Shorts | Playlists).
-                    val hasMusic = state.topSongs.isNotEmpty() || state.albums.isNotEmpty() || state.singles.isNotEmpty()
-                    val isChannel = !hasMusic
+                    // Quem decide e a rota: isYouTubeChannel = CANAL (abas Inicio | Videos | Playlists | Shorts), senao ARTISTA (so Home, sem abas).
+                    val isChannel = state.isYouTubeChannel
 
                     if (isChannel) {
                         // ---------- CANAL FIX22: Inicio | Videos | Playlists, sem Shorts ----------
@@ -483,7 +508,7 @@ fun ArtistScreen(
                 onBackClick = onBackClick,
                 dominantColor = Color.Black,
                 onSearchClick = if (state.isYouTubeChannel) ({ channelSearchOpen = !channelSearchOpen; if (!channelSearchOpen) channelSearchQuery = ""; scope.launch { listState.animateScrollToItem(0) } }) else null,
-                onShareClick = if (state.isYouTubeChannel) onShareClick else null,
+                onMoreClick = { profileMenuOpen = true },
                 circularThumbnail = true,
             )
         }
@@ -608,7 +633,7 @@ private fun ChannelHeader(
     onDescClick: () -> Unit,
     onBackClick: () -> Unit,
     onFollowClick: () -> Unit,
-    onShareClick: () -> Unit,
+    onMoreClick: () -> Unit,
     onLoadMoreChannelClick: () -> Unit = {},
     searchOpen: Boolean = false,
     searchQuery: String = "",
@@ -620,10 +645,8 @@ private fun ChannelHeader(
     val searchFocus = remember { FocusRequester() }
     LaunchedEffect(searchOpen) { if (searchOpen) searchFocus.requestFocus() }
     val handle = state.channelHandle?.takeIf { it.isNotBlank() }
-    val subsVideos = listOfNotNull(
-        state.subscribers?.takeIf { it.isNotBlank() },
-        if (state.videos.isNotEmpty()) state.videos.size.toString() + " vídeos" else null,
-    ).joinToString(" • ")
+    // So inscritos: o app busca 1000 videos e depois 100 em 100, entao a contagem nunca seria o total real.
+    val subscribersLabel = state.subscribers?.takeIf { it.isNotBlank() }
     val tabs = listOf("Início", "Vídeos", "Playlists", "Shorts")
     Column(
         Modifier.fillMaxWidth().background(Color.Black)
@@ -637,7 +660,7 @@ private fun ChannelHeader(
             MediaListCircleButton(VzIcons.ArrowBackIos, "Voltar", onBackClick)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 MediaListCircleButton(VzIcons.Search, "Buscar no canal", onSearchToggle)
-                MediaListCircleButton(VzIcons.Share, "Compartilhar canal", onShareClick)
+                MediaListCircleButton(VzIcons.MoreVert, "Mais opções", onMoreClick)
             }
         }
         // Lupa: campo de busca dentro do canal, filtra os videos/playlists ja carregados.
@@ -674,14 +697,14 @@ private fun ChannelHeader(
             }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text(text = state.name, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Text(text = state.name, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(4.dp))
                 if (!handle.isNullOrBlank()) {
                     Text(text = handle, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                if (subsVideos.isNotBlank()) {
+                if (!subscribersLabel.isNullOrBlank()) {
                     Spacer(Modifier.height(2.dp))
-                    Text(text = subsVideos, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text = subscribersLabel, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }

@@ -2,6 +2,7 @@ package com.vztechcore.vztune.data.youtube
 
 import android.net.Uri
 import android.util.Log
+import com.vztechcore.vztune.core.domain.music.Artist
 import com.vztechcore.vztune.core.domain.music.Playlist
 import com.vztechcore.vztune.core.domain.music.Source
 import com.vztechcore.vztune.core.domain.music.Track
@@ -11,6 +12,7 @@ import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.InfoItem
 import org.schabi.newpipe.extractor.Page
 import org.schabi.newpipe.extractor.ServiceList
+import org.schabi.newpipe.extractor.channel.ChannelInfoItem
 import org.schabi.newpipe.extractor.playlist.PlaylistExtractor
 import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.search.SearchExtractor
@@ -307,6 +309,45 @@ class YouTubeRepository @Inject constructor(
     }
 
     
+    /**
+     * Busca canais do YouTube pelo nome (menu "Canais encontrados" / "Contas encontradas").
+     * InnerTube primeiro (filtro de canais), NewPipe como fallback. Devolve [Artist] com source = YOUTUBE.
+     */
+    suspend fun searchChannels(query: String, pageSize: Int = 15): List<Artist> = withContext(Dispatchers.IO) {
+        if (query.isBlank()) return@withContext emptyList()
+        runCatching {
+            val json = InnerTubeYouTube.search(query, "EgIQAg%3D%3D")
+            val items = YouTubeSearchParser.parseChannels(json).take(pageSize)
+            if (items.isNotEmpty()) return@withContext items
+        }.onFailure { Log.w(TAG, "InnerTube searchChannels failed, fallback NewPipe: ${it.message}") }
+
+        if (!NewPipeInitializer.ensureInitialized(downloader)) {
+            Log.e(TAG, "searchChannels: NewPipe not initialized")
+            return@withContext emptyList()
+        }
+        runCatching {
+            val extractor = ServiceList.YouTube.getSearchExtractor(query, listOf("channels"), null)
+            extractor.fetchPage()
+            extractor.initialPage.items
+                .filterIsInstance<ChannelInfoItem>()
+                .mapNotNull { item ->
+                    val id = item.url.substringAfter("/channel/", "").substringBefore("?").substringBefore("/")
+                    if (!id.startsWith("UC")) return@mapNotNull null
+                    Artist(
+                        id = id,
+                        name = item.name ?: return@mapNotNull null,
+                        thumbnailUrl = item.thumbnails.lastOrNull()?.url,
+                        source = Source.YOUTUBE,
+                    )
+                }
+                .distinctBy { it.id }
+                .take(pageSize)
+        }.getOrElse { e ->
+            Log.e(TAG, "searchChannels failed for query=$query", e)
+            emptyList()
+        }
+    }
+
     data class ShortPage(
         val items: List<SearchHit.ShortHit>,
         val hasMore: Boolean,

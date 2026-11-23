@@ -42,7 +42,7 @@ import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.ArrowBackIos
 import com.vztechcore.vztune.ui.icons.actions.PersonAdd
 import com.vztechcore.vztune.ui.icons.actions.PersonCheck
-import com.vztechcore.vztune.ui.icons.actions.Share
+import com.vztechcore.vztune.ui.icons.actions.MoreVert
 import com.vztechcore.vztune.ui.icons.media.Artist
 import com.vztechcore.vztune.ui.icons.player.Shuffle
 import com.vztechcore.vztune.ui.screens.medialist.MediaListCircleButton
@@ -62,7 +62,7 @@ fun rememberArtistChameleonBrush(accent: Color): Brush =
  * Hero do artista como era antes: foto cheia em cima, nome e stats embaixo à esquerda,
  * botões pill embaixo: Seguir na esquerda, Aleatório na direita.
  * Fundo sempre preto AMOLED, sem camaleão.
- * Barra superior: Voltar na esquerda, Compartilhar na direita.
+ * Barra superior: Voltar na esquerda, 3 pontinhos (menu) na direita.
  */
 @Composable
 fun ArtistHeader(
@@ -71,7 +71,7 @@ fun ArtistHeader(
     onBackClick: () -> Unit,
     onRandomClick: () -> Unit,
     onFollowClick: () -> Unit,
-    onShareClick: () -> Unit = {},
+    onMoreClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val hasPlayableItems = state.topSongs.isNotEmpty() || state.videos.isNotEmpty()
@@ -102,7 +102,7 @@ fun ArtistHeader(
                     )
             )
 
-            // Barra superior: Voltar esquerda, Compartilhar direita
+            // Barra superior: Voltar esquerda, 3 pontinhos direita
             Row(
                 Modifier
                     .align(Alignment.TopStart)
@@ -113,7 +113,7 @@ fun ArtistHeader(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 MediaListCircleButton(VzIcons.ArrowBackIos, "Voltar", onBackClick)
-                MediaListCircleButton(VzIcons.Share, "Compartilhar artista", onShareClick)
+                MediaListCircleButton(VzIcons.MoreVert, "Mais opções", onMoreClick)
             }
 
             Column(

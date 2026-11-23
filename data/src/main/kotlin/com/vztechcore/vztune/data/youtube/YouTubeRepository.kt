@@ -171,6 +171,7 @@ class YouTubeRepository @Inject constructor(
         val playlists: List<Playlist> = emptyList(),
         val channelName: String?,
         val avatarUrl: String?,
+        val channelHandle: String? = null,
         val bannerUrl: String? = null,
         val description: String? = null,
         val debugLog: String? = null,

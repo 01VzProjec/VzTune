@@ -155,6 +155,7 @@ fun ArtistScreen(
     var channelSearchQuery by remember { mutableStateOf("") }
     val displayState = if (channelSearchQuery.isBlank()) state else state.copy(
         videos = state.videos.filter { it.title.contains(channelSearchQuery, ignoreCase = true) },
+        shorts = state.shorts.filter { it.title.contains(channelSearchQuery, ignoreCase = true) },
         channelPlaylists = state.channelPlaylists.filter { it.title.contains(channelSearchQuery, ignoreCase = true) },
     )
 
@@ -351,7 +352,7 @@ fun ArtistScreen(
                                     }
                                 }
                             }
-                            else -> {
+                            2 -> {
                                 // --- PLAYLISTS ---
                                 if (displayState.channelPlaylists.isNotEmpty()) {
                                     itemsIndexed(displayState.channelPlaylists, key = { _, pl -> "cp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
@@ -363,6 +364,27 @@ fun ArtistScreen(
                                         Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.12f)).clickable { onLoadMoreChannelPlaylists() }.padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
                                             Text(text = if (state.isLoadingMoreChannelPlaylists) "Carregando..." else "Buscar mais", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
                                         }
+                                    }
+                                }
+                            }
+                            3 -> {
+                                // --- SHORTS DO CANAL ---
+                                if (displayState.shorts.isNotEmpty()) {
+                                    item(key = "channel_shorts_grid") {
+                                        ShortsGridRows(
+                                            tracks = displayState.shorts,
+                                            onClick = onVideoClick,
+                                            onMoreClick = onTrackInfoClick,
+                                        )
+                                    }
+                                } else {
+                                    item(key = "channel_shorts_empty") {
+                                        Text(
+                                            text = "Nenhum Short encontrado",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color.White.copy(alpha = 0.6f),
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
+                                        )
                                     }
                                 }
                             }
@@ -459,8 +481,9 @@ fun ArtistScreen(
                 title = state.name,
                 thumbnailUrl = state.thumbnailUrl,
                 onBackClick = onBackClick,
-                onShareClick = onShareClick,
                 dominantColor = Color.Black,
+                onSearchClick = if (state.isYouTubeChannel) ({ onSearchToggle(); scope.launch { listState.animateScrollToItem(0) } }) else null,
+                onShareClick = if (state.isYouTubeChannel) onShareClick else null,
                 circularThumbnail = true,
             )
         }
@@ -596,12 +619,12 @@ private fun ChannelHeader(
     var showTempLog by remember { mutableStateOf(false) }
     val searchFocus = remember { FocusRequester() }
     LaunchedEffect(searchOpen) { if (searchOpen) searchFocus.requestFocus() }
-    val handle = "@" + state.name.replace(" ", "").lowercase()
+    val handle = state.channelHandle?.takeIf { it.isNotBlank() }
     val subsVideos = listOfNotNull(
         state.subscribers?.takeIf { it.isNotBlank() },
         if (state.videos.isNotEmpty()) state.videos.size.toString() + " vídeos" else null,
     ).joinToString(" • ")
-    val tabs = listOf("Início", "Vídeos", "Playlists")
+    val tabs = listOf("Início", "Vídeos", "Playlists", "Shorts")
     Column(
         Modifier.fillMaxWidth().background(Color.Black)
     ) {
@@ -614,34 +637,7 @@ private fun ChannelHeader(
             MediaListCircleButton(VzIcons.ArrowBackIos, "Voltar", onBackClick)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 MediaListCircleButton(VzIcons.Search, "Buscar no canal", onSearchToggle)
-                Box {
-                    MediaListCircleButton(VzIcons.MoreVert, "Mais", { channelMenuOpen = true })
-                    DropdownMenu(
-                        expanded = channelMenuOpen,
-                        onDismissRequest = { channelMenuOpen = false },
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(text = "Buscar mais faixas e playlists") },
-                            onClick = { channelMenuOpen = false; onLoadMoreChannelClick() },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(text = "Compartilhar") },
-                            onClick = { channelMenuOpen = false; onShareClick() },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(text = "Ver Log temporário") },
-                            onClick = { channelMenuOpen = false; showTempLog = true },
-                        )
-                    }
-                    if (showTempLog) {
-                        AlertDialog(
-                            onDismissRequest = { showTempLog = false },
-                            title = { Text(text = "Log temporário") },
-                            text = { Text(text = state.debugLog ?: "Sem log ainda. Reabre o canal.", modifier = Modifier.verticalScroll(rememberScrollState())) },
-                            confirmButton = { TextButton(onClick = { showTempLog = false }) { Text(text = "Fechar") } },
-                        )
-                    }
-                }
+                MediaListCircleButton(VzIcons.Share, "Compartilhar canal", onShareClick)
             }
         }
         // Lupa: campo de busca dentro do canal, filtra os videos/playlists ja carregados.
@@ -680,7 +676,9 @@ private fun ChannelHeader(
             Column(Modifier.weight(1f)) {
                 Text(text = state.name, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 Spacer(Modifier.height(4.dp))
-                Text(text = handle, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (!handle.isNullOrBlank()) {
+                    Text(text = handle, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 if (subsVideos.isNotBlank()) {
                     Spacer(Modifier.height(2.dp))
                     Text(text = subsVideos, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -714,6 +712,19 @@ private fun ChannelHeader(
                 Icon(imageVector = if (state.isFollowing) VzIcons.PersonCheck else VzIcons.PersonAdd, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                 Text(text = if (state.isFollowing) "Seguindo" else "Seguir", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
             }
+        }
+        if (!state.debugLog.isNullOrBlank()) {
+            TextButton(onClick = { showTempLog = true }, modifier = Modifier.padding(horizontal = 12.dp)) {
+                Text(text = "Ver log temporário", color = Color.White.copy(alpha = 0.65f))
+            }
+        }
+        if (showTempLog) {
+            AlertDialog(
+                onDismissRequest = { showTempLog = false },
+                title = { Text(text = "Log temporário") },
+                text = { Text(text = state.debugLog ?: "Sem log ainda. Reabre o canal.", modifier = Modifier.verticalScroll(rememberScrollState())) },
+                confirmButton = { TextButton(onClick = { showTempLog = false }) { Text(text = "Fechar") } },
+            )
         }
         Spacer(Modifier.height(16.dp))
         // Abas igual a foto, com sublinhado na selecionada

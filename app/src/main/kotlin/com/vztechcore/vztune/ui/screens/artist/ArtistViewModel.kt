@@ -72,6 +72,7 @@ class ArtistViewModel @Inject constructor(
                         it.copy(
                             isLoading = false, errorMessage = null,
                             name = channel.channelName ?: it.name,
+                            channelHandle = channel.channelHandle ?: it.channelHandle,
                             thumbnailUrl = channel.avatarUrl ?: it.thumbnailUrl,
                             subscribers = channel.subscriberCount ?: it.subscribers,
                             description = channel.description ?: it.description,
@@ -81,7 +82,7 @@ class ArtistViewModel @Inject constructor(
                             singles = emptyList(), singlesMore = null,
                             videos = channel.videos, videosMore = null,
                             featured = emptyList(), featuredMore = null, relatedArtists = emptyList(),
-                            shorts = emptyList(), // FIX20 - Canal sem Shorts
+                            shorts = channel.shorts, // Shorts do canal retornados pelo InnerTube
                             channelPlaylists = channel.playlists,
                             bannerUrl = channel.bannerUrl ?: it.bannerUrl,
                             isYouTubeChannel = true,

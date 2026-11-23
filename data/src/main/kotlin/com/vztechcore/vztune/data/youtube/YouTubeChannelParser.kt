@@ -27,6 +27,38 @@ object YouTubeChannelParser {
         val shortsContinuation: String?,
     )
 
+    fun extractChannelHandle(json: JSONObject): String? {
+        val candidates = mutableListOf<String>()
+        val metadata = json.optJSONObject("metadata")?.optJSONObject("channelMetadataRenderer")
+        if (metadata != null) {
+            candidates += metadata.optString("vanityUrl")
+            candidates += metadata.optString("canonicalUrl")
+            candidates += metadata.optString("channelUrl")
+        }
+        val headers = mutableListOf<JSONObject>()
+        collect(json, "c4TabbedHeaderRenderer", headers)
+        collect(json, "channelHeaderRenderer", headers)
+        collect(json, "pageHeaderRenderer", headers)
+        for (header in headers) {
+            candidates += header.optString("vanityUrl")
+            candidates += header.optString("channelHandle")
+            candidates += header.optString("canonicalUrl")
+            candidates += header.optString("channelUrl")
+        }
+        val pattern = Regex("@([A-Za-z0-9._-]{3,})")
+        for (candidate in candidates) {
+            val value = candidate.trim().takeIf { it.isNotBlank() && it != "null" } ?: continue
+            val match = pattern.find(value) ?: continue
+            return "@" + match.groupValues[1]
+        }
+        return null
+    }
+
+    fun extractChannelHandleFromUrl(url: String): String? {
+        val match = Regex("/@([A-Za-z0-9._-]{3,})").find(url) ?: return null
+        return "@" + match.groupValues[1]
+    }
+
     fun parseChannelPage(json: JSONObject): ChannelData {
         val header = parseHeader(json)
         val channelName = header.first
@@ -374,7 +406,8 @@ object YouTubeChannelParser {
             val videoId = r.optString("videoId").takeIf { it.isNotBlank() } ?: continue
             val title = YouTubeSearchParser.textOf(r.optJSONObject("headline"))
                 ?: YouTubeSearchParser.textOf(r.optJSONObject("title")) ?: continue
-            val thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))
+            val thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))?.takeIf { it.isNotBlank() }
+                ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
             out += Track(id = videoId, title = title, artist = "", durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
         }
         // Layout 2026: shortsLockupViewModel (invio shorts_lockup_to_video)
@@ -388,7 +421,8 @@ object YouTubeChannelParser {
                 ?: r.optString("videoId").takeIf { it.isNotBlank() } ?: continue
             val title = r.optJSONObject("overlayMetadata")?.optJSONObject("primaryText")?.optString("content")?.takeIf { it.isNotBlank() }
                 ?: r.optString("title").takeIf { it.isNotBlank() } ?: continue
-            val thumb = bestSources(r.optJSONObject("thumbnail")) ?: bestSources(r.optJSONObject("thumbnailViewModel")) ?: YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))
+            val thumb = (bestSources(r.optJSONObject("thumbnail")) ?: bestSources(r.optJSONObject("thumbnailViewModel")) ?: YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail")))?.takeIf { it.isNotBlank() }
+                ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
             out += Track(id = videoId, title = title, artist = "", durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
         }
         // Lockup generico de Shorts na aba Shorts
@@ -400,7 +434,8 @@ object YouTubeChannelParser {
             val meta = lvm.optJSONObject("metadata")?.optJSONObject("lockupMetadataViewModel")
             val titleObj = meta?.optJSONObject("title")
             val title = titleObj?.optString("content")?.takeIf { it.isNotBlank() } ?: YouTubeSearchParser.textOf(titleObj) ?: continue
-            val thumb = YouTubeSearchParser.lockupThumbnail(lvm)
+            val thumb = YouTubeSearchParser.lockupThumbnail(lvm)?.takeIf { it.isNotBlank() }
+                ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
             out += Track(id = videoId, title = title, artist = "", durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
         }
         return out

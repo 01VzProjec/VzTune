@@ -9,6 +9,7 @@ import com.vztechcore.vztune.core.domain.music.Track
 data class ArtistUiState(
     val artistId: String,
     val name: String,
+    val channelHandle: String? = null,
     val thumbnailUrl: String? = null,
     val isLoading: Boolean = true,
     val errorMessage: String? = null,

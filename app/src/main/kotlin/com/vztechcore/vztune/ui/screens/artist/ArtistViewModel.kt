@@ -86,6 +86,9 @@ class ArtistViewModel @Inject constructor(
                             shorts = channel.shorts, // Shorts do canal retornados pelo InnerTube
                             channelPlaylists = channel.playlists,
                             bannerUrl = channel.bannerUrl ?: it.bannerUrl,
+                            videoCountText = channel.videoCountText,
+                            playlistsLabel = channel.playlistsLabel,
+                            about = channel.about,
                             isYouTubeChannel = true,
                             channelVideosHasMore = musicRepository.hasMoreChannelVideos(route.id), isLoadingMoreChannelVideos = false,
                             channelPlaylistsHasMore = musicRepository.hasMoreChannelPlaylists(route.id), isLoadingMoreChannelPlaylists = false,

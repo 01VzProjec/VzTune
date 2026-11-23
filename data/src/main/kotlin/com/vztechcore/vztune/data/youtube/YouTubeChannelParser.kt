@@ -7,6 +7,33 @@ import com.vztechcore.vztune.data.innertube.InnerTubeYouTube
 import org.json.JSONArray
 import org.json.JSONObject
 
+/** Link de imagem (foto de perfil / banner) com o tamanho, ex: "72x72". */
+data class ChannelImageLink(val label: String, val url: String)
+
+/** Dados da aba "Sobre" do canal (InnerTube). */
+data class ChannelAboutInfo(
+    val avatars: List<ChannelImageLink> = emptyList(),
+    val banners: List<ChannelImageLink> = emptyList(),
+    val tags: List<String> = emptyList(),
+    val videoCountText: String? = null,
+)
+
+/** Aba Lancamentos do canal: albuns e/ou singles (canal de artista nao tem playlists). */
+data class ChannelReleases(
+    val items: List<Playlist>,
+    val hasAlbums: Boolean,
+    val hasSingles: Boolean,
+) {
+    /** Nome da aba no lugar de "Playlists". */
+    val label: String?
+        get() = when {
+            items.isEmpty() -> null
+            hasAlbums && hasSingles -> "Álbuns e Singles"
+            hasSingles -> "Singles"
+            else -> "Álbuns"
+        }
+}
+
 /**
  * Parses YouTube InnerTube browse JSON for a channel (youtube.com).
  * Header + tabs (Videos / Shorts / Playlists). Falls back to whole JSON if no tabs.
@@ -33,6 +60,7 @@ object YouTubeChannelParser {
         if (metadata != null) {
             candidates += metadata.optString("vanityUrl")
             candidates += metadata.optString("canonicalUrl")
+            candidates += metadata.optString("vanityChannelUrl")
             candidates += metadata.optString("channelUrl")
         }
         val headers = mutableListOf<JSONObject>()
@@ -44,6 +72,11 @@ object YouTubeChannelParser {
             candidates += header.optString("channelHandle")
             candidates += header.optString("canonicalUrl")
             candidates += header.optString("channelUrl")
+        }
+        // Layout 2026: o @usuario aparece como texto solto nas linhas de metadata do header.
+        for (text in leafStrings(json.optJSONObject("header"))) {
+            val t = text.trim()
+            if (t.length >= 4 && t.matches(Regex("^@[A-Za-z0-9._-]{3,}\$"))) candidates += t
         }
         val pattern = Regex("@([A-Za-z0-9._-]{3,})")
         for (candidate in candidates) {
@@ -229,7 +262,10 @@ object YouTubeChannelParser {
                 ?: YouTubeSearchParser.textOf(h.optJSONObject("channelTitle")) ?: ""
             val avatar = YouTubeSearchParser.thumbnailOf(h.optJSONObject("avatar"))
             val banner = YouTubeSearchParser.thumbnailOf(h.optJSONObject("banner"))
-            val desc = YouTubeSearchParser.textOf(h.optJSONObject("description"))
+            // Descricao COMPLETA: o header as vezes traz so um trecho; o channelMetadataRenderer traz inteira. Fica a maior.
+            val headerDesc = YouTubeSearchParser.textOf(h.optJSONObject("description"))
+            val fullDesc = json.optJSONObject("metadata")?.optJSONObject("channelMetadataRenderer")?.optString("description")?.takeIf { it.isNotBlank() }
+            val desc = listOfNotNull(headerDesc, fullDesc).maxByOrNull { it.length }
             val subs = YouTubeSearchParser.textOf(h.optJSONObject("subscriberCountText"))
                 ?: YouTubeSearchParser.textOf(h.optJSONObject("subscriberCount"))
             if (name.isNotBlank()) return Quint(name, avatar, banner, desc, subs)
@@ -241,7 +277,7 @@ object YouTubeChannelParser {
             val avatar = YouTubeSearchParser.thumbnailOf(meta.optJSONObject("avatar")) ?: bestSources(meta.optJSONObject("avatar"))
             val desc = meta.optString("description").takeIf { it.isNotBlank() }
             val pageHeader = json.optJSONObject("header")?.optJSONObject("pageHeaderRenderer")?.optJSONObject("content")?.optJSONObject("pageHeaderViewModel")
-            val banner = pageHeader?.let { bestSources(it.optJSONObject("banner")) } ?: bestSources(pageHeader)
+            val banner = pageHeader?.let { bestSources(it.optJSONObject("banner")) }
             var subs: String? = null
             val rows = pageHeader?.optJSONObject("metadata")?.optJSONObject("contentMetadataViewModel")?.optJSONArray("metadataRows")
             if (rows != null) {
@@ -257,6 +293,139 @@ object YouTubeChannelParser {
             return Quint(name, avatar, banner, desc, subs)
         }
         return Quint("", null, null, null, null)
+    }
+
+    // ===================== SOBRE / contagem de videos =====================
+
+    private data class RawImage(val url: String, val width: Int, val height: Int)
+
+    /** Texto do total de videos do canal, ex: "534 vídeos". Vem do header (InnerTube), nunca da contagem dos achados. */
+    fun extractVideoCount(json: JSONObject): String? = findVideoCountText(json.optJSONObject("header"))
+
+    private val VideoCountRegex = Regex("^\\s*[\\d.,]+\\s*(?:mil|mi|milh[õo]es|milhão|k|m|b)?\\s*v[ií]deos?\\s*\$", RegexOption.IGNORE_CASE)
+    private val VideoCountInlineRegex = Regex("\\d[\\d.,]*\\s*(?:mil|mi|k|m|b)?\\s*v[ií]deos?\\b", RegexOption.IGNORE_CASE)
+
+    /** Procura "N vídeos" nos textos de um header (canal ou playlist de uploads). */
+    fun findVideoCountText(node: Any?): String? {
+        if (node == null) return null
+        val strings = leafStrings(node)
+        strings.firstOrNull { VideoCountRegex.matches(it) }?.let { return it.trim() }
+        // Fallback: tudo numa linha so, ex: "1,2 mi de inscritos • 534 vídeos"
+        for (s in strings) {
+            val low = s.lowercase()
+            if (!low.contains("inscrit") && !low.contains("subscri")) continue
+            VideoCountInlineRegex.find(s)?.let { return it.value.trim() }
+        }
+        return null
+    }
+
+    /** Fotos, banners, tags e total de videos do canal. */
+    fun parseAbout(json: JSONObject): ChannelAboutInfo {
+        val meta = json.optJSONObject("metadata")?.optJSONObject("channelMetadataRenderer")
+        val headers = mutableListOf<JSONObject>()
+        collect(json, "c4TabbedHeaderRenderer", headers)
+        collect(json, "channelHeaderRenderer", headers)
+        val header = headers.firstOrNull()
+        val pageHeaderVm = json.optJSONObject("header")?.optJSONObject("pageHeaderRenderer")
+            ?.optJSONObject("content")?.optJSONObject("pageHeaderViewModel")
+
+        val avatarRaw = rawImages(meta?.optJSONObject("avatar")) + rawImages(header?.optJSONObject("avatar")) + rawImages(pageHeaderVm?.optJSONObject("image"))
+        val bannerRaw = rawImages(header?.optJSONObject("banner")) + rawImages(pageHeaderVm?.optJSONObject("banner"))
+
+        val tags = mutableListOf<String>()
+        val tagArray = json.optJSONObject("microformat")?.optJSONObject("microformatDataRenderer")?.optJSONArray("tags")
+        if (tagArray != null) {
+            for (i in 0 until tagArray.length()) {
+                val tag = tagArray.optString(i).trim()
+                if (tag.isNotBlank()) tags.add(tag)
+            }
+        }
+        if (tags.isEmpty()) {
+            // keywords vem numa string so: palavras soltas e "frases entre aspas"
+            val keywords = meta?.optString("keywords").orEmpty()
+            Regex("\"([^\"]+)\"|(\\S+)").findAll(keywords).forEach { m ->
+                val tag = (m.groups[1]?.value ?: m.groups[2]?.value).orEmpty().trim()
+                if (tag.isNotBlank()) tags.add(tag)
+            }
+        }
+        return ChannelAboutInfo(
+            avatars = toImageLinks(avatarRaw, synthesizeAvatarSizes = true),
+            banners = toImageLinks(bannerRaw, synthesizeAvatarSizes = false),
+            tags = tags.distinct(),
+            videoCountText = extractVideoCount(json),
+        )
+    }
+
+    /** Banner sempre na maior resolucao (as URLs do YouTube aceitam =wNNNN). */
+    fun upscaleBanner(url: String): String = url.replace(Regex("=w\\d+"), "=w2560")
+
+    private fun fixUrl(url: String): String = if (url.startsWith("//")) "https:$url" else url
+
+    private fun rawImages(node: Any?): List<RawImage> {
+        val out = mutableListOf<RawImage>()
+        fun walk(n: Any?) {
+            when (n) {
+                is JSONObject -> {
+                    for (key in listOf("thumbnails", "sources")) {
+                        val arr = n.optJSONArray(key) ?: continue
+                        for (i in 0 until arr.length()) {
+                            val o = arr.optJSONObject(i) ?: continue
+                            val url = o.optString("url").takeIf { it.isNotBlank() } ?: continue
+                            out.add(RawImage(fixUrl(url), o.optInt("width", 0), o.optInt("height", 0)))
+                        }
+                    }
+                    val keys = n.keys()
+                    while (keys.hasNext()) walk(n.opt(keys.next()))
+                }
+                is JSONArray -> for (i in 0 until n.length()) walk(n.opt(i))
+            }
+        }
+        walk(node)
+        return out
+    }
+
+    private fun toImageLinks(raw: List<RawImage>, synthesizeAvatarSizes: Boolean): List<ChannelImageLink> {
+        val sizeParam = Regex("=s\\d+")
+        val bySize = linkedMapOf<String, String>()
+        for (img in raw) {
+            val side = sizeParam.find(img.url)?.value?.drop(2)?.toIntOrNull()
+            val label = when {
+                img.width > 0 && img.height > 0 -> "${img.width}x${img.height}"
+                side != null -> "${side}x${side}"
+                else -> "Original"
+            }
+            if (!bySize.containsKey(label)) bySize[label] = img.url
+        }
+        if (synthesizeAvatarSizes) {
+            val base = raw.firstOrNull { sizeParam.containsMatchIn(it.url) }?.url
+            if (base != null) {
+                for (s in listOf(72, 120, 240, 512, 900)) {
+                    val label = "${s}x${s}"
+                    if (!bySize.containsKey(label)) bySize[label] = base.replace(sizeParam, "=s$s")
+                }
+            }
+        }
+        return bySize.entries
+            .map { ChannelImageLink(it.key, it.value) }
+            .sortedBy { it.label.substringBefore("x").toIntOrNull() ?: Int.MAX_VALUE }
+    }
+
+    /** Todos os textos (strings) de um trecho do JSON. */
+    private fun leafStrings(node: Any?, limit: Int = 4000): List<String> {
+        val out = ArrayList<String>()
+        fun walk(n: Any?) {
+            if (out.size >= limit) return
+            when (n) {
+                is JSONObject -> {
+                    val keys = n.keys()
+                    while (keys.hasNext()) walk(n.opt(keys.next()))
+                }
+                is JSONArray -> for (i in 0 until n.length()) walk(n.opt(i))
+                is String -> if (n.isNotBlank()) out.add(n)
+            }
+        }
+        walk(node)
+        return out
     }
 
     private data class Quint<A, B, C, D, E>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E)
@@ -285,6 +454,7 @@ object YouTubeChannelParser {
                 "videos" -> url.endsWith("/videos") || title.contains("vídeo") || title.contains("video")
                 "shorts" -> url.endsWith("/shorts") || title.contains("short")
                 "playlists" -> url.endsWith("/playlists") || title.contains("playlist")
+                "releases" -> url.endsWith("/releases") || title.contains("lançamento") || title.contains("lancamento") || title.contains("release")
                 "streams" -> url.endsWith("/streams") || url.endsWith("/live") || title.contains("ao vivo") || title.contains("live") || title.contains("stream")
                 else -> url.endsWith("/$seg") || title.contains(seg)
             }
@@ -398,34 +568,26 @@ object YouTubeChannelParser {
         return null
     }
 
-    private fun collectShorts(node: Any?): List<Track> {
+    /** Shorts do canal (reelItemRenderer, shortsLockupViewModel e lockup SHORTS). Nunca descarta Short por falta de titulo/thumbnail. */
+    fun collectShorts(node: Any?): List<Track> {
         val out = mutableListOf<Track>()
         val reels = mutableListOf<JSONObject>()
         collect(node, "reelItemRenderer", reels)
         for (r in reels) {
             val videoId = r.optString("videoId").takeIf { it.isNotBlank() } ?: continue
             val title = YouTubeSearchParser.textOf(r.optJSONObject("headline"))
-                ?: YouTubeSearchParser.textOf(r.optJSONObject("title")) ?: continue
-            val thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))?.takeIf { it.isNotBlank() }
-                ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+                ?: YouTubeSearchParser.textOf(r.optJSONObject("title")) ?: "Short"
+            val thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))?.takeIf { it.isNotBlank() }?.let { fixUrl(it) }
+                ?: shortThumbnail(videoId)
             out += Track(id = videoId, title = title, artist = "", durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
         }
-        // Layout 2026: shortsLockupViewModel (invio shorts_lockup_to_video)
-        // videoId = onTap.reelWatchEndpoint.videoId, titulo = overlayMetadata.primaryText.content, thumb = thumbnail.sources maior width
+        // Layout 2026: shortsLockupViewModel
         val slvms = mutableListOf<JSONObject>()
         collect(node, "shortsLockupViewModel", slvms)
         for (r in slvms) {
-            val videoId = r.optJSONObject("onTap")?.optJSONObject("innertubeCommand")?.optJSONObject("reelWatchEndpoint")?.optString("videoId")?.takeIf { it.isNotBlank() }
-                ?: r.optString("entityId").removePrefix("shorts-shelf-item-").takeIf { it.isNotBlank() }
-                ?: r.optString("contentId").takeIf { it.isNotBlank() }
-                ?: r.optString("videoId").takeIf { it.isNotBlank() } ?: continue
-            val title = r.optJSONObject("overlayMetadata")?.optJSONObject("primaryText")?.optString("content")?.takeIf { it.isNotBlank() }
-                ?: r.optString("title").takeIf { it.isNotBlank() } ?: continue
-            val thumb = (bestSources(r.optJSONObject("thumbnail")) ?: bestSources(r.optJSONObject("thumbnailViewModel")) ?: YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail")))?.takeIf { it.isNotBlank() }
-                ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
-            out += Track(id = videoId, title = title, artist = "", durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
+            shortFromLockup(r)?.let { out += it }
         }
-        // Lockup generico de Shorts na aba Shorts
+        // Lockup generico de Shorts
         val lockups = mutableListOf<JSONObject>()
         collect(node, "lockupViewModel", lockups)
         for (lvm in lockups) {
@@ -433,12 +595,41 @@ object YouTubeChannelParser {
             val videoId = lvm.optString("contentId").takeIf { it.isNotBlank() } ?: continue
             val meta = lvm.optJSONObject("metadata")?.optJSONObject("lockupMetadataViewModel")
             val titleObj = meta?.optJSONObject("title")
-            val title = titleObj?.optString("content")?.takeIf { it.isNotBlank() } ?: YouTubeSearchParser.textOf(titleObj) ?: continue
-            val thumb = YouTubeSearchParser.lockupThumbnail(lvm)?.takeIf { it.isNotBlank() }
-                ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+            val title = titleObj?.optString("content")?.takeIf { it.isNotBlank() }
+                ?: YouTubeSearchParser.textOf(titleObj) ?: "Short"
+            val thumb = YouTubeSearchParser.lockupThumbnail(lvm)?.takeIf { it.isNotBlank() }?.let { fixUrl(it) }
+                ?: shortThumbnail(videoId)
             out += Track(id = videoId, title = title, artist = "", durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
         }
-        return out
+        return out.distinctBy { it.id }
+    }
+
+    private fun shortThumbnail(videoId: String): String = "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+
+    private fun shortFromLockup(r: JSONObject): Track? {
+        val videoId = r.optJSONObject("onTap")?.optJSONObject("innertubeCommand")?.optJSONObject("reelWatchEndpoint")?.optString("videoId")?.takeIf { it.isNotBlank() }
+            ?: r.optString("entityId").removePrefix("shorts-shelf-item-").takeIf { it.isNotBlank() }
+            ?: r.optString("contentId").takeIf { it.isNotBlank() }
+            ?: r.optString("videoId").takeIf { it.isNotBlank() }
+            ?: return null
+        val title = r.optJSONObject("overlayMetadata")?.optJSONObject("primaryText")?.optString("content")?.takeIf { it.isNotBlank() }
+            ?: r.optString("title").takeIf { it.isNotBlank() }
+            ?: titleFromAccessibility(r.optString("accessibilityText"))
+            ?: "Short"
+        val thumb = (bestSources(r.optJSONObject("thumbnail"))
+            ?: bestSources(r.optJSONObject("thumbnailViewModel"))
+            ?: bestSources(r)
+            ?: YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail")))
+            ?.takeIf { it.isNotBlank() }?.let { fixUrl(it) }
+            ?: shortThumbnail(videoId)
+        return Track(id = videoId, title = title, artist = "", durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
+    }
+
+    /** "Titulo do Short, 1,2 mil visualizações - reproduzir Short" -> "Titulo do Short". */
+    private fun titleFromAccessibility(text: String): String? {
+        if (text.isBlank()) return null
+        val m = Regex("^(.*?),\\s*[\\d.,]+\\s*(?:mil|mi|M|K|B)?\\s*(?:visualiza|views).*\$", RegexOption.IGNORE_CASE).find(text)
+        return (m?.groupValues?.get(1) ?: text.substringBefore(" - ")).trim().takeIf { it.isNotBlank() }
     }
 
     fun collectPlaylists(node: Any?): List<Playlist> {
@@ -473,6 +664,24 @@ object YouTubeChannelParser {
             out += Playlist(id = pid, title = title, owner = owner?.ifBlank { null }, thumbnailUrl = thumb, trackCount = count, source = Source.YOUTUBE)
         }
         return out
+    }
+
+    /** Aba Lancamentos: albuns/singles. Detecta o tipo pelo texto "Álbum • 2020" / "Single • 2021" / "EP". */
+    fun collectReleases(node: Any?): ChannelReleases {
+        val items = collectPlaylists(node).distinctBy { it.id }
+        var hasAlbums = false
+        var hasSingles = false
+        val lockups = mutableListOf<JSONObject>()
+        collect(node, "lockupViewModel", lockups)
+        for (lvm in lockups) {
+            val rows = lvm.optJSONObject("metadata")?.optJSONObject("lockupMetadataViewModel")?.optJSONObject("metadata")
+            val text = leafStrings(rows).joinToString(" ").lowercase()
+            when {
+                Regex("\\b(single|singles|ep)\\b").containsMatchIn(text) -> hasSingles = true
+                text.contains("álbum") || text.contains("album") -> hasAlbums = true
+            }
+        }
+        return ChannelReleases(items, hasAlbums, hasSingles)
     }
 
     private fun collect(node: Any?, key: String, out: MutableList<JSONObject>) {

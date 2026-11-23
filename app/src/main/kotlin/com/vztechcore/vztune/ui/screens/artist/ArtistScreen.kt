@@ -101,6 +101,7 @@ import com.vztechcore.vztune.ui.icons.actions.MoreVert
 import com.vztechcore.vztune.ui.icons.navigation.Search
 import com.vztechcore.vztune.ui.components.sheets.FoundProfilesSheet
 import com.vztechcore.vztune.ui.components.sheets.ProfileOptionsSheet
+import com.vztechcore.vztune.ui.components.text.LinkifiedText
 
 private val RowPadding = PaddingValues(horizontal = 16.dp)
 private val CoverWidth = 160.dp
@@ -163,6 +164,12 @@ fun ArtistScreen(
         shorts = state.shorts.filter { it.title.contains(channelSearchQuery, ignoreCase = true) },
         channelPlaylists = state.channelPlaylists.filter { it.title.contains(channelSearchQuery, ignoreCase = true) },
     )
+
+    // Abas do canal: Inicio e Sobre sempre; Videos / Playlists (Albuns) / Shorts so aparecem quando tem conteudo.
+    val hasChannelVideos = state.videos.isNotEmpty()
+    val hasChannelShorts = state.shorts.isNotEmpty()
+    val hasChannelPlaylists = state.channelPlaylists.isNotEmpty()
+    val channelPlaylistsLabel = state.playlistsLabel ?: "Playlists"
 
     // Fundo sempre preto AMOLED - camaleao desativado por enquanto
 
@@ -289,8 +296,8 @@ fun ArtistScreen(
                                             VzVideoCard(track = heroVideo, isPlaying = pv.isPlaying, isPaused = pv.isPaused, onClick = { onVideoClick(heroVideo) }, onMoreClick = { onTrackInfoClick(heroVideo) }, horizontalPadding = 0.dp)
                                         }
                                     }
-                                } else if (displayState.videos.isEmpty() && !state.isLoading) {
-                                    item(key = "home_hero_empty") { Text(text = "Nenhum vídeo ainda", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
+                                } else if (!state.isLoading && !hasChannelVideos && !hasChannelShorts && !hasChannelPlaylists) {
+                                    item(key = "home_hero_empty") { Text(text = "Este canal ainda não tem conteúdo", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
                                 }
                                 if (forYouVideos.isNotEmpty()) {
                                     item(key = "home_foryou_title") {
@@ -307,6 +314,7 @@ fun ArtistScreen(
                                         }
                                     }
                                 }
+                                if (hasChannelVideos) {
                                 item(key = "home_videos_header") {
                                     SectionHeaderArrow(title = "Vídeos", onArrowClick = { selectedChannelTab = 1; channelSort = 0 })
                                 }
@@ -333,8 +341,10 @@ fun ArtistScreen(
                                         }
                                     }
                                 }
+                                }
+                                if (hasChannelPlaylists) {
                                 item(key = "home_playlists_header") {
-                                    SectionHeaderArrow(title = "Playlists", onArrowClick = { selectedChannelTab = 2 })
+                                    SectionHeaderArrow(title = channelPlaylistsLabel, onArrowClick = { selectedChannelTab = 2 })
                                 }
                                 if (displayState.channelPlaylists.isNotEmpty()) {
                                     itemsIndexed(displayState.channelPlaylists.take(homePlaylistsVisible), key = { _, pl -> "hp_" + pl.id }) { _, playlist -> ChannelPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) }, onMoreClick = { playlistMenu = playlist }) }
@@ -347,6 +357,7 @@ fun ArtistScreen(
                                             Icon(imageVector = VzIcons.ExpandMore, contentDescription = "Mostrar mais playlists", tint = Color.White, modifier = Modifier.size(24.dp))
                                         }
                                     }
+                                }
                                 }
                             }
                             1 -> {
@@ -413,9 +424,12 @@ fun ArtistScreen(
                                     }
                                 }
                             }
+                            4 -> {
+                                // --- SOBRE ---
+                                item(key = "channel_about") { ChannelAboutSection(state = state) }
+                            }
                         }
                         item(key = "channel_space") { Spacer(Modifier.height(SectionGap)) }
-                        item(key = "description") { ArtistDescription(description = state.description) }
                     } else {
 
                         
@@ -645,9 +659,19 @@ private fun ChannelHeader(
     val searchFocus = remember { FocusRequester() }
     LaunchedEffect(searchOpen) { if (searchOpen) searchFocus.requestFocus() }
     val handle = state.channelHandle?.takeIf { it.isNotBlank() }
-    // So inscritos: o app busca 1000 videos e depois 100 em 100, entao a contagem nunca seria o total real.
-    val subscribersLabel = state.subscribers?.takeIf { it.isNotBlank() }
-    val tabs = listOf("Início", "Vídeos", "Playlists", "Shorts")
+    // Inscritos • total de videos do canal (vem do InnerTube), nunca a contagem dos videos carregados.
+    val subscribersLabel = listOfNotNull(
+        state.subscribers?.takeIf { it.isNotBlank() },
+        state.videoCountText?.takeIf { it.isNotBlank() },
+    ).joinToString(" • ").takeIf { it.isNotBlank() }
+    // Abas dinamicas (o numero e o id fixo da aba): Inicio e Sobre sempre; Videos / Playlists (Albuns) / Shorts so com conteudo.
+    val tabs = buildList<Pair<Int, String>> {
+        add(0 to "Início")
+        if (state.videos.isNotEmpty()) add(1 to "Vídeos")
+        if (state.channelPlaylists.isNotEmpty()) add(2 to (state.playlistsLabel ?: "Playlists"))
+        if (state.shorts.isNotEmpty()) add(3 to "Shorts")
+        add(4 to "Sobre")
+    }
     Column(
         Modifier.fillMaxWidth().background(Color.Black)
     ) {
@@ -678,9 +702,9 @@ private fun ChannelHeader(
         // FIX18 - Banner: so aparece se o criador tem banner. Sem banner = sem card vazio. Tamanho exato do criador: sem aspectRatio fixo, a imagem manda na altura (FillWidth).
         if (!state.bannerUrl.isNullOrBlank()) {
             Box(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(12.dp))
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp).aspectRatio(1707f / 283f).clip(RoundedCornerShape(12.dp))
             ) {
-                AsyncImage(model = state.bannerUrl, contentDescription = null, contentScale = ContentScale.FillWidth, modifier = Modifier.fillMaxWidth())
+                AsyncImage(model = state.bannerUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
         }
         // Avatar + nome + @ + inscritos
@@ -704,21 +728,32 @@ private fun ChannelHeader(
                 }
                 if (!subscribersLabel.isNullOrBlank()) {
                     Spacer(Modifier.height(2.dp))
-                    Text(text = subscribersLabel, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text = subscribersLabel, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
         // Descricao com ...mais (clica pra expandir)
         if (!state.description.isNullOrBlank()) {
-            val shown = if (descExpanded) state.description else state.description.take(110) + if (state.description.length > 110) "...mais" else ""
-            Text(
-                text = shown,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.7f),
-                maxLines = if (descExpanded) 10 else 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clickable { onDescClick() },
-            )
+            val description = state.description
+            if (descExpanded) {
+                // Aberta: descricao COMPLETA, sem limite de linhas, com e-mail / telefone / @usuario / site clicaveis.
+                LinkifiedText(
+                    text = description,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.7f),
+                    onPlainClick = onDescClick,
+                )
+            } else {
+                Text(
+                    text = description.take(110) + if (description.length > 110) "...mais" else "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.7f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clickable { onDescClick() },
+                )
+            }
             Spacer(Modifier.height(12.dp))
         }
         // So Seguir, mesmo sistema do artista: Seguir / Seguindo, troca com onFollowClick (isFollowing).
@@ -755,7 +790,7 @@ private fun ChannelHeader(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
         ) {
-            itemsIndexed(tabs) { index, tab ->
+            items(tabs, key = { it.first }) { (index, tab) ->
                 Column(Modifier.clickable { onTabSelected(index) }.padding(bottom = 8.dp)) {
                     Text(text = tab, style = MaterialTheme.typography.titleSmall, color = if (selectedTab == index) Color.White else Color.White.copy(alpha = 0.6f), fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal)
                     Spacer(Modifier.height(6.dp))

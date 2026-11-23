@@ -1,743 +1,1076 @@
 #!/usr/bin/env python3
-"""VzTune - novo sistema de Canal x Artista.
-
-O que este script faz (sem criar nenhum backup / .bak):
-
-1. Video abre o CANAL do YouTube primeiro (YouTube tem preferencia); se nao achar, tenta o
-   artista do YT Music. Musica do YT Music continua abrindo so o artista.
-2. Telas de Canal e de Artista: o icone de Compartilhar vira 3 pontinhos. O menu sobe de baixo
-   pra cima com "Canais encontrados" (tela canal) / "Contas encontradas" (tela artista) e,
-   abaixo, "Compartilhar".
-3. "Canais encontrados" / "Contas encontradas" (icone Groups) abre outro menu com os perfis do
-   OUTRO mundo com o MESMO nome (canal -> artistas do YT Music, artista -> canais do YouTube),
-   pra trocar quando o app abriu o errado. A tela atual e substituida (voltar nao passa pela errada).
-4. Tela Canal: ao lado da foto agora aparece o NOME do canal (antes sumia: Text com weight dentro
-   de item do LazyColumn media 0 de altura) e a quantidade de videos foi removida.
-5. Correcoes: a tela do artista decidia canal x artista pela presenca de musica (o canal do
-   YouTube podia cair no layout errado); "Buscar mais playlists" e as opcoes de playlist do canal
-   nao estavam ligadas no AppNavHost; clique em ArtistHit nao repassava isYouTubeChannel.
-
-Rode na raiz do projeto VzTune:   python edit.py
-(ou passe a raiz como primeiro argumento). Todos os trechos sao validados ANTES de gravar:
-se algum nao bater, nada e alterado. Pode rodar de novo sem problema (idempotente).
+# -*- coding: utf-8 -*-
 """
-from pathlib import Path
-import sys
+edit.py - VzTune: Pagina Canal (header, banner, descricao clicavel, aba Sobre, abas dinamicas, Shorts)
 
-ROOT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path.cwd().resolve()
+Uso (na raiz do projeto):
+    python3 edit.py --dry     # so confere se todos os trechos existem, NAO grava nada
+    python3 edit.py           # aplica (faz backup .bak_edit de cada arquivo alterado)
 
-APP = "app/src/main/kotlin/com/vztechcore/vztune"
+- Se um trecho nao for encontrado, NADA e gravado (tudo ou nada) e o script lista o que faltou.
+- Pode rodar de novo: o que ja foi aplicado e ignorado.
+"""
+import os, sys, shutil
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA = "data/src/main/kotlin/com/vztechcore/vztune/data"
+APP = "app/src/main/kotlin/com/vztechcore/vztune"
 
-F_PARSER = f"{DATA}/youtube/YouTubeSearchParser.kt"
 F_YT_REPO = f"{DATA}/youtube/YouTubeRepository.kt"
-F_MUSIC_REPO = f"{DATA}/music/MusicRepository.kt"
 F_STATE = f"{APP}/ui/screens/artist/ArtistUiState.kt"
 F_VM = f"{APP}/ui/screens/artist/ArtistViewModel.kt"
-F_HEADER = f"{APP}/ui/screens/artist/ArtistHeader.kt"
 F_SCREEN = f"{APP}/ui/screens/artist/ArtistScreen.kt"
-F_NAV = f"{APP}/ui/navigation/AppNavHost.kt"
-F_MENU_VM = f"{APP}/ui/components/sheets/TrackMenuViewModel.kt"
-F_SEARCH_VM = f"{APP}/ui/screens/search/SearchViewModel.kt"
-F_NEW_SHEET = f"{APP}/ui/components/sheets/ProfileOptionsSheet.kt"
 
 
-# ----------------------------------------------------------------------------------------
-# Operacoes
-# ----------------------------------------------------------------------------------------
-class Replace:
-    """Troca um trecho exato (tem que aparecer 1 unica vez)."""
+class PatchError(Exception):
+    pass
 
+
+class Op:
+    pass
+
+
+class Replace(Op):
+    """Troca [old] por [new]; [old] precisa existir UMA vez. Ja aplicado = ignora."""
     def __init__(self, old, new):
         self.old, self.new = old, new
 
-    def apply(self, text):
-        old, new = self.old, self.new
-        if old in new:
-            # Insercao: a ancora continua no texto depois de aplicar, entao so o texto novo prova que ja foi.
-            if new in text:
-                return text, "ja aplicado"
-        elif old not in text:
-            if new == "" or new in text:
-                return text, "ja aplicado"
-            raise ValueError(f"trecho nao encontrado (nem o antigo nem o novo):\n{old[:300]}")
-        n = text.count(old)
-        if n != 1:
-            raise ValueError(f"trecho encontrado {n}x (esperado 1x):\n{old[:300]}")
-        return text.replace(old, new, 1), "ok"
+    def apply(self, s):
+        if self.new in s:
+            return s, "ja aplicado"
+        c = s.count(self.old)
+        if c != 1:
+            raise PatchError(f"trecho a substituir encontrado {c}x (esperado 1): {self.old.strip()[:90]!r}")
+        return s.replace(self.old, self.new), "ok"
 
 
-class InsertBefore(Replace):
-    """Insere codigo antes de uma ancora exata (aparece 1 unica vez)."""
+class InsertBefore(Op):
+    """Insere [text] logo antes de [anchor] (que precisa existir UMA vez)."""
+    def __init__(self, anchor, text):
+        self.anchor, self.text = anchor, text
 
-    def __init__(self, anchor, code):
-        super().__init__(anchor, code + anchor)
-
-
-class ReplaceBetween:
-    """Troca tudo de [start, end) - start incluido, end preservado."""
-
-    def __init__(self, start, end, new, done_marker):
-        self.start, self.end, self.new, self.done = start, end, new, done_marker
-
-    def apply(self, text):
-        if self.done in text:
-            return text, "ja aplicado"
-        if text.count(self.start) != 1:
-            raise ValueError(f"inicio encontrado {text.count(self.start)}x:\n{self.start[:300]}")
-        i = text.index(self.start)
-        j = text.find(self.end, i + len(self.start))
-        if j < 0:
-            raise ValueError(f"fim nao encontrado:\n{self.end[:300]}")
-        return text[:i] + self.new + text[j:], "ok"
+    def apply(self, s):
+        if (self.text + self.anchor) in s:
+            return s, "ja aplicado"
+        c = s.count(self.anchor)
+        if c != 1:
+            raise PatchError(f"ancora encontrada {c}x (esperado 1): {self.anchor.strip()[:90]!r}")
+        i = s.index(self.anchor)
+        return s[:i] + self.text + s[i:], "ok"
 
 
-# ----------------------------------------------------------------------------------------
-# Codigo novo
-# ----------------------------------------------------------------------------------------
-PARSE_CHANNELS = r'''    /**
-     * Canais do YouTube numa busca com filtro de canais.
-     * Devolve [Artist] com source = YOUTUBE (o app trata como canal, nunca como artista do YT Music).
-     */
-    fun parseChannels(json: JSONObject): List<Artist> {
-        val out = mutableListOf<Artist>()
-        val renderers = mutableListOf<JSONObject>()
-        collect(json, "channelRenderer", renderers)
-        for (r in renderers) {
-            val id = r.optString("channelId").takeIf { it.startsWith("UC") } ?: continue
-            val name = textOf(r.optJSONObject("title")) ?: continue
-            val thumb = thumbnailOf(r.optJSONObject("thumbnail"))
-                ?.let { if (it.startsWith("//")) "https:$it" else it }
-            // O YouTube troca os campos: o @handle costuma vir em subscriberCountText e os inscritos em videoCountText.
-            val subs = listOf(r.optJSONObject("subscriberCountText"), r.optJSONObject("videoCountText"))
-                .mapNotNull { textOf(it) }
-                .firstOrNull { it.contains("inscrit", ignoreCase = true) || it.contains("subscriber", ignoreCase = true) }
-            out += Artist(id = id, name = name, thumbnailUrl = thumb, source = Source.YOUTUBE, subscribers = subs)
+class ReplaceBetween(Op):
+    """Troca tudo de [start] ate ANTES de [end] por [new]. [marker] = texto que so existe depois de aplicado."""
+    def __init__(self, start, end, new, marker):
+        self.start, self.end, self.new, self.marker = start, end, new, marker
+
+    def apply(self, s):
+        if self.marker in s:
+            return s, "ja aplicado"
+        if s.count(self.start) != 1:
+            raise PatchError(f"inicio encontrado {s.count(self.start)}x (esperado 1): {self.start.strip()[:90]!r}")
+        a = s.index(self.start)
+        b = s.find(self.end, a + len(self.start))
+        if b < 0:
+            raise PatchError(f"fim nao encontrado depois do inicio: {self.end.strip()[:90]!r}")
+        return s[:a] + self.new + s[b:], "ok"
+
+
+PATCHES = {}
+
+# ========================================================================================
+# PARTE 2 - Pagina Canal: header, banner, descricao clicavel, aba Sobre, abas dinamicas, Shorts
+# ========================================================================================
+F_CH_PARSER = f"{DATA}/youtube/YouTubeChannelParser.kt"
+F_PL_PARSER = f"{DATA}/youtube/YouTubePlaylistParser.kt"
+F_CARDS = f"{APP}/ui/components/cards/ChannelCards.kt"
+F_LINKIFY = f"{APP}/ui/components/text/LinkifiedText.kt"
+F_ICON_COPY = f"{APP}/ui/icons/actions/ContentCopy.kt"
+F_ABOUT = f"{APP}/ui/screens/artist/ChannelAbout.kt"
+
+# ---------------- data: modelos novos ----------------
+CH_TOP_LEVEL = r'''/** Link de imagem (foto de perfil / banner) com o tamanho, ex: "72x72". */
+data class ChannelImageLink(val label: String, val url: String)
+
+/** Dados da aba "Sobre" do canal (InnerTube). */
+data class ChannelAboutInfo(
+    val avatars: List<ChannelImageLink> = emptyList(),
+    val banners: List<ChannelImageLink> = emptyList(),
+    val tags: List<String> = emptyList(),
+    val videoCountText: String? = null,
+)
+
+/** Aba Lancamentos do canal: albuns e/ou singles (canal de artista nao tem playlists). */
+data class ChannelReleases(
+    val items: List<Playlist>,
+    val hasAlbums: Boolean,
+    val hasSingles: Boolean,
+) {
+    /** Nome da aba no lugar de "Playlists". */
+    val label: String?
+        get() = when {
+            items.isEmpty() -> null
+            hasAlbums && hasSingles -> "Álbuns e Singles"
+            hasSingles -> "Singles"
+            else -> "Álbuns"
+        }
+}
+
+'''
+
+CH_HANDLE_SCAN = r'''        // Layout 2026: o @usuario aparece como texto solto nas linhas de metadata do header.
+        for (text in leafStrings(json.optJSONObject("header"))) {
+            val t = text.trim()
+            if (t.length >= 4 && t.matches(Regex("^@[A-Za-z0-9._-]{3,}\$"))) candidates += t
+        }
+'''
+
+CH_DESC_OLD = '''            val desc = YouTubeSearchParser.textOf(h.optJSONObject("description"))
+'''
+CH_DESC_NEW = '''            // Descricao COMPLETA: o header as vezes traz so um trecho; o channelMetadataRenderer traz inteira. Fica a maior.
+            val headerDesc = YouTubeSearchParser.textOf(h.optJSONObject("description"))
+            val fullDesc = json.optJSONObject("metadata")?.optJSONObject("channelMetadataRenderer")?.optString("description")?.takeIf { it.isNotBlank() }
+            val desc = listOfNotNull(headerDesc, fullDesc).maxByOrNull { it.length }
+'''
+
+CH_ABOUT_CODE = r'''    // ===================== SOBRE / contagem de videos =====================
+
+    private data class RawImage(val url: String, val width: Int, val height: Int)
+
+    /** Texto do total de videos do canal, ex: "534 vídeos". Vem do header (InnerTube), nunca da contagem dos achados. */
+    fun extractVideoCount(json: JSONObject): String? = findVideoCountText(json.optJSONObject("header"))
+
+    private val VideoCountRegex = Regex("^\\s*[\\d.,]+\\s*(?:mil|mi|milh[õo]es|milhão|k|m|b)?\\s*v[ií]deos?\\s*\$", RegexOption.IGNORE_CASE)
+    private val VideoCountInlineRegex = Regex("\\d[\\d.,]*\\s*(?:mil|mi|k|m|b)?\\s*v[ií]deos?\\b", RegexOption.IGNORE_CASE)
+
+    /** Procura "N vídeos" nos textos de um header (canal ou playlist de uploads). */
+    fun findVideoCountText(node: Any?): String? {
+        if (node == null) return null
+        val strings = leafStrings(node)
+        strings.firstOrNull { VideoCountRegex.matches(it) }?.let { return it.trim() }
+        // Fallback: tudo numa linha so, ex: "1,2 mi de inscritos • 534 vídeos"
+        for (s in strings) {
+            val low = s.lowercase()
+            if (!low.contains("inscrit") && !low.contains("subscri")) continue
+            VideoCountInlineRegex.find(s)?.let { return it.value.trim() }
+        }
+        return null
+    }
+
+    /** Fotos, banners, tags e total de videos do canal. */
+    fun parseAbout(json: JSONObject): ChannelAboutInfo {
+        val meta = json.optJSONObject("metadata")?.optJSONObject("channelMetadataRenderer")
+        val headers = mutableListOf<JSONObject>()
+        collect(json, "c4TabbedHeaderRenderer", headers)
+        collect(json, "channelHeaderRenderer", headers)
+        val header = headers.firstOrNull()
+        val pageHeaderVm = json.optJSONObject("header")?.optJSONObject("pageHeaderRenderer")
+            ?.optJSONObject("content")?.optJSONObject("pageHeaderViewModel")
+
+        val avatarRaw = rawImages(meta?.optJSONObject("avatar")) + rawImages(header?.optJSONObject("avatar")) + rawImages(pageHeaderVm?.optJSONObject("image"))
+        val bannerRaw = rawImages(header?.optJSONObject("banner")) + rawImages(pageHeaderVm?.optJSONObject("banner"))
+
+        val tags = mutableListOf<String>()
+        val tagArray = json.optJSONObject("microformat")?.optJSONObject("microformatDataRenderer")?.optJSONArray("tags")
+        if (tagArray != null) {
+            for (i in 0 until tagArray.length()) {
+                val tag = tagArray.optString(i).trim()
+                if (tag.isNotBlank()) tags.add(tag)
+            }
+        }
+        if (tags.isEmpty()) {
+            // keywords vem numa string so: palavras soltas e "frases entre aspas"
+            val keywords = meta?.optString("keywords").orEmpty()
+            Regex("\"([^\"]+)\"|(\\S+)").findAll(keywords).forEach { m ->
+                val tag = (m.groups[1]?.value ?: m.groups[2]?.value).orEmpty().trim()
+                if (tag.isNotBlank()) tags.add(tag)
+            }
+        }
+        return ChannelAboutInfo(
+            avatars = toImageLinks(avatarRaw, synthesizeAvatarSizes = true),
+            banners = toImageLinks(bannerRaw, synthesizeAvatarSizes = false),
+            tags = tags.distinct(),
+            videoCountText = extractVideoCount(json),
+        )
+    }
+
+    /** Banner sempre na maior resolucao (as URLs do YouTube aceitam =wNNNN). */
+    fun upscaleBanner(url: String): String = url.replace(Regex("=w\\d+"), "=w2560")
+
+    private fun fixUrl(url: String): String = if (url.startsWith("//")) "https:$url" else url
+
+    private fun rawImages(node: Any?): List<RawImage> {
+        val out = mutableListOf<RawImage>()
+        fun walk(n: Any?) {
+            when (n) {
+                is JSONObject -> {
+                    for (key in listOf("thumbnails", "sources")) {
+                        val arr = n.optJSONArray(key) ?: continue
+                        for (i in 0 until arr.length()) {
+                            val o = arr.optJSONObject(i) ?: continue
+                            val url = o.optString("url").takeIf { it.isNotBlank() } ?: continue
+                            out.add(RawImage(fixUrl(url), o.optInt("width", 0), o.optInt("height", 0)))
+                        }
+                    }
+                    val keys = n.keys()
+                    while (keys.hasNext()) walk(n.opt(keys.next()))
+                }
+                is JSONArray -> for (i in 0 until n.length()) walk(n.opt(i))
+            }
+        }
+        walk(node)
+        return out
+    }
+
+    private fun toImageLinks(raw: List<RawImage>, synthesizeAvatarSizes: Boolean): List<ChannelImageLink> {
+        val sizeParam = Regex("=s\\d+")
+        val bySize = linkedMapOf<String, String>()
+        for (img in raw) {
+            val side = sizeParam.find(img.url)?.value?.drop(2)?.toIntOrNull()
+            val label = when {
+                img.width > 0 && img.height > 0 -> "${img.width}x${img.height}"
+                side != null -> "${side}x${side}"
+                else -> "Original"
+            }
+            if (!bySize.containsKey(label)) bySize[label] = img.url
+        }
+        if (synthesizeAvatarSizes) {
+            val base = raw.firstOrNull { sizeParam.containsMatchIn(it.url) }?.url
+            if (base != null) {
+                for (s in listOf(72, 120, 240, 512, 900)) {
+                    val label = "${s}x${s}"
+                    if (!bySize.containsKey(label)) bySize[label] = base.replace(sizeParam, "=s$s")
+                }
+            }
+        }
+        return bySize.entries
+            .map { ChannelImageLink(it.key, it.value) }
+            .sortedBy { it.label.substringBefore("x").toIntOrNull() ?: Int.MAX_VALUE }
+    }
+
+    /** Todos os textos (strings) de um trecho do JSON. */
+    private fun leafStrings(node: Any?, limit: Int = 4000): List<String> {
+        val out = ArrayList<String>()
+        fun walk(n: Any?) {
+            if (out.size >= limit) return
+            when (n) {
+                is JSONObject -> {
+                    val keys = n.keys()
+                    while (keys.hasNext()) walk(n.opt(keys.next()))
+                }
+                is JSONArray -> for (i in 0 until n.length()) walk(n.opt(i))
+                is String -> if (n.isNotBlank()) out.add(n)
+            }
+        }
+        walk(node)
+        return out
+    }
+
+'''
+
+CH_RELEASES_LINE = r'''                "releases" -> url.endsWith("/releases") || title.contains("lançamento") || title.contains("lancamento") || title.contains("release")
+'''
+
+CH_SHORTS_NEW = r'''    /** Shorts do canal (reelItemRenderer, shortsLockupViewModel e lockup SHORTS). Nunca descarta Short por falta de titulo/thumbnail. */
+    fun collectShorts(node: Any?): List<Track> {
+        val out = mutableListOf<Track>()
+        val reels = mutableListOf<JSONObject>()
+        collect(node, "reelItemRenderer", reels)
+        for (r in reels) {
+            val videoId = r.optString("videoId").takeIf { it.isNotBlank() } ?: continue
+            val title = YouTubeSearchParser.textOf(r.optJSONObject("headline"))
+                ?: YouTubeSearchParser.textOf(r.optJSONObject("title")) ?: "Short"
+            val thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))?.takeIf { it.isNotBlank() }?.let { fixUrl(it) }
+                ?: shortThumbnail(videoId)
+            out += Track(id = videoId, title = title, artist = "", durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
+        }
+        // Layout 2026: shortsLockupViewModel
+        val slvms = mutableListOf<JSONObject>()
+        collect(node, "shortsLockupViewModel", slvms)
+        for (r in slvms) {
+            shortFromLockup(r)?.let { out += it }
+        }
+        // Lockup generico de Shorts
+        val lockups = mutableListOf<JSONObject>()
+        collect(node, "lockupViewModel", lockups)
+        for (lvm in lockups) {
+            if (lvm.optString("contentType") != "LOCKUP_CONTENT_TYPE_SHORTS") continue
+            val videoId = lvm.optString("contentId").takeIf { it.isNotBlank() } ?: continue
+            val meta = lvm.optJSONObject("metadata")?.optJSONObject("lockupMetadataViewModel")
+            val titleObj = meta?.optJSONObject("title")
+            val title = titleObj?.optString("content")?.takeIf { it.isNotBlank() }
+                ?: YouTubeSearchParser.textOf(titleObj) ?: "Short"
+            val thumb = YouTubeSearchParser.lockupThumbnail(lvm)?.takeIf { it.isNotBlank() }?.let { fixUrl(it) }
+                ?: shortThumbnail(videoId)
+            out += Track(id = videoId, title = title, artist = "", durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
         }
         return out.distinctBy { it.id }
     }
 
-'''
+    private fun shortThumbnail(videoId: String): String = "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
 
-SEARCH_CHANNELS = r'''    /**
-     * Busca canais do YouTube pelo nome (menu "Canais encontrados" / "Contas encontradas").
-     * InnerTube primeiro (filtro de canais), NewPipe como fallback. Devolve [Artist] com source = YOUTUBE.
-     */
-    suspend fun searchChannels(query: String, pageSize: Int = 15): List<Artist> = withContext(Dispatchers.IO) {
-        if (query.isBlank()) return@withContext emptyList()
-        runCatching {
-            val json = InnerTubeYouTube.search(query, "EgIQAg%3D%3D")
-            val items = YouTubeSearchParser.parseChannels(json).take(pageSize)
-            if (items.isNotEmpty()) return@withContext items
-        }.onFailure { Log.w(TAG, "InnerTube searchChannels failed, fallback NewPipe: ${it.message}") }
+    private fun shortFromLockup(r: JSONObject): Track? {
+        val videoId = r.optJSONObject("onTap")?.optJSONObject("innertubeCommand")?.optJSONObject("reelWatchEndpoint")?.optString("videoId")?.takeIf { it.isNotBlank() }
+            ?: r.optString("entityId").removePrefix("shorts-shelf-item-").takeIf { it.isNotBlank() }
+            ?: r.optString("contentId").takeIf { it.isNotBlank() }
+            ?: r.optString("videoId").takeIf { it.isNotBlank() }
+            ?: return null
+        val title = r.optJSONObject("overlayMetadata")?.optJSONObject("primaryText")?.optString("content")?.takeIf { it.isNotBlank() }
+            ?: r.optString("title").takeIf { it.isNotBlank() }
+            ?: titleFromAccessibility(r.optString("accessibilityText"))
+            ?: "Short"
+        val thumb = (bestSources(r.optJSONObject("thumbnail"))
+            ?: bestSources(r.optJSONObject("thumbnailViewModel"))
+            ?: bestSources(r)
+            ?: YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail")))
+            ?.takeIf { it.isNotBlank() }?.let { fixUrl(it) }
+            ?: shortThumbnail(videoId)
+        return Track(id = videoId, title = title, artist = "", durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
+    }
 
-        if (!NewPipeInitializer.ensureInitialized(downloader)) {
-            Log.e(TAG, "searchChannels: NewPipe not initialized")
-            return@withContext emptyList()
-        }
-        runCatching {
-            val extractor = ServiceList.YouTube.getSearchExtractor(query, listOf("channels"), null)
-            extractor.fetchPage()
-            extractor.initialPage.items
-                .filterIsInstance<ChannelInfoItem>()
-                .mapNotNull { item ->
-                    val id = item.url.substringAfter("/channel/", "").substringBefore("?").substringBefore("/")
-                    if (!id.startsWith("UC")) return@mapNotNull null
-                    Artist(
-                        id = id,
-                        name = item.name ?: return@mapNotNull null,
-                        thumbnailUrl = item.thumbnails.lastOrNull()?.url,
-                        source = Source.YOUTUBE,
-                    )
-                }
-                .distinctBy { it.id }
-                .take(pageSize)
-        }.getOrElse { e ->
-            Log.e(TAG, "searchChannels failed for query=$query", e)
-            emptyList()
-        }
+    /** "Titulo do Short, 1,2 mil visualizações - reproduzir Short" -> "Titulo do Short". */
+    private fun titleFromAccessibility(text: String): String? {
+        if (text.isBlank()) return null
+        val m = Regex("^(.*?),\\s*[\\d.,]+\\s*(?:mil|mi|M|K|B)?\\s*(?:visualiza|views).*\$", RegexOption.IGNORE_CASE).find(text)
+        return (m?.groupValues?.get(1) ?: text.substringBefore(" - ")).trim().takeIf { it.isNotBlank() }
     }
 
 '''
 
-MUSIC_REPO_PROFILES = r'''    // =====================================================================
-    //  Perfis: canal do YouTube x artista do YT Music
-    // =====================================================================
-
-    /**
-     * Perfil que abre quando o usuario clica no artista/canal de uma faixa.
-     * Video (Source.YOUTUBE): o canal do YouTube que postou tem PREFERENCIA; sem canal, tenta o artista do YT Music.
-     * Musica (Source.YOUTUBE_MUSIC): so artista do YT Music (nunca vira canal).
-     */
-    suspend fun resolveProfileForTrack(track: Track, artistName: String): Artist? {
-        if (track.source == Source.YOUTUBE) {
-            val channel = runCatching { youTubeRepository.getChannelForVideo(track.id) }.getOrNull()
-            if (channel != null) {
-                return Artist(
-                    id = channel.channelId,
-                    name = channel.channelName.ifBlank { artistName },
-                    thumbnailUrl = channel.avatarUrl,
-                    source = Source.YOUTUBE,
-                )
+CH_RELEASES_CODE = r'''    /** Aba Lancamentos: albuns/singles. Detecta o tipo pelo texto "Álbum • 2020" / "Single • 2021" / "EP". */
+    fun collectReleases(node: Any?): ChannelReleases {
+        val items = collectPlaylists(node).distinctBy { it.id }
+        var hasAlbums = false
+        var hasSingles = false
+        val lockups = mutableListOf<JSONObject>()
+        collect(node, "lockupViewModel", lockups)
+        for (lvm in lockups) {
+            val rows = lvm.optJSONObject("metadata")?.optJSONObject("lockupMetadataViewModel")?.optJSONObject("metadata")
+            val text = leafStrings(rows).joinToString(" ").lowercase()
+            when {
+                Regex("\\b(single|singles|ep)\\b").containsMatchIn(text) -> hasSingles = true
+                text.contains("álbum") || text.contains("album") -> hasAlbums = true
             }
         }
-        return runCatching {
-            ytMusicRepository.resolveArtist(
-                artistName,
-                trackTitle = track.title,
-                albumTitle = track.album?.takeIf { it.isNotBlank() },
-            )
-        }.getOrNull()
-    }
-
-    /**
-     * Perfis com o MESMO nome no outro mundo, pro usuario trocar quando o app abriu o errado.
-     * [wantYouTubeChannels] = true -> canais do YouTube; false -> artistas/contas do YT Music.
-     * Como a busca e sempre no outro mundo, o perfil atual nunca aparece na lista.
-     */
-    suspend fun findSameNameProfiles(name: String, wantYouTubeChannels: Boolean): List<Artist> {
-        val clean = name.trim()
-        if (clean.isBlank()) return emptyList()
-        val candidates = runCatching {
-            if (wantYouTubeChannels) youTubeRepository.searchChannels(clean) else ytMusicRepository.searchArtists(clean)
-        }.getOrDefault(emptyList())
-        return candidates.filter { sameProfileName(it.name, clean) }.distinctBy { it.id }
-    }
-
-    /** Mesmo nome = igual depois de normalizar (sem acento, sem " - Topic", sem pontuacao). Nome so com simbolos compara cru. */
-    private fun sameProfileName(a: String, b: String): Boolean {
-        val na = ArtistResolver.normalize(a)
-        val nb = ArtistResolver.normalize(b)
-        if (na.isNotBlank() && nb.isNotBlank()) return na == nb
-        return a.trim().equals(b.trim(), ignoreCase = true)
+        return ChannelReleases(items, hasAlbums, hasSingles)
     }
 
 '''
 
-STATE_FIELDS = r'''    val isFollowing: Boolean = false,
-    // Perfis com o MESMO nome no outro mundo (canal <-> artista), usados no menu de 3 pontinhos.
-    val foundProfiles: List<Artist> = emptyList(),
-    val isLoadingFoundProfiles: Boolean = true,
+PL_SHORTS_NEW = r'''        // UUSH / Shorts via UU: usa o MESMO parser de Shorts do canal (reel, shortsLockupViewModel e lockup SHORTS),
+        // que nunca descarta Short sem titulo e sempre devolve thumbnail.
+        out += YouTubeChannelParser.collectShorts(node)
 '''
 
-VM_FOUND = r'''    // Perfis com o MESMO nome no outro mundo: canal do YouTube -> artistas do YT Music; artista -> canais do YouTube.
-    private fun loadFoundProfiles() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingFoundProfiles = true) }
-            val found = runCatching {
-                musicRepository.findSameNameProfiles(route.name, wantYouTubeChannels = !route.isYouTubeChannel)
-            }.getOrDefault(emptyList())
-            _uiState.update { it.copy(foundProfiles = found, isLoadingFoundProfiles = false) }
+PL_COUNT_CODE = r'''    /** Total de videos da playlist de uploads do canal (UULF/UU), ex: "534 vídeos". */
+    fun extractVideoCountText(json: JSONObject): String? =
+        YouTubeChannelParser.findVideoCountText(json.optJSONObject("header"))
+
+'''
+
+REPO_UULF_DECL = r'''                var uulfCountText: String? = null
+'''
+
+REPO_RELEASES = r'''                // Canal de artista/oficial: sem playlists, a aba Lancamentos tem albuns/singles (a aba vira "Álbuns" / "Álbuns e Singles").
+                var playlistsLabel: String? = null
+                if (playlists.isEmpty()) {
+                    runCatching {
+                        val relParams = YouTubeChannelParser.tabParams(homeJson, "releases")
+                        if (relParams != null) {
+                            val relJson = InnerTubeYouTube.browse(uc, relParams)
+                            val rel = YouTubeChannelParser.collectReleases(relJson)
+                            if (rel.items.isNotEmpty()) {
+                                playlists.addAll(rel.items.map { if (it.owner.isNullOrBlank() && channelName.isNotBlank()) it.copy(owner = channelName) else it })
+                                playlistsLabel = rel.label
+                            }
+                        }
+                    }.onFailure { Log.w(TAG, "Releases tab failed: ${it.message}") }
+                }
+                // Sobre: fotos, banners, tags e TOTAL de videos (header do canal; senao header da playlist de uploads).
+                val about = YouTubeChannelParser.parseAbout(homeJson)
+'''
+
+REPO_PAGE_OLD = '''                        bannerUrl = homeParsed.bannerUrl,
+                        description = homeParsed.description,
+                        debugLog = debugPlV5.takeIf { it.isNotBlank() },
+                        subscriberCount = homeParsed.subscriberCount,
+                        hasMoreVideos = videosCont != null,
+                        hasMorePlaylists = playlistsCont != null
+                    )
+'''
+REPO_PAGE_NEW = '''                        bannerUrl = (about.banners.lastOrNull()?.url ?: homeParsed.bannerUrl)?.let { YouTubeChannelParser.upscaleBanner(it) },
+                        description = homeParsed.description,
+                        debugLog = debugPlV5.takeIf { it.isNotBlank() },
+                        subscriberCount = homeParsed.subscriberCount,
+                        hasMoreVideos = videosCont != null,
+                        hasMorePlaylists = playlistsCont != null,
+                        videoCountText = about.videoCountText ?: uulfCountText,
+                        playlistsLabel = playlistsLabel,
+                        about = about,
+                    )
+'''
+
+# ---------------- app: Shorts ----------------
+SHORT_CARD_NEW = r'''@Composable
+fun ShortCard(track: Track, onClick: () -> Unit, onMoreClick: () -> Unit, modifier: Modifier = Modifier) {
+    val nowPlaying = LocalNowPlaying.current
+    val playback = nowPlaying.playbackOf(track)
+    val isCurrent = playback.isPlaying || playback.isPaused
+    // Sem thumbnail vinda do parser, usa a miniatura padrao do YouTube pelo id do video.
+    val thumb = track.thumbnailUrl?.takeIf { it.isNotBlank() } ?: "https://i.ytimg.com/vi/${track.id}/hqdefault.jpg"
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onClick() }) {
+        Box(Modifier.fillMaxWidth().aspectRatio(9f / 16f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(12.dp))) {
+            AsyncImage(model = thumb, contentDescription = track.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            Box(Modifier.fillMaxWidth().height(96.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)))))
+            Box(Modifier.align(Alignment.TopEnd).padding(6.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable { onMoreClick() }.padding(6.dp)) {
+                Icon(imageVector = VzIcons.MoreVert, contentDescription = "Mais", tint = Color.White, modifier = Modifier.size(18.dp))
+            }
+            Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 8.dp, vertical = 8.dp)) {
+                if (track.title.isNotBlank()) {
+                    Text(text = track.title, style = MaterialTheme.typography.labelMedium, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                val views = formatViewCount(track.viewCount)
+                if (!views.isNullOrBlank()) {
+                    Text(text = views, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            if (isCurrent) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
+                Text(text = if (playback.isPlaying) "Tocando" else "Pausado", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
+            }
         }
     }
-
+}
 '''
 
-MENU_VM_NEW = r'''    /**
-     * Clique em artista/canal DENTRO de uma faixa.
-     * Video: o canal do YouTube tem preferencia (fallback: artista do YT Music). Musica: artista do YT Music.
-     */
-    fun onOpenArtistForTrack(track: Track, artistName: String) {
-        viewModelScope.launch {
-            val profile = musicRepository.resolveProfileForTrack(track, artistName) ?: return@launch
-            _navigationEvent.emit(MenuNavigationEvent.OpenArtist(profile))
-        }
-    }
+# ---------------- app: icone ----------------
+ICON_COPY_FILE = r'''package com.vztechcore.vztune.ui.icons.actions
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.vztechcore.vztune.ui.icons.VzIcons
+
+// Material "content_copy" (Rounded).
+val VzIcons.ContentCopy: ImageVector
+    get() = VzIcons.icon(
+        name = "ContentCopy",
+        pathData = "M15,1H4C2.9,1 2,1.9 2,3v14c0,0.55 0.45,1 1,1s1,-0.45 1,-1V4c0,-0.55 0.45,-1 1,-1h10c0.55,0 1,-0.45 1,-1s-0.45,-1 -1,-1z M19,5H8C6.9,5 6,5.9 6,7v14c0,1.1 0.9,2 2,2h11c1.1,0 2,-0.9 2,-2V7c0,-1.1 -0.9,-2 -2,-2z M18,21H9c-0.55,0 -1,-0.45 -1,-1V8c0,-0.55 0.45,-1 1,-1h9c0.55,0 1,0.45 1,1v12c0,0.55 -0.45,1 -1,1z"
+    )
 '''
 
-SEARCH_VM_NEW = r'''    /**
-     * Clique em artista/canal DENTRO de uma faixa no Search.
-     * Video: o canal do YouTube tem preferencia (fallback: artista do YT Music). Musica: artista do YT Music.
-     */
-    fun onOpenArtistForTrack(track: Track, artistName: String) {
-        viewModelScope.launch {
-            val profile = musicRepository.resolveProfileForTrack(track, artistName) ?: return@launch
-            _navigationEvent.emit(
-                NavigationEvent.OpenArtist(
-                    profile.id, profile.name, profile.thumbnailUrl,
-                    isYouTubeChannel = profile.source == Source.YOUTUBE,
-                )
-            )
-        }
-    }
+# ---------------- app: texto clicavel ----------------
+LINKIFIED_FILE = r'''package com.vztechcore.vztune.ui.components.text
 
-'''
-
-SCREEN_SHEETS = r'''    // Menu de 3 pontinhos: "Canais/Contas encontradas" + Compartilhar. O primeiro abre a lista de perfis com o mesmo nome.
-    if (profileMenuOpen) {
-        ProfileOptionsSheet(
-            isYouTubeChannel = state.isYouTubeChannel,
-            foundCount = state.foundProfiles.size,
-            isLoadingFound = state.isLoadingFoundProfiles,
-            onFoundProfilesClick = { profileMenuOpen = false; foundProfilesOpen = true },
-            onShareClick = onShareClick,
-            onDismiss = { profileMenuOpen = false },
-        )
-    }
-    if (foundProfilesOpen) {
-        FoundProfilesSheet(
-            isYouTubeChannel = state.isYouTubeChannel,
-            profiles = state.foundProfiles,
-            isLoading = state.isLoadingFoundProfiles,
-            onProfileClick = { profile -> foundProfilesOpen = false; onProfileClick(profile) },
-            onDismiss = { foundProfilesOpen = false },
-        )
-    }
-'''
-
-NAV_WIRING = r'''                            onLoadMoreChannelVideos = vm::loadMoreChannelVideos,
-                            onLoadMoreChannelPlaylists = vm::loadMoreChannelPlaylists,
-                            onPlaylistPlayNext = vm::onPlaylistPlayNext,
-                            onPlaylistAddToQueue = vm::onPlaylistAddToQueue,
-                            onSavePlaylistToLibrary = vm::onSavePlaylistToLibrary,
-                            // Trocar canal <-> artista com o mesmo nome: substitui a tela atual (voltar nao passa pela errada).
-                            onProfileClick = { profile ->
-                                navController.navigate(
-                                    Routes.Artist(profile.id, profile.name, profile.thumbnailUrl, isYouTubeChannel = profile.source == Source.YOUTUBE)
-                                ) { popUpTo<Routes.Artist> { inclusive = true } }
-                            },
-                        )
-'''
-
-NEW_SHEET_FILE = r'''package com.vztechcore.vztune.ui.components.sheets
-
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import com.vztechcore.vztune.core.domain.music.Artist
-import com.vztechcore.vztune.core.domain.music.Source
-import com.vztechcore.vztune.ui.components.feedback.VzLoading
 import com.vztechcore.vztune.ui.components.rows.SheetOptionRow
 import com.vztechcore.vztune.ui.icons.VzIcons
-import com.vztechcore.vztune.ui.icons.actions.Share
-import com.vztechcore.vztune.ui.icons.media.Groups
+import com.vztechcore.vztune.ui.icons.actions.ContentCopy
+import com.vztechcore.vztune.ui.icons.actions.OpenInNew
 
-private val ProfileSheetColor = Color(0xFF121829)
+private const val LINK_TAG = "vz_link"
 
-// Nomes do item do menu. Troque aqui se quiser outro texto.
-private const val FOUND_CHANNELS_LABEL = "Canais encontrados" // aparece na tela do CANAL
-private const val FOUND_ACCOUNTS_LABEL = "Contas encontradas" // aparece na tela do ARTISTA
+// Cores: e-mail e @usuario = azul claro, telefone/WhatsApp = verde, site = azul mais escuro.
+private val EmailNickColor = Color(0xFF5AB0FF)
+private val PhoneColor = Color(0xFF3DDC84)
+private val UrlColor = Color(0xFF2F6BFF)
 
-private fun foundProfilesLabel(isYouTubeChannel: Boolean): String =
-    if (isYouTubeChannel) FOUND_CHANNELS_LABEL else FOUND_ACCOUNTS_LABEL
+private enum class LinkKind { EMAIL, NICK, PHONE, URL }
+
+private data class LinkSpan(val start: Int, val end: Int, val kind: LinkKind, val value: String)
+
+private val UrlRegex = Regex("(?:https?://|www\\.)[^\\s<>\"']+", RegexOption.IGNORE_CASE)
+private val EmailRegex = Regex("[A-Za-z0-9._%+\\-]+@[A-Za-z0-9\\-]+(?:\\.[A-Za-z0-9\\-]+)+")
+// (xx) xxxxx-xxxx | (xx)xxxxx-xxxx | (xx)x xxxx-xxxx | (37)9 9935-6789 | opcional +55
+private val PhoneRegex = Regex("(?:\\+55\\s?)?\\(\\d{2}\\)\\s?(?:\\d\\s)?\\d{4,5}-\\d{4}")
+// @nick so vale na MESMA palavra: o espaco termina o link. Nao pega o @ de dentro de e-mail.
+private val NickRegex = Regex("(?<![A-Za-z0-9._%+\\-@])@[A-Za-z0-9_.\\-]{2,}")
+
+private fun findLinks(text: String): List<LinkSpan> {
+    val candidates = mutableListOf<Pair<LinkSpan, Int>>()
+    UrlRegex.findAll(text).forEach { m ->
+        val trimmed = m.value.trimEnd('.', ',', ';', ':', '!', '?', ')', ']', '}', '"', '\'')
+        if (trimmed.length > 4) candidates.add(LinkSpan(m.range.first, m.range.first + trimmed.length, LinkKind.URL, trimmed) to 0)
+    }
+    EmailRegex.findAll(text).forEach { m ->
+        candidates.add(LinkSpan(m.range.first, m.range.last + 1, LinkKind.EMAIL, m.value) to 1)
+    }
+    PhoneRegex.findAll(text).forEach { m ->
+        candidates.add(LinkSpan(m.range.first, m.range.last + 1, LinkKind.PHONE, m.value) to 2)
+    }
+    NickRegex.findAll(text).forEach { m ->
+        val trimmed = m.value.trimEnd('.', '-')
+        if (trimmed.length >= 3) candidates.add(LinkSpan(m.range.first, m.range.first + trimmed.length, LinkKind.NICK, trimmed) to 3)
+    }
+    val sorted = candidates.sortedWith(compareBy({ it.first.start }, { it.second }))
+    val out = mutableListOf<LinkSpan>()
+    var lastEnd = 0
+    for ((span, _) in sorted) {
+        if (span.start >= lastEnd) {
+            out.add(span)
+            lastEnd = span.end
+        }
+    }
+    return out
+}
+
+private fun buildLinkedString(text: String): AnnotatedString {
+    val links = findLinks(text)
+    return buildAnnotatedString {
+        var cursor = 0
+        for (link in links) {
+            if (link.start > cursor) append(text.substring(cursor, link.start))
+            val style = when (link.kind) {
+                LinkKind.EMAIL, LinkKind.NICK -> SpanStyle(color = EmailNickColor)
+                LinkKind.PHONE -> SpanStyle(color = PhoneColor)
+                LinkKind.URL -> SpanStyle(color = UrlColor, textDecoration = TextDecoration.Underline)
+            }
+            val startIndex = length
+            withStyle(style) { append(text.substring(link.start, link.end)) }
+            addStringAnnotation(LINK_TAG, link.kind.name + "|" + link.value, startIndex, length)
+            cursor = link.end
+        }
+        if (cursor < text.length) append(text.substring(cursor))
+    }
+}
+
+/** Copia [value] pra area de transferencia e avisa com um Toast. */
+fun copyToClipboard(context: Context, value: String, message: String) {
+    val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    manager.setPrimaryClip(ClipData.newPlainText("VzTune", value))
+    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+}
+
+/** Abre o link no navegador principal do usuario. */
+fun openUrlInBrowser(context: Context, url: String) {
+    val full = if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) url else "https://$url"
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(full)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, "Nenhum navegador encontrado", Toast.LENGTH_SHORT).show()
+    }
+}
 
 /**
- * Menu de 3 pontinhos das telas de Canal e de Artista (sobe de baixo pra cima, igual aos outros):
- * "Canais encontrados" / "Contas encontradas" (icone Groups) e, abaixo, "Compartilhar".
+ * Texto com links clicaveis:
+ * - e-mail (azul claro) e @usuario (azul claro): clicou, copia.
+ * - telefone (xx) xxxxx-xxxx (verde): clicou, copia como numero de WhatsApp.
+ * - site (azul escuro): clicou, sobe menu "Copiar" / "Abrir no navegador".
+ * Toque fora dos links chama [onPlainClick].
  */
+@Composable
+fun LinkifiedText(
+    text: String,
+    modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.bodySmall,
+    color: Color = Color.White.copy(alpha = 0.7f),
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip,
+    onPlainClick: (() -> Unit)? = null,
+) {
+    val context = LocalContext.current
+    val annotated = remember(text) { buildLinkedString(text) }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    var sheetUrl by remember { mutableStateOf<String?>(null) }
+    val currentPlainClick by rememberUpdatedState(onPlainClick)
+
+    sheetUrl?.let { url ->
+        UrlActionsSheet(
+            url = url,
+            onCopy = { copyToClipboard(context, url, "Link copiado") },
+            onOpen = { openUrlInBrowser(context, url) },
+            onDismiss = { sheetUrl = null },
+        )
+    }
+
+    Text(
+        text = annotated,
+        style = style,
+        color = color,
+        maxLines = maxLines,
+        overflow = overflow,
+        onTextLayout = { layout = it },
+        modifier = modifier.pointerInput(annotated) {
+            detectTapGestures { position ->
+                val offset = layout?.getOffsetForPosition(position)
+                val hit = offset?.let { annotated.getStringAnnotations(LINK_TAG, it, it).firstOrNull() }
+                if (hit == null) {
+                    currentPlainClick?.invoke()
+                } else {
+                    val kind = hit.item.substringBefore("|")
+                    val value = hit.item.substringAfter("|")
+                    when (kind) {
+                        LinkKind.EMAIL.name -> copyToClipboard(context, value, "E-mail copiado")
+                        LinkKind.NICK.name -> copyToClipboard(context, value, "Usuário copiado")
+                        LinkKind.PHONE.name -> copyToClipboard(context, value, "Número de WhatsApp copiado")
+                        LinkKind.URL.name -> sheetUrl = value
+                    }
+                }
+            }
+        },
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileOptionsSheet(
-    isYouTubeChannel: Boolean,
-    foundCount: Int,
-    isLoadingFound: Boolean,
-    onFoundProfilesClick: () -> Unit,
-    onShareClick: () -> Unit,
+private fun UrlActionsSheet(
+    url: String,
+    onCopy: () -> Unit,
+    onOpen: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = ProfileSheetColor,
+        containerColor = Color(0xFF121829),
         contentColor = Color.White,
     ) {
         Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-            SheetOptionRow(
-                icon = VzIcons.Groups,
-                label = foundProfilesLabel(isYouTubeChannel),
-                subtitle = when {
-                    isLoadingFound -> "Procurando..."
-                    foundCount > 0 -> "$foundCount com o mesmo nome"
-                    else -> "Nenhum com o mesmo nome"
-                },
-                onClick = onFoundProfilesClick,
+            Text(
+                text = url,
+                style = MaterialTheme.typography.bodySmall,
+                color = UrlColor,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
             SheetOptionRow(
-                icon = VzIcons.Share,
-                label = "Compartilhar",
+                icon = VzIcons.ContentCopy,
+                label = "Copiar",
                 onClick = {
-                    onShareClick()
+                    onCopy()
+                    onDismiss()
+                },
+            )
+            SheetOptionRow(
+                icon = VzIcons.OpenInNew,
+                label = "Abrir no navegador",
+                onClick = {
+                    onOpen()
                     onDismiss()
                 },
             )
         }
     }
 }
+'''
+
+# ---------------- app: aba Sobre ----------------
+ABOUT_FILE = r'''package com.vztechcore.vztune.ui.screens.artist
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.dp
+import com.vztechcore.vztune.data.youtube.ChannelImageLink
+import com.vztechcore.vztune.ui.components.text.LinkifiedText
+import com.vztechcore.vztune.ui.components.text.openUrlInBrowser
+
+private val AboutLinkColor = Color(0xFF5AB0FF)
 
 /**
- * Segundo menu: perfis do OUTRO mundo com o mesmo nome.
- * Na tela do canal lista artistas/contas do YT Music; na tela do artista lista canais do YouTube.
+ * Aba "Sobre" do canal: Descricao (com links clicaveis), Inscritos, Videos, Fotos, Banners e TAGS.
+ * Fotos e Banners mostram o tamanho (72x72, 120x120...) e abrem o link direto da imagem.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FoundProfilesSheet(
-    isYouTubeChannel: Boolean,
-    profiles: List<Artist>,
-    isLoading: Boolean,
-    onProfileClick: (Artist) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = ProfileSheetColor,
-        contentColor = Color.White,
+internal fun ChannelAboutSection(state: ArtistUiState, modifier: Modifier = Modifier) {
+    val about = state.about
+    Column(
+        modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-            Text(
-                text = foundProfilesLabel(isYouTubeChannel),
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-            )
-            when {
-                isLoading -> Box(
-                    Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    VzLoading(Modifier.size(96.dp))
-                }
-
-                profiles.isEmpty() -> Text(
-                    text = if (isYouTubeChannel) "Nenhum artista com o mesmo nome foi encontrado." else "Nenhum canal com o mesmo nome foi encontrado.",
+        AboutBlock(title = "Descrição") {
+            val description = state.description?.takeIf { it.isNotBlank() }
+            if (description != null) {
+                LinkifiedText(
+                    text = description,
+                    modifier = Modifier.fillMaxWidth(),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                    color = Color.White.copy(alpha = 0.8f),
                 )
-
-                else -> LazyColumn(Modifier.heightIn(max = 420.dp)) {
-                    items(profiles, key = { it.source.name + "_" + it.id }) { profile ->
-                        FoundProfileRow(profile = profile, onClick = { onProfileClick(profile) })
-                    }
-                }
+            } else {
+                AboutPlain("Sem descrição")
             }
         }
+        AboutBlock(title = "Inscritos") { AboutPlain(state.subscribers?.takeIf { it.isNotBlank() } ?: "Não informado") }
+        state.videoCountText?.takeIf { it.isNotBlank() }?.let { count ->
+            AboutBlock(title = "Vídeos") { AboutPlain(count) }
+        }
+        AboutBlock(title = "Fotos") { AboutImageLinks(about?.avatars.orEmpty(), "Nenhuma foto encontrada") }
+        AboutBlock(title = "Banners") { AboutImageLinks(about?.banners.orEmpty(), "Nenhum banner encontrado") }
+        AboutBlock(title = "TAGS") { AboutTags(about?.tags.orEmpty()) }
     }
 }
 
 @Composable
-private fun FoundProfileRow(profile: Artist, onClick: () -> Unit) {
-    val kind = if (profile.source == Source.YOUTUBE) "Canal do YouTube" else "Artista do YT Music"
-    val subtitle = listOfNotNull(kind, profile.subscribers?.takeIf { it.isNotBlank() }).joinToString(" • ")
-    Row(
-        Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))) {
-            if (!profile.thumbnailUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = profile.thumbnailUrl,
-                    contentDescription = profile.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(48.dp),
-                )
-            }
-        }
-        Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f)) {
+private fun AboutBlock(title: String, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(text = title + ":", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
+        content()
+    }
+}
+
+@Composable
+private fun AboutPlain(text: String) {
+    Text(text = text, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.8f))
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AboutImageLinks(links: List<ChannelImageLink>, emptyText: String) {
+    val context = LocalContext.current
+    if (links.isEmpty()) {
+        AboutPlain(emptyText)
+        return
+    }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        links.forEach { link ->
             Text(
-                text = profile.name,
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color.White,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                text = link.label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = AboutLinkColor,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.clickable { openUrlInBrowser(context, link.url) }.padding(vertical = 4.dp),
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AboutTags(tags: List<String>) {
+    if (tags.isEmpty()) {
+        AboutPlain("Nenhuma tag encontrada")
+        return
+    }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        tags.forEach { tag ->
             Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.5f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                text = tag,
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.1f)).padding(horizontal = 12.dp, vertical = 6.dp),
             )
         }
     }
 }
 '''
 
-# ----------------------------------------------------------------------------------------
-# Patches por arquivo
-# ----------------------------------------------------------------------------------------
-PATCHES = {
-    # ---------------- data ----------------
-    F_PARSER: [
+# ---------------- app: tela ----------------
+SCREEN_FLAGS = r'''    // Abas do canal: Inicio e Sobre sempre; Videos / Playlists (Albuns) / Shorts so aparecem quando tem conteudo.
+    val hasChannelVideos = state.videos.isNotEmpty()
+    val hasChannelShorts = state.shorts.isNotEmpty()
+    val hasChannelPlaylists = state.channelPlaylists.isNotEmpty()
+    val channelPlaylistsLabel = state.playlistsLabel ?: "Playlists"
+
+'''
+
+SCREEN_DESC_NEW = r'''        if (!state.description.isNullOrBlank()) {
+            val description = state.description
+            if (descExpanded) {
+                // Aberta: descricao COMPLETA, sem limite de linhas, com e-mail / telefone / @usuario / site clicaveis.
+                LinkifiedText(
+                    text = description,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.7f),
+                    onPlainClick = onDescClick,
+                )
+            } else {
+                Text(
+                    text = description.take(110) + if (description.length > 110) "...mais" else "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.7f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clickable { onDescClick() },
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+'''
+
+TABS_NEW = r'''    // Abas dinamicas (o numero e o id fixo da aba): Inicio e Sobre sempre; Videos / Playlists (Albuns) / Shorts so com conteudo.
+    val tabs = buildList<Pair<Int, String>> {
+        add(0 to "Início")
+        if (state.videos.isNotEmpty()) add(1 to "Vídeos")
+        if (state.channelPlaylists.isNotEmpty()) add(2 to (state.playlistsLabel ?: "Playlists"))
+        if (state.shorts.isNotEmpty()) add(3 to "Shorts")
+        add(4 to "Sobre")
+    }
+'''
+
+# ---------------- patches da parte 2 ----------------
+PART2 = {
+    F_CH_PARSER: [
+        InsertBefore("/**\n * Parses YouTube InnerTube browse JSON for a channel (youtube.com).", CH_TOP_LEVEL),
         Replace(
-            "import com.vztechcore.vztune.core.domain.music.Playlist\n",
-            "import com.vztechcore.vztune.core.domain.music.Artist\nimport com.vztechcore.vztune.core.domain.music.Playlist\n",
+            '            candidates += metadata.optString("canonicalUrl")\n',
+            '            candidates += metadata.optString("canonicalUrl")\n            candidates += metadata.optString("vanityChannelUrl")\n',
         ),
-        InsertBefore("    fun parseShorts(json: JSONObject): List<SearchHit.ShortHit> {", PARSE_CHANNELS),
+        Replace(
+            '        val pattern = Regex("@([A-Za-z0-9._-]{3,})")\n',
+            CH_HANDLE_SCAN + '        val pattern = Regex("@([A-Za-z0-9._-]{3,})")\n',
+        ),
+        Replace(CH_DESC_OLD, CH_DESC_NEW),
+        # sem banner no header, nao pode cair na maior imagem do header (era a foto de perfil)
+        Replace(
+            "            val banner = pageHeader?.let { bestSources(it.optJSONObject(\"banner\")) } ?: bestSources(pageHeader)\n",
+            "            val banner = pageHeader?.let { bestSources(it.optJSONObject(\"banner\")) }\n",
+        ),
+        InsertBefore(
+            "    private data class Quint<A, B, C, D, E>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E)\n",
+            CH_ABOUT_CODE,
+        ),
+        InsertBefore('                "streams" -> url.endsWith("/streams")', CH_RELEASES_LINE),
+        ReplaceBetween(
+            "    private fun collectShorts(node: Any?): List<Track> {\n",
+            "    fun collectPlaylists(node: Any?): List<Playlist> {\n",
+            CH_SHORTS_NEW,
+            "private fun shortFromLockup(",
+        ),
+        InsertBefore("    private fun collect(node: Any?, key: String, out: MutableList<JSONObject>) {\n", CH_RELEASES_CODE),
+    ],
+    F_PL_PARSER: [
+        ReplaceBetween(
+            "        // UUSH / Shorts via UU: shortsLockupViewModel (id em onTap.reelWatchEndpoint.videoId, titulo em overlayMetadata.primaryText.content)\n",
+            "        return out\n    }\n\n    private fun parseHeaderTitle(json: JSONObject): String? {\n",
+            PL_SHORTS_NEW,
+            "YouTubeChannelParser.collectShorts(node)",
+        ),
+        InsertBefore("    private fun parseHeaderTitle(json: JSONObject): String? {\n", PL_COUNT_CODE),
     ],
     F_YT_REPO: [
         Replace(
-            "import com.vztechcore.vztune.core.domain.music.Playlist\n",
-            "import com.vztechcore.vztune.core.domain.music.Artist\nimport com.vztechcore.vztune.core.domain.music.Playlist\n",
+            "        val hasMorePlaylists: Boolean = false,\n    )\n\n    data class VideoPage(",
+            "        val hasMorePlaylists: Boolean = false,\n"
+            "        // Total de videos do canal (InnerTube), nome da aba de playlists (Playlists / Albuns / Albuns e Singles) e dados da aba Sobre.\n"
+            "        val videoCountText: String? = null,\n"
+            "        val playlistsLabel: String? = null,\n"
+            "        val about: ChannelAboutInfo? = null,\n"
+            "    )\n\n    data class VideoPage(",
         ),
+        InsertBefore("                // ---- VIDEOS via UULF loop ----\n", REPO_UULF_DECL),
         Replace(
-            "import org.schabi.newpipe.extractor.playlist.PlaylistExtractor\n",
-            "import org.schabi.newpipe.extractor.channel.ChannelInfoItem\nimport org.schabi.newpipe.extractor.playlist.PlaylistExtractor\n",
+            '                    var json = InnerTubeYouTube.browse("VL" + "UULF" + uc.drop(2))\n',
+            '                    var json = InnerTubeYouTube.browse("VL" + "UULF" + uc.drop(2))\n'
+            '                    uulfCountText = YouTubePlaylistParser.extractVideoCountText(json)\n',
         ),
         InsertBefore(
-            "    data class ShortPage(\n        val items: List<SearchHit.ShortHit>,\n        val hasMore: Boolean,\n    )\n",
-            SEARCH_CHANNELS,
+            "                if (videos.isNotEmpty() || shorts.isNotEmpty() || playlists.isNotEmpty()) {\n                    return@withContext ChannelPage(",
+            REPO_RELEASES,
         ),
+        Replace(REPO_PAGE_OLD, REPO_PAGE_NEW),
     ],
-    F_MUSIC_REPO: [
-        Replace(
-            "import com.vztechcore.vztune.core.domain.music.Source\n",
-            "import com.vztechcore.vztune.core.domain.music.Artist\nimport com.vztechcore.vztune.core.domain.music.Source\n",
-        ),
-        Replace(
-            "import com.vztechcore.vztune.data.ytmusic.YTMusicRepository\n",
-            "import com.vztechcore.vztune.data.ytmusic.ArtistResolver\nimport com.vztechcore.vztune.data.ytmusic.YTMusicRepository\n",
-        ),
-        InsertBefore('    private companion object { const val TAG = "VzTuneMusic" }', MUSIC_REPO_PROFILES),
-    ],
-    # ---------------- app: estado / viewmodel ----------------
     F_STATE: [
-        Replace("    val isFollowing: Boolean = false,\n", STATE_FIELDS),
+        Replace(
+            "import com.vztechcore.vztune.core.domain.music.Track\n",
+            "import com.vztechcore.vztune.core.domain.music.Track\nimport com.vztechcore.vztune.data.youtube.ChannelAboutInfo\n",
+        ),
+        Replace(
+            "    val bannerUrl: String? = null,\n",
+            "    val bannerUrl: String? = null,\n"
+            "    // Canal: total de videos (InnerTube), nome da aba de playlists (Playlists / Albuns / Albuns e Singles) e aba Sobre.\n"
+            "    val videoCountText: String? = null,\n"
+            "    val playlistsLabel: String? = null,\n"
+            "    val about: ChannelAboutInfo? = null,\n",
+        ),
     ],
     F_VM: [
         Replace(
-            "    init {\n        loadContent()\n        viewModelScope.launch {",
-            "    init {\n        loadContent()\n        loadFoundProfiles()\n        viewModelScope.launch {",
+            "                            bannerUrl = channel.bannerUrl ?: it.bannerUrl,\n",
+            "                            bannerUrl = channel.bannerUrl ?: it.bannerUrl,\n"
+            "                            videoCountText = channel.videoCountText,\n"
+            "                            playlistsLabel = channel.playlistsLabel,\n"
+            "                            about = channel.about,\n",
         ),
-        InsertBefore("    fun onFollowClick() {\n", VM_FOUND),
     ],
-    # ---------------- app: telas ----------------
-    F_HEADER: [
-        Replace(
-            "import com.vztechcore.vztune.ui.icons.actions.Share\n",
-            "import com.vztechcore.vztune.ui.icons.actions.MoreVert\n",
-        ),
-        Replace(
-            " * Barra superior: Voltar na esquerda, Compartilhar na direita.",
-            " * Barra superior: Voltar na esquerda, 3 pontinhos (menu) na direita.",
-        ),
-        Replace(
-            "            // Barra superior: Voltar esquerda, Compartilhar direita\n",
-            "            // Barra superior: Voltar esquerda, 3 pontinhos direita\n",
-        ),
-        Replace(
-            "    onShareClick: () -> Unit = {},\n    modifier: Modifier = Modifier,\n) {\n    val hasPlayableItems",
-            "    onMoreClick: () -> Unit = {},\n    modifier: Modifier = Modifier,\n) {\n    val hasPlayableItems",
-        ),
-        Replace(
-            '                MediaListCircleButton(VzIcons.Share, "Compartilhar artista", onShareClick)',
-            '                MediaListCircleButton(VzIcons.MoreVert, "Mais opções", onMoreClick)',
+    F_CARDS: [
+        ReplaceBetween(
+            "@Composable\nfun ShortCard(",
+            "@Composable\nfun ShortsGridRows(",
+            SHORT_CARD_NEW,
+            'i.ytimg.com/vi/${track.id}/hqdefault.jpg',
         ),
     ],
     F_SCREEN: [
-        # imports
-        Replace("import com.vztechcore.vztune.ui.icons.actions.Share\n", ""),
         Replace(
-            "import com.vztechcore.vztune.ui.icons.navigation.Search\n",
-            "import com.vztechcore.vztune.ui.icons.navigation.Search\n"
-            "import com.vztechcore.vztune.ui.components.sheets.FoundProfilesSheet\n"
             "import com.vztechcore.vztune.ui.components.sheets.ProfileOptionsSheet\n",
+            "import com.vztechcore.vztune.ui.components.sheets.ProfileOptionsSheet\n"
+            "import com.vztechcore.vztune.ui.components.text.LinkifiedText\n",
         ),
-        # novo callback de trocar de perfil
+        InsertBefore("    // Fundo sempre preto AMOLED - camaleao desativado por enquanto\n", SCREEN_FLAGS),
+        # Inicio: sem videos nao tem "Para voce", "Videos" nem "Mais acessados"; sem playlists some a secao Playlists
         Replace(
-            "    onLoadMoreChannelPlaylists: () -> Unit = {},\n    modifier: Modifier = Modifier,\n) {\n    val listState = rememberLazyListState()",
-            "    onLoadMoreChannelPlaylists: () -> Unit = {},\n    onProfileClick: (Artist) -> Unit = {},\n    modifier: Modifier = Modifier,\n) {\n    val listState = rememberLazyListState()",
-        ),
-        # estados dos menus
-        Replace(
-            "    var playlistMenu by remember { mutableStateOf<Playlist?>(null) }\n",
-            "    var playlistMenu by remember { mutableStateOf<Playlist?>(null) }\n"
-            "    // Menu de 3 pontinhos (Canais/Contas encontradas + Compartilhar) e a lista de perfis com o mesmo nome.\n"
-            "    var profileMenuOpen by remember { mutableStateOf(false) }\n"
-            "    var foundProfilesOpen by remember { mutableStateOf(false) }\n",
-        ),
-        # texto do compartilhar: canal x artista
-        Replace(
-            r'''        val shareText = "Confere esse artista no VzTune 🎧\n${state.name}\n$url"''',
-            r'''        val kindLabel = if (state.isYouTubeChannel) "esse canal" else "esse artista"
-        val shareText = "Confere $kindLabel no VzTune 🎧\n${state.name}\n$url"''',
+            "                                } else if (displayState.videos.isEmpty() && !state.isLoading) {\n",
+            "                                } else if (!state.isLoading && !hasChannelVideos && !hasChannelShorts && !hasChannelPlaylists) {\n",
         ),
         Replace(
-            r'''context.startActivity(Intent.createChooser(sendIntent, "Compartilhar artista"))''',
-            r'''context.startActivity(Intent.createChooser(sendIntent, if (state.isYouTubeChannel) "Compartilhar canal" else "Compartilhar artista"))''',
+            'item(key = "home_hero_empty") { Text(text = "Nenhum vídeo ainda",',
+            'item(key = "home_hero_empty") { Text(text = "Este canal ainda não tem conteúdo",',
         ),
-        # sheets
+        InsertBefore('                                item(key = "home_videos_header") {\n', "                                if (hasChannelVideos) {\n"),
         InsertBefore(
-            "    Box(\n        modifier\n            .fillMaxSize()\n            .background(Color.Black)\n    ) {\n        LazyColumn(",
-            SCREEN_SHEETS,
-        ),
-        # chamadas dos headers
-        Replace(
-            "                        onShareClick = onShareClick,\n                        onLoadMoreChannelClick =",
-            "                        onMoreClick = { profileMenuOpen = true },\n                        onLoadMoreChannelClick =",
+            '                                item(key = "home_playlists_header") {\n',
+            "                                }\n                                if (hasChannelPlaylists) {\n",
         ),
         Replace(
-            "                        onFollowClick = onFollowClick,\n                        onShareClick = onShareClick,\n                    )",
-            "                        onFollowClick = onFollowClick,\n                        onMoreClick = { profileMenuOpen = true },\n                    )",
+            'SectionHeaderArrow(title = "Playlists", onArrowClick = { selectedChannelTab = 2 })',
+            'SectionHeaderArrow(title = channelPlaylistsLabel, onArrowClick = { selectedChannelTab = 2 })',
         ),
-        # quem decide canal x artista e a ROTA (isYouTubeChannel), nao a presenca de musica
+        # fecha o "if (hasChannelPlaylists) {" aberto acima
         Replace(
-            "                    // FIX14 REBUILD - Regra: tem musica = ARTISTA (so Home, sem abas). Sem musica = CANAL (abas Videos | Shorts | Playlists).\n"
-            "                    val hasMusic = state.topSongs.isNotEmpty() || state.albums.isNotEmpty() || state.singles.isNotEmpty()\n"
-            "                    val isChannel = !hasMusic\n",
-            "                    // Quem decide e a rota: isYouTubeChannel = CANAL (abas Inicio | Videos | Playlists | Shorts), senao ARTISTA (so Home, sem abas).\n"
-            "                    val isChannel = state.isYouTubeChannel\n",
+            "                                    }\n                                }\n                            }\n                            1 -> {\n                                // --- VIDEOS ---\n",
+            "                                    }\n                                }\n                                }\n                            }\n                            1 -> {\n                                // --- VIDEOS ---\n",
         ),
-        # barra colapsada: 3 pontinhos tambem
+        # aba Sobre no lugar do "Sobre" de baixo
         Replace(
-            "                onShareClick = if (state.isYouTubeChannel) onShareClick else null,\n",
-            "                onMoreClick = { profileMenuOpen = true },\n",
+            "                        }\n"
+            '                        item(key = "channel_space") { Spacer(Modifier.height(SectionGap)) }\n'
+            '                        item(key = "description") { ArtistDescription(description = state.description) }\n'
+            "                    } else {\n",
+            "                            4 -> {\n"
+            "                                // --- SOBRE ---\n"
+            '                                item(key = "channel_about") { ChannelAboutSection(state = state) }\n'
+            "                            }\n"
+            "                        }\n"
+            '                        item(key = "channel_space") { Spacer(Modifier.height(SectionGap)) }\n'
+            "                    } else {\n",
         ),
-        # ChannelHeader: parametro
+        # ChannelHeader: abas dinamicas
+        Replace('    val tabs = listOf("Início", "Vídeos", "Playlists", "Shorts")\n', TABS_NEW),
+        Replace("            itemsIndexed(tabs) { index, tab ->\n", "            items(tabs, key = { it.first }) { (index, tab) ->\n"),
+        # ChannelHeader: inscritos • total de videos
         Replace(
-            "    onFollowClick: () -> Unit,\n    onShareClick: () -> Unit,\n    onLoadMoreChannelClick: () -> Unit = {},",
-            "    onFollowClick: () -> Unit,\n    onMoreClick: () -> Unit,\n    onLoadMoreChannelClick: () -> Unit = {},",
-        ),
-        # ChannelHeader: so inscritos (sem quantidade de videos)
-        Replace(
-            "    val subsVideos = listOfNotNull(\n"
-            "        state.subscribers?.takeIf { it.isNotBlank() },\n"
-            '        if (state.videos.isNotEmpty()) state.videos.size.toString() + " vídeos" else null,\n'
-            '    ).joinToString(" • ")\n',
             "    // So inscritos: o app busca 1000 videos e depois 100 em 100, entao a contagem nunca seria o total real.\n"
             "    val subscribersLabel = state.subscribers?.takeIf { it.isNotBlank() }\n",
-        ),
-        # ChannelHeader: botao 3 pontinhos
-        Replace(
-            '                MediaListCircleButton(VzIcons.Share, "Compartilhar canal", onShareClick)',
-            '                MediaListCircleButton(VzIcons.MoreVert, "Mais opções", onMoreClick)',
-        ),
-        # ChannelHeader: nome do canal (weight dentro de item do LazyColumn media 0 de altura e o nome sumia)
-        Replace(
-            "                Text(text = state.name, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))\n",
-            "                Text(text = state.name, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)\n",
+            "    // Inscritos • total de videos do canal (vem do InnerTube), nunca a contagem dos videos carregados.\n"
+            "    val subscribersLabel = listOfNotNull(\n"
+            "        state.subscribers?.takeIf { it.isNotBlank() },\n"
+            "        state.videoCountText?.takeIf { it.isNotBlank() },\n"
+            '    ).joinToString(" • ").takeIf { it.isNotBlank() }\n',
         ),
         Replace(
-            "                if (subsVideos.isNotBlank()) {\n"
-            "                    Spacer(Modifier.height(2.dp))\n"
-            "                    Text(text = subsVideos, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)\n"
-            "                }\n",
-            "                if (!subscribersLabel.isNullOrBlank()) {\n"
-            "                    Spacer(Modifier.height(2.dp))\n"
-            "                    Text(text = subscribersLabel, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)\n"
-            "                }\n",
+            "Text(text = subscribersLabel, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1,",
+            "Text(text = subscribersLabel, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 2,",
         ),
-    ],
-    F_NAV: [
+        # ChannelHeader: banner sempre em 1707x283 (maior resolucao, cortando pra proporcao)
         Replace(
-            "                            onLoadMoreChannelVideos = vm::loadMoreChannelVideos,\n                        )\n",
-            NAV_WIRING,
+            "                Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(12.dp))\n"
+            "            ) {\n"
+            "                AsyncImage(model = state.bannerUrl, contentDescription = null, contentScale = ContentScale.FillWidth, modifier = Modifier.fillMaxWidth())\n",
+            "                Modifier.fillMaxWidth().padding(horizontal = 16.dp).aspectRatio(1707f / 283f).clip(RoundedCornerShape(12.dp))\n"
+            "            ) {\n"
+            "                AsyncImage(model = state.bannerUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())\n",
         ),
-    ],
-    # ---------------- app: video abre canal primeiro ----------------
-    F_MENU_VM: [
+        # ChannelHeader: descricao completa e clicavel
         ReplaceBetween(
-            "    /** Clique em artista DENTRO de uma faixa: verifica quem tem ESSA faixa / ESSE álbum no catálogo. */\n",
-            "    /**\n     * FIX 6 (método do SimpMusic): abre o CANAL REAL que postou o vídeo.",
-            MENU_VM_NEW,
-            "resolveProfileForTrack",
-        ),
-    ],
-    F_SEARCH_VM: [
-        ReplaceBetween(
-            "    /** FIX9: Clique em artista DENTRO de uma faixa no Search. Igual ao TrackMenuViewModel. */\n",
-            "    /** FIX9: Canal real do video no Search.",
-            SEARCH_VM_NEW,
-            "resolveProfileForTrack",
-        ),
-        Replace(
-            "                        NavigationEvent.OpenArtist(\n"
-            "                            hit.artist.id,\n"
-            "                            hit.artist.name,\n"
-            "                            hit.artist.thumbnailUrl,\n"
-            "                        )\n",
-            "                        NavigationEvent.OpenArtist(\n"
-            "                            hit.artist.id,\n"
-            "                            hit.artist.name,\n"
-            "                            hit.artist.thumbnailUrl,\n"
-            "                            isYouTubeChannel = hit.artist.source == Source.YOUTUBE,\n"
-            "                        )\n",
+            "        if (!state.description.isNullOrBlank()) {\n            val shown = ",
+            "        // So Seguir, mesmo sistema do artista",
+            SCREEN_DESC_NEW,
+            "val description = state.description\n            if (descExpanded) {",
         ),
     ],
 }
+for _file, _ops in PART2.items():
+    PATCHES.setdefault(_file, []).extend(_ops)
 
-NEW_FILES = {F_NEW_SHEET: NEW_SHEET_FILE}
+NEW_FILES = {
+    F_LINKIFY: LINKIFIED_FILE,
+    F_ICON_COPY: ICON_COPY_FILE,
+    F_ABOUT: ABOUT_FILE,
+}
 
 
-# ----------------------------------------------------------------------------------------
-# Execucao: valida tudo na memoria e so entao grava
-# ----------------------------------------------------------------------------------------
 def main():
-    pending = {}
-    errors = []
-    report = []
-
+    dry = "--dry" in sys.argv
+    new_files = {p: c for p, c in NEW_FILES.items()}
+    results, errors, staged = [], [], {}
     for rel, ops in PATCHES.items():
-        path = ROOT / rel
-        if not path.is_file():
-            errors.append(f"[{rel}] arquivo nao encontrado.")
-            continue
-        text = path.read_text(encoding="utf-8")
-        original = text
-        for idx, op in enumerate(ops, 1):
+        path = os.path.join(ROOT, rel)
+        if not os.path.exists(path):
+            errors.append(f"[{rel}] arquivo nao existe"); continue
+        with open(path, encoding="utf-8") as f:
+            s = f.read()
+        for n, op in enumerate(ops, 1):
             try:
-                text, status = op.apply(text)
-                report.append((rel, idx, status))
-            except ValueError as exc:
-                errors.append(f"[{rel}] patch {idx}: {exc}")
-        if text != original:
-            pending[path] = text
-
+                s, st = op.apply(s)
+                results.append(f"  {st:12s} {rel.split('/')[-1]} #{n}")
+            except PatchError as e:
+                errors.append(f"[{rel}] op #{n}: {e}")
+        staged[rel] = s
+    print("\n".join(results))
     if errors:
-        print("ERRO: nada foi alterado. Problemas encontrados:\n")
-        for e in errors:
-            print(" -", e, "\n")
-        print("O codigo atual pode estar diferente do dump. Me mande o arquivo citado.")
-        sys.exit(2)
-
-    for rel, content in NEW_FILES.items():
-        path = ROOT / rel
-        if not path.is_file() or path.read_text(encoding="utf-8") != content:
-            pending[path] = content
-
-    for path, content in pending.items():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-
-    print("Arquivos atualizados:" if pending else "Nada a fazer: tudo ja estava aplicado.")
-    for path in sorted(pending):
-        print("  *", path.relative_to(ROOT))
-    ok = sum(1 for _, _, s in report if s == "ok")
-    skipped = sum(1 for _, _, s in report if s != "ok")
-    print(f"\nPatches aplicados: {ok} | ja aplicados: {skipped}")
-    print("Nenhum backup foi criado. Agora rode o build no GitHub Actions.")
+        print("\nERROS (nada foi gravado):")
+        print("\n".join("  - " + e for e in errors))
+        sys.exit(1)
+    if dry:
+        print("\nDRY-RUN ok: todos os trechos batem. Rode sem --dry para aplicar.")
+        return
+    for rel, s in staged.items():
+        path = os.path.join(ROOT, rel)
+        old = open(path, encoding="utf-8").read()
+        if old != s:
+            shutil.copyfile(path, path + ".bak_edit")
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(s)
+            print("alterado:", rel)
+    for rel, content in new_files.items():
+        path = os.path.join(ROOT, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if os.path.exists(path) and open(path, encoding="utf-8").read() == content:
+            continue
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(content)
+        print("criado/atualizado:", rel)
+    print("\nPronto. Compile o projeto.")
 
 
 if __name__ == "__main__":

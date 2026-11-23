@@ -100,43 +100,15 @@ object YouTubePlaylistParser {
             walk(lvm.optJSONObject("contentImage"))
             out += Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE)
         }
-        // UUSH / Shorts via UU: shortsLockupViewModel (id em onTap.reelWatchEndpoint.videoId, titulo em overlayMetadata.primaryText.content)
-        // Sem isso, UUSH vinha 0 e shorts do canal ficava incompleto.
-        val slvms = mutableListOf<JSONObject>()
-        collect(node, "shortsLockupViewModel", slvms)
-        for (r in slvms) {
-            val videoId = r.optJSONObject("onTap")?.optJSONObject("innertubeCommand")?.optJSONObject("reelWatchEndpoint")?.optString("videoId")?.takeIf { it.isNotBlank() }
-                ?: r.optString("entityId").removePrefix("shorts-shelf-item-").takeIf { it.isNotBlank() }
-                ?: r.optString("contentId").takeIf { it.isNotBlank() } ?: continue
-            val title = r.optJSONObject("overlayMetadata")?.optJSONObject("primaryText")?.optString("content")?.takeIf { it.isNotBlank() }
-                ?: r.optString("title").takeIf { it.isNotBlank() } ?: continue
-            // Thumb: thumbnail.sources maior width (best effort via walk)
-            var thumb: String? = null
-            var bestW = -1
-            fun walkThumb(n: Any?) {
-                when (n) {
-                    is JSONObject -> {
-                        val arr = n.optJSONArray("sources")
-                        if (arr != null) {
-                            for (i in 0 until arr.length()) {
-                                val s = arr.optJSONObject(i) ?: continue
-                                val url = s.optString("url").takeIf { it.isNotBlank() } ?: continue
-                                val w = s.optInt("width", 0)
-                                if (w >= bestW) { bestW = w; thumb = url }
-                            }
-                        }
-                        val keys = n.keys()
-                        while (keys.hasNext()) walkThumb(n.opt(keys.next()))
-                    }
-                    is JSONArray -> for (i in 0 until n.length()) walkThumb(n.opt(i))
-                }
-            }
-            walkThumb(r.optJSONObject("thumbnail"))
-            if (thumb == null) thumb = YouTubeSearchParser.thumbnailOf(r.optJSONObject("thumbnail"))
-            out += Track(id = videoId, title = title, artist = "", durationSeconds = 0L, thumbnailUrl = thumb, source = Source.YOUTUBE)
-        }
+        // UUSH / Shorts via UU: usa o MESMO parser de Shorts do canal (reel, shortsLockupViewModel e lockup SHORTS),
+        // que nunca descarta Short sem titulo e sempre devolve thumbnail.
+        out += YouTubeChannelParser.collectShorts(node)
         return out
     }
+
+    /** Total de videos da playlist de uploads do canal (UULF/UU), ex: "534 vídeos". */
+    fun extractVideoCountText(json: JSONObject): String? =
+        YouTubeChannelParser.findVideoCountText(json.optJSONObject("header"))
 
     private fun parseHeaderTitle(json: JSONObject): String? {
         val headers = mutableListOf<JSONObject>()

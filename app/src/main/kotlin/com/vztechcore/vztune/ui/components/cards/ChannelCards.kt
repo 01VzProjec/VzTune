@@ -138,16 +138,23 @@ fun ShortCard(track: Track, onClick: () -> Unit, onMoreClick: () -> Unit, modifi
     val nowPlaying = LocalNowPlaying.current
     val playback = nowPlaying.playbackOf(track)
     val isCurrent = playback.isPlaying || playback.isPaused
+    // Sem thumbnail vinda do parser, usa a miniatura padrao do YouTube pelo id do video.
+    val thumb = track.thumbnailUrl?.takeIf { it.isNotBlank() } ?: "https://i.ytimg.com/vi/${track.id}/hqdefault.jpg"
     Column(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onClick() }) {
         Box(Modifier.fillMaxWidth().aspectRatio(9f / 16f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(12.dp))) {
-            if (track.thumbnailUrl != null) AsyncImage(model = track.thumbnailUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            Box(Modifier.fillMaxWidth().height(64.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.78f)))))
+            AsyncImage(model = thumb, contentDescription = track.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            Box(Modifier.fillMaxWidth().height(96.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)))))
             Box(Modifier.align(Alignment.TopEnd).padding(6.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable { onMoreClick() }.padding(6.dp)) {
                 Icon(imageVector = VzIcons.MoreVert, contentDescription = "Mais", tint = Color.White, modifier = Modifier.size(18.dp))
             }
-            val views = formatViewCount(track.viewCount)
-            if (!views.isNullOrBlank()) {
-                Text(text = views, style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = 8.dp, vertical = 8.dp))
+            Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 8.dp, vertical = 8.dp)) {
+                if (track.title.isNotBlank()) {
+                    Text(text = track.title, style = MaterialTheme.typography.labelMedium, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                val views = formatViewCount(track.viewCount)
+                if (!views.isNullOrBlank()) {
+                    Text(text = views, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
             if (isCurrent) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
                 Text(text = if (playback.isPlaying) "Tocando" else "Pausado", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)

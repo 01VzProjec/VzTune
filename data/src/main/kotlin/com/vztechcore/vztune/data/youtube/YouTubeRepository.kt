@@ -180,6 +180,10 @@ class YouTubeRepository @Inject constructor(
         val subscriberCount: String?,
         val hasMoreVideos: Boolean = false,
         val hasMorePlaylists: Boolean = false,
+        // Total de videos do canal (InnerTube), nome da aba de playlists (Playlists / Albuns / Albuns e Singles) e dados da aba Sobre.
+        val videoCountText: String? = null,
+        val playlistsLabel: String? = null,
+        val about: ChannelAboutInfo? = null,
     )
 
     data class VideoPage(
@@ -1244,12 +1248,14 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 val homeJson = InnerTubeYouTube.browse(uc)
                 val homeParsed = YouTubeChannelParser.parseChannelPage(homeJson)
                 val channelName = homeParsed.channelName
+                var uulfCountText: String? = null
                 // ---- VIDEOS via UULF loop ----
                 var videos = mutableListOf<com.vztechcore.vztune.core.domain.music.Track>()
                 var videosCont: String? = null
                 runCatching {
                     var seenTokens = mutableSetOf<String>()
                     var json = InnerTubeYouTube.browse("VL" + "UULF" + uc.drop(2))
+                    uulfCountText = YouTubePlaylistParser.extractVideoCountText(json)
                     var parsed = YouTubePlaylistParser.parsePlaylistPage(json, channelName)
                     videos += parsed.tracks
                     videosCont = parsed.continuation
@@ -1515,6 +1521,23 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                         Log.w(TAG, "Playlists V5 Path1 $debugPlV5")
                     }.onFailure { debugPlV5 = "[DEBUG V5 Path1 browse falhou: ${it.message}]"; Log.w(TAG, "Playlists V5 Path1 failed: ${it.message}") }
                 }
+                // Canal de artista/oficial: sem playlists, a aba Lancamentos tem albuns/singles (a aba vira "Álbuns" / "Álbuns e Singles").
+                var playlistsLabel: String? = null
+                if (playlists.isEmpty()) {
+                    runCatching {
+                        val relParams = YouTubeChannelParser.tabParams(homeJson, "releases")
+                        if (relParams != null) {
+                            val relJson = InnerTubeYouTube.browse(uc, relParams)
+                            val rel = YouTubeChannelParser.collectReleases(relJson)
+                            if (rel.items.isNotEmpty()) {
+                                playlists.addAll(rel.items.map { if (it.owner.isNullOrBlank() && channelName.isNotBlank()) it.copy(owner = channelName) else it })
+                                playlistsLabel = rel.label
+                            }
+                        }
+                    }.onFailure { Log.w(TAG, "Releases tab failed: ${it.message}") }
+                }
+                // Sobre: fotos, banners, tags e TOTAL de videos (header do canal; senao header da playlist de uploads).
+                val about = YouTubeChannelParser.parseAbout(homeJson)
                 if (videos.isNotEmpty() || shorts.isNotEmpty() || playlists.isNotEmpty()) {
                     return@withContext ChannelPage(
                         videos = videos.distinctBy { it.id },
@@ -1523,12 +1546,15 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                         channelName = channelName.ifBlank { null },
                         channelHandle = YouTubeChannelParser.extractChannelHandle(homeJson),
                         avatarUrl = homeParsed.avatarUrl,
-                        bannerUrl = homeParsed.bannerUrl,
+                        bannerUrl = (about.banners.lastOrNull()?.url ?: homeParsed.bannerUrl)?.let { YouTubeChannelParser.upscaleBanner(it) },
                         description = homeParsed.description,
                         debugLog = debugPlV5.takeIf { it.isNotBlank() },
                         subscriberCount = homeParsed.subscriberCount,
                         hasMoreVideos = videosCont != null,
-                        hasMorePlaylists = playlistsCont != null
+                        hasMorePlaylists = playlistsCont != null,
+                        videoCountText = about.videoCountText ?: uulfCountText,
+                        playlistsLabel = playlistsLabel,
+                        about = about,
                     )
                 }
                 // Tudo vazio via InnerTube: nao retorna, deixa o NewPipe abaixo tentar.

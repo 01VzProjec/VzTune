@@ -5,6 +5,7 @@ import com.vztechcore.vztune.core.domain.music.Artist
 import com.vztechcore.vztune.core.domain.music.BrowseRef
 import com.vztechcore.vztune.core.domain.music.Playlist
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.data.youtube.ChannelAboutInfo
 
 data class ArtistUiState(
     val artistId: String,
@@ -28,6 +29,10 @@ data class ArtistUiState(
     val shorts: List<Track> = emptyList(),
     val channelPlaylists: List<Playlist> = emptyList(),
     val bannerUrl: String? = null,
+    // Canal: total de videos (InnerTube), nome da aba de playlists (Playlists / Albuns / Albuns e Singles) e aba Sobre.
+    val videoCountText: String? = null,
+    val playlistsLabel: String? = null,
+    val about: ChannelAboutInfo? = null,
     // FIX18 - Canal: tem mais videos no UU? + carregando Buscar mais?
     val channelVideosHasMore: Boolean = false,
     val channelPlaylistsHasMore: Boolean = false,

@@ -1,1352 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-edit.py - VzTune: Cards de video (avatar+play_arrow+views+data+duracao),
-          Tela Shorts completa (player proprio, zoom, mute, velocidade,
-          qualidade, descricao, seguir) e Viewer de avatar/banner com zoom.
+fix_shorts.py - Corrige o erro de compilacao do ShortsScreen.kt.
+
+O que aconteceu: o ShortsScreen.kt ficou com a sintaxe quebrada (string literal
+partida no meio / chave faltando), gerando "Expecting an element / ')' / '}'".
+Este script REESCREVE o arquivo inteiro com uma versao limpa e verificada,
+sem escapes de backslash (usa Char(10) pra quebra de linha), pra nao quebrar de novo.
+
 Uso (na raiz do projeto):
-    python3 edit.py --dry   # so confere, NAO grava nada
-    python3 edit.py         # aplica tudo (sem .bak)
-Tudo-ou-nada: se qualquer trecho nao bater, nada e gravado.
-Pode rodar de novo: o que ja foi aplicado e ignorado.
+    python3 fix_shorts.py --dry   # so mostra o que faria, nao grava
+    python3 fix_shorts.py         # aplica (guarda o quebrado em .broken)
 """
-import os, re, sys
+import os, sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-APP = "app/src/main/kotlin/com/vztechcore/vztune"
-DATA = "data/src/main/kotlin/com/vztechcore/vztune/data"
-CORE = "core/src/main/kotlin/com/vztechcore/vztune/core"
+REL = "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/shorts/ShortsScreen.kt"
 
-class PatchError(Exception):
-    pass
-
-# ---------------------------------------------------------------------------
-# Motor de patch tolerante a indentacao (o dump perde os espacos; os arquivos
-# reais tem indentacao normal). Cada linha da ancora casa com qualquer
-# indentacao inicial; o conteudo da linha precisa bater exatamente.
-# ---------------------------------------------------------------------------
-def _flex_regex(anchor):
-    lines = anchor.strip("\n").split("\n")
-    if not lines or lines[0].strip() == "":
-        raise PatchError("ancora invalida (primeira linha vazia)")
-    parts = [r"(?m)^[ \t]*" + re.escape(lines[0].strip())]
-    for ln in lines[1:]:
-        t = ln.strip()
-        parts.append(r"\n[ \t]*" + (re.escape(t) if t else ""))
-    return re.compile("".join(parts))
-
-def _find_all(s, anchor):
-    return list(_flex_regex(anchor).finditer(s))
-
-class Replace:
-    def __init__(self, old, new, marker=None, all=False):
-        self.old, self.new = old, new
-        self.marker = marker if marker is not None else new.strip("\n")
-        self.all = all
-    def apply(self, s):
-        if self.marker and self.marker in s:
-            return s, "ja aplicado"
-        ms = _find_all(s, self.old)
-        if not ms or (not self.all and len(ms) != 1):
-            raise PatchError("trecho encontrado %dx (esperado %s): %r" %
-                             (len(ms), ">=1" if self.all else "1", self.old.strip()[:90]))
-        return _flex_regex(self.old).sub(lambda m: self.new, s), "ok"
-
-class InsertBefore:
-    def __init__(self, anchor, text, marker=None):
-        self.anchor, self.text = anchor, text
-        self.marker = marker if marker is not None else text.strip("\n")
-    def apply(self, s):
-        if self.marker and self.marker in s:
-            return s, "ja aplicado"
-        ms = _find_all(s, self.anchor)
-        if len(ms) != 1:
-            raise PatchError("ancora encontrada %dx (esperado 1): %r" %
-                             (len(ms), self.anchor.strip()[:90]))
-        i = ms[0].start()
-        return s[:i] + self.text.rstrip("\n") + "\n" + s[i:], "ok"
-
-class ReplaceBetween:
-    def __init__(self, start, end, new, marker):
-        self.start, self.end, self.new, self.marker = start, end, new, marker
-    def apply(self, s):
-        if self.marker in s:
-            return s, "ja aplicado"
-        ms = _find_all(s, self.start)
-        if len(ms) != 1:
-            raise PatchError("inicio encontrado %dx: %r" % (len(ms), self.start.strip()[:90]))
-        a = ms[0]
-        me = _flex_regex(self.end).search(s, a.end())
-        if me is None:
-            raise PatchError("fim nao encontrado: %r" % self.end.strip()[:90])
-        return s[:a.start()] + self.new.rstrip("\n") + "\n" + s[me.start():], "ok"
-
-# ===========================================================================
-# ARQUIVOS NOVOS / REESCRITOS
-# ===========================================================================
-NEW_FILES = {}
-
-# ---------------- Icones novos (Parte 1 e 2) ----------------
-NEW_FILES[f"{APP}/ui/icons/player/PlayArrow.kt"] = r'''package com.vztechcore.vztune.ui.icons.player
-
-import androidx.compose.ui.graphics.vector.ImageVector
-import com.vztechcore.vztune.ui.icons.VzIcons
-
-// Material "play_arrow" (outline) - icone pedido nos cards de video.
-val VzIcons.PlayArrow: ImageVector
-    get() = VzIcons.icon(
-        name = "PlayArrow",
-        pathData = "M8,17.18V6.82Q8,6.4 8.3,6.11Q8.6,5.82 9,5.82q0.13,0 0.26,0.04T9.53,5.97l8.15,5.18q0.23,0.15 0.34,0.38q0.11,0.23 0.11,0.48t-0.11,0.47t-0.34,0.38L9.53,18.02Q9.4,18.1 9.26,18.14Q9.13,18.18 9,18.18q-0.4,0-0.7-0.29T8,17.18ZM10,12Zm0,3.35L15.25,12L10,8.65v6.7Z"
-    )
-'''
-
-NEW_FILES[f"{APP}/ui/icons/actions/Comment.kt"] = r'''package com.vztechcore.vztune.ui.icons.actions
-
-import androidx.compose.ui.graphics.vector.ImageVector
-import com.vztechcore.vztune.ui.icons.VzIcons
-
-// Balao de comentarios (Material chat_bubble outline) - tela Shorts.
-val VzIcons.Comment: ImageVector
-    get() = VzIcons.icon(
-        name = "Comment",
-        pathData = "M7,14H17q0.43,0 0.71-0.29Q18,13.43 18,13t-0.29-0.71T17,12H7q-0.42,0-0.71,0.29T6,13t0.29,0.71T7,14Zm0-3H17q0.43,0 0.71-0.29Q18,10.43 18,10t-0.29-0.71T17,9H7Q6.58,9 6.29,9.29T6,10t0.29,0.71T7,11ZM7,8H17q0.43,0 0.71-0.29Q18,7.43 18,7T17.71,6.29T17,6H7Q6.58,6 6.29,6.29T6,7T6.29,7.71T7,8ZM4,18q-0.82,0-1.41-0.59T2,16V4Q2,3.17 2.59,2.59T4,2H20q0.83,0 1.41,0.59T22,4V19.58q0,0.68-0.61,0.94T20.3,20.3L18,18H4Zm14.85-2L20,17.13V4H4V16H18.85ZM4,16V4V16Z"
-    )
-'''
-
-NEW_FILES[f"{APP}/ui/icons/actions/Remove.kt"] = r'''package com.vztechcore.vztune.ui.icons.actions
-
-import androidx.compose.ui.graphics.vector.ImageVector
-import com.vztechcore.vztune.ui.icons.VzIcons
-
-// Menos (-) Material - botao de diminuir velocidade na tela Shorts.
-val VzIcons.Remove: ImageVector
-    get() = VzIcons.icon(
-        name = "Remove",
-        pathData = "M19,13H5v-2h14v2z"
-    )
-'''
-
-NEW_FILES[f"{APP}/ui/icons/actions/Visibility.kt"] = r'''package com.vztechcore.vztune.ui.icons.actions
-
-import androidx.compose.ui.graphics.vector.ImageVector
-import com.vztechcore.vztune.ui.icons.VzIcons
-
-// Olho (Material visibility) - ocultar/mostrar interface dos Shorts.
-val VzIcons.Visibility: ImageVector
-    get() = VzIcons.icon(
-        name = "Visibility",
-        pathData = "M12,4.5C7,4.5 2.73,7.61 1,12c1.73,4.39 6,7.5 11,7.5s9.27,-3.11 11,-7.5c-1.73,-4.39 -6,-7.5 -11,-7.5zM12,17c-2.76,0 -5,-2.24 -5,-5s2.24,-5 5,-5 5,2.24 5,5 -2.24,5 -5,5zM12,9c-1.66,0 -3,1.34 -3,3s1.34,3 3,3 3,-1.34 3,-3 -1.34,-3 -3,-3z"
-    )
-'''
-
-NEW_FILES[f"{APP}/ui/icons/actions/Bookmark.kt"] = r'''package com.vztechcore.vztune.ui.icons.actions
-
-import androidx.compose.ui.graphics.vector.ImageVector
-import com.vztechcore.vztune.ui.icons.VzIcons
-
-// Bookmark (Material bookmark_border) - botao Salvar (visual) dos Shorts.
-val VzIcons.Bookmark: ImageVector
-    get() = VzIcons.icon(
-        name = "Bookmark",
-        pathData = "M17,3H7c-1.1,0 -1.99,0.9 -1.99,2L5,21l7,-3 7,3V5c0,-1.1 -0.9,-2 -2,-2zM17,18l-5,-2.18L7,18V5h10v13z"
-    )
-'''
-
-# ---------------- Core: Track ganha avatar do canal ----------------
-NEW_FILES[f"{CORE}/domain/music/Track.kt"] = r'''package com.vztechcore.vztune.core.domain.music
-
-/**
- * A playable audio item. Can originate from YouTube (video) or YouTube Music (song).
- */
-data class Track(
-    val id: String,
-    val title: String,
-    val artist: String,
-    val album: String? = null,
-    val durationSeconds: Long = 0L,
-    val thumbnailUrl: String? = null,
-    val source: Source,
-    val streamUrl: String? = null,
-    // True when the source flags the track as containing explicit lyrics.
-    val isExplicit: Boolean = false,
-    // Canal / video YouTube (NewPipe StreamInfoItem). Null quando nao vem do YouTube
-    // ou quando o NewPipe nao expoe. Usado nos cards de canal e nos Shorts.
-    val viewCount: Long? = null,
-    // Texto ja formatado em pt-BR: hoje, ha 1 dia, ha 3 semanas, ha 2 meses, ha 1 ano.
-    val publishedText: String? = null,
-    // Foto de perfil do canal que postou o video (cards 16:9 e tela Shorts).
-    val channelAvatarUrl: String? = null,
-)
-'''
-
-# ---------------- Rotas: Shorts + initialTab do canal ----------------
-NEW_FILES[f"{APP}/ui/navigation/Routes.kt"] = r'''package com.vztechcore.vztune.ui.navigation
-
-import kotlinx.serialization.Serializable
-
-object Routes {
-    @Serializable data object Home
-    @Serializable data object Analytics
-    @Serializable data object Library
-    @Serializable data object Search
-    @Serializable data object Downloads
-
-    @Serializable data class MediaList(
-        val id: String,
-        val isAlbum: Boolean,
-        val title: String,
-        val subtitle: String? = null,
-        val thumbnailUrl: String? = null,
-        val sourceName: String? = null, // FIX20 - YOUTUBE ou YOUTUBE_MUSIC. Sem isso a playlist perdia o mundo.
-    )
-
-    /** Artist profile page. [id] is the YouTube Music channel/browse id (UC...). */
-    @Serializable data class Artist(
-        val id: String,
-        val name: String,
-        val thumbnailUrl: String? = null,
-        // true = canal do YouTube (videos/shorts/playlists via NewPipe).
-        // false = artista do YT Music (musicas/albuns via InnerTube).
-        val isYouTubeChannel: Boolean = false,
-        // Aba inicial do canal (0 Inicio, 1 Videos, 2 Playlists, 3 Shorts, 4 Sobre).
-        val initialTab: Int = 0,
-    )
-
-    /** "See all" list of an artist. [kind] is an ArtistListKind name. */
-    @Serializable data class ArtistList(
-        val artistId: String,
-        val artistName: String,
-        val kind: String,
-        val browseId: String,
-        val params: String? = null,
-    )
-
-    /** List opened from a Library shortcut card. [kind] is a LibraryShortcut name. */
-    @Serializable data class LibraryList(val kind: String)
-
-    @Serializable data class TrackInfo(
-        val id: String,
-        val title: String,
-        val artist: String,
-        val album: String?,
-        val thumbnailUrl: String?,
-        val sourceName: String, // "YOUTUBE" or "YOUTUBE_MUSIC"
-        val durationSeconds: Long,
-    )
-
-    /**
-     * Tela cheia de Shorts (rolagem vertical). A lista de Shorts vai no
-     * ShortsFeed (memoria); a rota leva so a chave + indice inicial + canal.
-     */
-    @Serializable data class Shorts(
-        val feedKey: String,
-        val startIndex: Int = 0,
-        val channelId: String,
-        val channelName: String,
-        val channelAvatarUrl: String? = null,
-        val channelHandle: String? = null,
-    )
-}
-'''
-
-# ---------------- ArtistUiState: initialTab ----------------
-NEW_FILES[f"{APP}/ui/screens/artist/ArtistUiState.kt"] = r'''package com.vztechcore.vztune.ui.screens.artist
-
-import com.vztechcore.vztune.core.domain.music.Album
-import com.vztechcore.vztune.core.domain.music.Artist
-import com.vztechcore.vztune.core.domain.music.BrowseRef
-import com.vztechcore.vztune.core.domain.music.Playlist
-import com.vztechcore.vztune.core.domain.music.Track
-import com.vztechcore.vztune.data.youtube.ChannelAboutInfo
-
-data class ArtistUiState(
-    val artistId: String,
-    val name: String,
-    val channelHandle: String? = null,
-    val thumbnailUrl: String? = null,
-    val isLoading: Boolean = true,
-    val errorMessage: String? = null,
-    val subscribers: String? = null,
-    val views: String? = null,
-    val description: String? = null,
-    val debugLog: String? = null,
-    val topSongs: List<Track> = emptyList(),
-    val songsMore: BrowseRef? = null,
-    val albums: List<Album> = emptyList(),
-    val albumsMore: BrowseRef? = null,
-    val singles: List<Album> = emptyList(),
-    val singlesMore: BrowseRef? = null,
-    val videos: List<Track> = emptyList(),
-    // Canal do YouTube (FIX5): Shorts e playlists do canal, banner do header.
-    val shorts: List<Track> = emptyList(),
-    val channelPlaylists: List<Playlist> = emptyList(),
-    val bannerUrl: String? = null,
-    // Canal: total de videos (InnerTube), nome da aba de playlists e aba Sobre.
-    val videoCountText: String? = null,
-    val playlistsLabel: String? = null,
-    val about: ChannelAboutInfo? = null,
-    // Aba inicial do canal (vinda da rota; tela Shorts abre o canal ja em Shorts).
-    val initialTab: Int = 0,
-    // FIX18 - Canal: tem mais videos no UU? + carregando Buscar mais?
-    val channelVideosHasMore: Boolean = false,
-    val channelPlaylistsHasMore: Boolean = false,
-    val isLoadingMoreChannelPlaylists: Boolean = false,
-    val isLoadingMoreChannelVideos: Boolean = false,
-    val isYouTubeChannel: Boolean = false,
-    val videosMore: BrowseRef? = null,
-    val featured: List<Playlist> = emptyList(),
-    val featuredMore: BrowseRef? = null,
-    val relatedArtists: List<Artist> = emptyList(),
-    val isFollowing: Boolean = false,
-    // Perfis com o MESMO nome no outro mundo (canal <-> artista).
-    val foundProfiles: List<Artist> = emptyList(),
-    val isLoadingFoundProfiles: Boolean = true,
-    // Canal: ainda tem video/playlist la no YouTube que nao foi carregado.
-    val hasMoreVideos: Boolean = false,
-    val hasMorePlaylists: Boolean = false,
-    val isLoadingMoreVideos: Boolean = false,
-    val isLoadingMorePlaylists: Boolean = false,
-) {
-    /** "1,13 mi de inscritos • 512.669.634 visualizações" (parts are skipped when unknown). */
-    val statsLabel: String
-        get() = listOfNotNull(subscribers, views).filter { it.isNotBlank() }.joinToString(" • ")
-}
-
-/** Video mais famoso do canal (maior viewCount). Null quando nao tem viewCount em nenhum video. */
-val ArtistUiState.mostViewedVideo: com.vztechcore.vztune.core.domain.music.Track?
-    get() = videos.maxByOrNull { it.viewCount ?: -1L }?.takeIf { (it.viewCount ?: 0L) > 0 }
-        ?: videos.firstOrNull()
-
-/** Videos do canal ordenados do mais visto para o menos visto. */
-val ArtistUiState.videosByViews: List<com.vztechcore.vztune.core.domain.music.Track>
-    get() = videos.sortedByDescending { it.viewCount ?: -1L }
-'''
-
-# ---------------- VzVideoCard refeito (Parte 1) ----------------
-NEW_FILES[f"{APP}/ui/components/cards/VzVideoCard.kt"] = r'''package com.vztechcore.vztune.ui.components.cards
-
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import com.vztechcore.vztune.core.domain.music.Track
-import com.vztechcore.vztune.ui.components.player.MediaThumbnail
-import com.vztechcore.vztune.ui.components.player.ThumbnailShape
-import com.vztechcore.vztune.ui.icons.VzIcons
-import com.vztechcore.vztune.ui.icons.actions.MoreVert
-import com.vztechcore.vztune.ui.icons.media.Artist
-import com.vztechcore.vztune.ui.icons.player.PlayArrow
-
-/**
- * UNICO card de video 16:9 do app (Search Vídeos + página do canal).
- *
- * Layout novo (Parte 1):
- *  - Thumbnail 16:9 com bolha de duração no canto INFERIOR ESQUERDO.
- *  - Título abaixo (2 linhas) + botão •••.
- *  - Linha de meta: [foto do canal] [nome] [play_arrow] [views • data].
- *
- * [showChannelRow] = false -> variante compacta ("Para você"):
- *  sem avatar/nome, só [play_arrow] [views • data].
- */
-@Composable
-fun VzVideoCard(
-    track: Track,
-    isPlaying: Boolean,
-    isPaused: Boolean,
-    onClick: () -> Unit,
-    onMoreClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    horizontalPadding: Dp = 12.dp,
-    showChannelRow: Boolean = true,
-) {
-    val viewsDate = videoViewsDate(track)
-    Column(
-        modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = horizontalPadding, vertical = 8.dp)
-    ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
-            MediaThumbnail(
-                imageUrl = track.thumbnailUrl,
-                shape = ThumbnailShape.WIDE,
-                cornerRadius = 10.dp,
-                isPlaying = isPlaying,
-                isPaused = isPaused,
-            )
-            DurationBubble(
-                seconds = track.durationSeconds,
-                modifier = Modifier.align(Alignment.BottomStart).padding(6.dp),
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.Top) {
-            Text(
-                text = track.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = onMoreClick, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    imageVector = VzIcons.MoreVert,
-                    contentDescription = "Mais",
-                    tint = Color.White.copy(alpha = 0.7f),
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-        if (showChannelRow) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(22.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (!track.channelAvatarUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = track.channelAvatarUrl,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        Icon(
-                            imageVector = VzIcons.Artist,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.5f),
-                            modifier = Modifier.size(12.dp),
-                        )
-                    }
-                }
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = track.artist,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.75f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (!viewsDate.isNullOrBlank()) {
-                    Spacer(Modifier.width(6.dp))
-                    Icon(
-                        imageVector = VzIcons.PlayArrow,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.6f),
-                        modifier = Modifier.size(13.dp),
-                    )
-                    Spacer(Modifier.width(2.dp))
-                    Text(
-                        text = viewsDate,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = VzIcons.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.6f),
-                    modifier = Modifier.size(13.dp),
-                )
-                Spacer(Modifier.width(3.dp))
-                Text(
-                    text = viewsDate ?: track.artist,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-'''
-
-# ---------------- ChannelCards refeito (bolhas, Short sem overlay, acentos) ----------------
-NEW_FILES[f"{APP}/ui/components/cards/ChannelCards.kt"] = r'''package com.vztechcore.vztune.ui.components.cards
-
-import android.content.Intent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import com.vztechcore.vztune.core.domain.music.Playlist
-import com.vztechcore.vztune.core.domain.music.Source
-import com.vztechcore.vztune.core.domain.music.Track
-import com.vztechcore.vztune.R
-import com.vztechcore.vztune.ui.components.player.LocalNowPlaying
-import com.vztechcore.vztune.ui.components.player.MediaThumbnail
-import com.vztechcore.vztune.ui.components.player.ThumbnailShape
-import com.vztechcore.vztune.ui.components.player.playbackOf
-import com.vztechcore.vztune.ui.icons.VzIcons
-import com.vztechcore.vztune.ui.icons.actions.FavoriteFilled
-import com.vztechcore.vztune.ui.icons.actions.FavoriteOutline
-import com.vztechcore.vztune.ui.icons.actions.MoreVert
-import com.vztechcore.vztune.ui.icons.actions.Share
-import com.vztechcore.vztune.ui.icons.media.Lists
-import com.vztechcore.vztune.ui.icons.media.PlaylistAdd
-import com.vztechcore.vztune.ui.icons.actions.PlayNext
-import com.vztechcore.vztune.ui.icons.actions.AddToQueue
-
-fun formatViewCount(count: Long?): String? {
-    if (count == null || count <= 0) return null
-    if (count == 1L) return "1 visualização"
-    return when {
-        count < 1_000 -> "$count visualizações"
-        count < 1_000_000 -> formatOneDecimal(count / 1_000.0) + " mil visualizações"
-        count < 1_000_000_000 -> {
-            val v = count / 1_000_000.0
-            val base = formatOneDecimal(v)
-            if (v < 1.05) base + " milhão visualizações" else base + " milhões visualizações"
-        }
-        else -> formatOneDecimal(count / 1_000_000_000.0) + " bilhões visualizações"
-    }
-}
-
-private fun formatOneDecimal(v: Double): String {
-    val s = "%.1f".format(v).replace(".", ",")
-    return if (s.endsWith(",0")) s.dropLast(2) else s
-}
-
-/** Duração "m:ss" / "h:mm:ss" pra bolha da thumbnail. Null quando não sabe. */
-fun formatDurationLabel(seconds: Long): String? {
-    if (seconds <= 0) return null
-    val h = seconds / 3600
-    val m = (seconds % 3600) / 60
-    val s = seconds % 60
-    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
-}
-
-/** "1,2 mi visualizações • há 2 dias" (o que existir dos dois). */
-fun videoViewsDate(track: Track): String? {
-    val views = formatViewCount(track.viewCount)
-    val date = track.publishedText?.takeIf { it.isNotBlank() }
-    return listOfNotNull(views, date).joinToString(" • ").takeIf { it.isNotBlank() }
-}
-
-fun videoMetaLine(track: Track): String? = videoViewsDate(track)
-
-/** Bolha preta com a duração total do vídeo (canto da thumbnail decidido pelo pai). */
-@Composable
-fun DurationBubble(seconds: Long, modifier: Modifier = Modifier) {
-    val label = formatDurationLabel(seconds) ?: return
-    Box(
-        modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(Color.Black.copy(alpha = 0.78f))
-            .padding(horizontal = 6.dp, vertical = 2.dp)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-        )
-    }
-}
-
-@Composable
-fun ChannelVideoCard(track: Track, onClick: () -> Unit, onMoreClick: () -> Unit, modifier: Modifier = Modifier) {
-    val nowPlaying = LocalNowPlaying.current
-    val playback = nowPlaying.playbackOf(track)
-    Row(modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.Top) {
-        // Thumbnail na esquerda + bolha de duração no canto inferior esquerdo.
-        Box(Modifier.width(160.dp)) {
-            MediaThumbnail(
-                imageUrl = track.thumbnailUrl,
-                shape = ThumbnailShape.WIDE,
-                cornerRadius = 10.dp,
-                isPlaying = playback.isPlaying,
-                isPaused = playback.isPaused,
-                placeholderRes = R.drawable.holder_video,
-            )
-            DurationBubble(
-                seconds = track.durationSeconds,
-                modifier = Modifier.align(Alignment.BottomStart).padding(6.dp),
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(text = track.title, style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(4.dp))
-            val meta = videoViewsDate(track)
-            if (!meta.isNullOrBlank()) Text(text = meta, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
-        IconButton(onClick = onMoreClick, modifier = Modifier.size(36.dp)) {
-            Icon(imageVector = VzIcons.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.75f))
-        }
-    }
-}
-
-@Composable
-fun ChannelPlaylistCard(playlist: Playlist, onClick: () -> Unit, onMoreClick: () -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.Top) {
-        Box(Modifier.width(160.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(10.dp))) {
-            val thumb = playlist.thumbnailUrl ?: playlist.mosaicThumbnails.firstOrNull()
-            if (thumb != null) AsyncImage(model = thumb, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            Box(Modifier.align(Alignment.BottomEnd).padding(6.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.78f)).padding(horizontal = 8.dp, vertical = 4.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(imageVector = VzIcons.Lists, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                    Text(text = if ((playlist.trackCount ?: 0) > 0) playlist.trackCount.toString() else "Playlist", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(text = playlist.title, style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(4.dp))
-            val owner = playlist.owner?.takeIf { it.isNotBlank() }
-            val sub = listOfNotNull(owner, "Playlist").joinToString(" - ")
-            Text(text = sub, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        IconButton(onClick = onMoreClick, modifier = Modifier.size(36.dp)) {
-            Icon(imageVector = VzIcons.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.75f))
-        }
-    }
-}
-
-/**
- * Card do Short (grade 9:16). SEM overlay "Tocando/Pausado" - o playback
- * agora mora na tela Shorts. Bolha de duração no canto SUPERIOR ESQUERDO
- * (quando a API informa a duração; a listagem de Shorts nem sempre traz).
- */
-@Composable
-fun ShortCard(track: Track, onClick: () -> Unit, onMoreClick: () -> Unit, modifier: Modifier = Modifier) {
-    val thumb = track.thumbnailUrl?.takeIf { it.isNotBlank() } ?: "https://i.ytimg.com/vi/${track.id}/hqdefault.jpg"
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onClick() }) {
-        Box(Modifier.fillMaxWidth().aspectRatio(9f / 16f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(12.dp))) {
-            AsyncImage(model = thumb, contentDescription = track.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            Box(Modifier.fillMaxWidth().height(96.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)))))
-            DurationBubble(
-                seconds = track.durationSeconds,
-                modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
-            )
-            Box(Modifier.align(Alignment.TopEnd).padding(6.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable { onMoreClick() }.padding(6.dp)) {
-                Icon(imageVector = VzIcons.MoreVert, contentDescription = "Mais", tint = Color.White, modifier = Modifier.size(18.dp))
-            }
-            Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 8.dp, vertical = 8.dp)) {
-                if (track.title.isNotBlank()) {
-                    Text(text = track.title, style = MaterialTheme.typography.labelMedium, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
-                val views = formatViewCount(track.viewCount)
-                if (!views.isNullOrBlank()) {
-                    Text(text = views, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ShortsGridRows(tracks: List<Track>, onClick: (Track) -> Unit, onMoreClick: (Track) -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        tracks.chunked(3).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                row.forEach { track ->
-                    Box(Modifier.weight(1f)) { ShortCard(track = track, onClick = { onClick(track) }, onMoreClick = { onMoreClick(track) }) }
-                }
-                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-            }
-        }
-    }
-}
-
-/** Menu do Short: SOMENTE favoritos + compartilhar (pedido da Parte 1). */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ShortsOptionsSheet(track: Track, isFavorite: Boolean, onToggleFavorite: (Track) -> Unit, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Color(0xFF121829), contentColor = Color.White) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.08f))) {
-                    if (track.thumbnailUrl != null) AsyncImage(model = track.thumbnailUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(text = track.title, style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(text = track.artist, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-            Row(Modifier.fillMaxWidth().clickable { onToggleFavorite(track); onDismiss() }.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = if (isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline, contentDescription = null, tint = if (isFavorite) Color(0xFFEC4899) else Color.White, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(16.dp))
-                Text(text = if (isFavorite) "Remover dos favoritos" else "Adicionar aos favoritos", style = MaterialTheme.typography.bodyLarge, color = Color.White, fontWeight = FontWeight.Medium)
-            }
-            Row(Modifier.fillMaxWidth().clickable {
-                val url = if (track.source == Source.YOUTUBE) "https://www.youtube.com/shorts/" + track.id else "https://music.youtube.com/watch?v=" + track.id
-                val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, "Assiste esse Short no VzTune\n" + track.title + "\n" + url) }
-                context.startActivity(Intent.createChooser(send, "Compartilhar Short"))
-                onDismiss()
-            }.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = VzIcons.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(16.dp))
-                Text(text = "Compartilhar", style = MaterialTheme.typography.bodyLarge, color = Color.White, fontWeight = FontWeight.Medium)
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PlaylistOptionsSheet(playlist: Playlist, onDismiss: () -> Unit, onPlayNext: (Playlist) -> Unit, onAddToQueue: (Playlist) -> Unit, onSaveToLibrary: (Playlist) -> Unit, onShare: (Playlist) -> Unit = {}) {
-    val context = LocalContext.current
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Color(0xFF121829), contentColor = Color.White) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.08f))) {
-                    val thumb = playlist.thumbnailUrl ?: playlist.mosaicThumbnails.firstOrNull()
-                    if (thumb != null) AsyncImage(model = thumb, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(text = playlist.title, style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(text = listOfNotNull(playlist.owner, "Playlist").joinToString(" - "), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-            Row(Modifier.fillMaxWidth().clickable { onPlayNext(playlist); onDismiss() }.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = VzIcons.PlayNext, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(16.dp))
-                Text(text = "Adicionar como proxima da fila", style = MaterialTheme.typography.bodyLarge, color = Color.White, fontWeight = FontWeight.Medium)
-            }
-            Row(Modifier.fillMaxWidth().clickable { onAddToQueue(playlist); onDismiss() }.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = VzIcons.AddToQueue, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(16.dp))
-                Text(text = "Adicionar ao final da fila", style = MaterialTheme.typography.bodyLarge, color = Color.White, fontWeight = FontWeight.Medium)
-            }
-            Row(Modifier.fillMaxWidth().clickable { onSaveToLibrary(playlist); onDismiss() }.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = VzIcons.PlaylistAdd, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(16.dp))
-                Text(text = "Salvar na biblioteca", style = MaterialTheme.typography.bodyLarge, color = Color.White, fontWeight = FontWeight.Medium)
-            }
-            Row(Modifier.fillMaxWidth().clickable {
-                val url = if (playlist.source == Source.YOUTUBE) "https://www.youtube.com/playlist?list=" + playlist.id else "https://music.youtube.com/playlist?list=" + playlist.id
-                val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, "Confere essa playlist no VzTune\n" + playlist.title + "\n" + url) }
-                context.startActivity(Intent.createChooser(send, "Compartilhar playlist"))
-                onShare(playlist)
-                onDismiss()
-            }.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = VzIcons.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(16.dp))
-                Text(text = "Compartilhar", style = MaterialTheme.typography.bodyLarge, color = Color.White, fontWeight = FontWeight.Medium)
-            }
-        }
-    }
-}
-'''
-
-# ---------------- PlaybackChrome: esconde tudo na tela Shorts ----------------
-NEW_FILES[f"{APP}/ui/navigation/PlaybackChrome.kt"] = r'''package com.vztechcore.vztune.ui.navigation
-
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
-import com.vztechcore.vztune.core.domain.music.Track
-import com.vztechcore.vztune.core.domain.player.PlaybackState
-import com.vztechcore.vztune.ui.components.feedback.DownloadStartedBanner
-import com.vztechcore.vztune.ui.components.layout.AppBottomBar
-import com.vztechcore.vztune.ui.components.player.CompactMiniPlayerBar
-import com.vztechcore.vztune.ui.components.player.MiniPlayerBar
-import com.vztechcore.vztune.ui.screens.main.MiniPlayerViewModel
-
-/**
- * Bottom chrome of the app: download banner, mini player (expanded or compact) and bottom bar.
- * Na tela Shorts nada disso aparece (imersiva, player proprio).
- */
-@Composable
-fun BoxScope.PlaybackChrome(
-    navController: NavController,
-    currentTab: AppTab,
-    playback: PlaybackState,
-    track: Track?,
-    dominantColor: Color,
-    miniPlayerVm: MiniPlayerViewModel,
-    isMinimized: Boolean,
-    isDetailScreen: Boolean,
-    isTrackInfoScreen: Boolean,
-    isShortsScreen: Boolean = false,
-    bannerTrack: Track? = null,
-    onDismissBanner: () -> Unit = {},
-    onViewDownloadsClick: () -> Unit = {},
-) {
-    if (isShortsScreen) return
-    Column(
-        modifier = Modifier
-            .align(Alignment.BottomCenter)
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .imePadding()
-    ) {
-        DownloadStartedBanner(
-            track = bannerTrack,
-            onDismiss = onDismissBanner,
-            onViewClick = onViewDownloadsClick,
-        )
-        if (!isTrackInfoScreen) {
-            when {
-                track != null && isDetailScreen -> {
-                    MiniPlayerBar(
-                        track = track,
-                        isPlaying = playback.isPlaying,
-                        isLoading = playback.isLoading,
-                        progress = playback.progress,
-                        dominantColor = dominantColor,
-                        onPlayPauseClick = miniPlayerVm::togglePlayPause,
-                        onNextClick = miniPlayerVm::next,
-                        onPrevClick = miniPlayerVm::previous,
-                        onClick = { },
-                        modifier = Modifier.padding(bottom = 8.dp),
-                    )
-                }
-                track != null -> {
-                    AnimatedVisibility(
-                        visible = isMinimized,
-                        enter = slideInVertically(
-                            initialOffsetY = { it },
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                        ) + fadeIn(),
-                        exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(300)) + fadeOut(),
-                        modifier = Modifier
-                            .padding(bottom = 16.dp, start = 16.dp, end = 16.dp),
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier
-                                    .size(48.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.75f))
-                                    .clickable { miniPlayerVm.setMinimized(false) },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    imageVector = currentTab.selectedIcon,
-                                    contentDescription = "Abrir Menu",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(24.dp),
-                                )
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            CompactMiniPlayerBar(
-                                track = track,
-                                isPlaying = playback.isPlaying,
-                                isLoading = playback.isLoading,
-                                progress = playback.progress,
-                                dominantColor = dominantColor,
-                                onPlayPauseClick = miniPlayerVm::togglePlayPause,
-                                onNextClick = miniPlayerVm::next,
-                                onClick = { },
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                    }
-                    AnimatedVisibility(
-                        visible = !isMinimized,
-                        enter = slideInVertically(
-                            initialOffsetY = { it },
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-                        ) + fadeIn(),
-                        exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(300)) + fadeOut(),
-                    ) {
-                        Column {
-                            MiniPlayerBar(
-                                track = track,
-                                isPlaying = playback.isPlaying,
-                                isLoading = playback.isLoading,
-                                progress = playback.progress,
-                                dominantColor = dominantColor,
-                                onPlayPauseClick = miniPlayerVm::togglePlayPause,
-                                onNextClick = miniPlayerVm::next,
-                                onPrevClick = miniPlayerVm::previous,
-                                onClick = { },
-                            )
-                            AppBottomBar(
-                                selected = currentTab,
-                                onSelect = { navController.navigateToTab(it) },
-                            )
-                        }
-                    }
-                }
-                !isDetailScreen -> {
-                    AppBottomBar(
-                        selected = currentTab,
-                        onSelect = { navController.navigateToTab(it) },
-                    )
-                }
-            }
-        }
-    }
-}
-'''
-
-# ---------------- Parte 3: viewer de imagem com zoom ----------------
-NEW_FILES[f"{APP}/ui/components/feedback/ImageViewer.kt"] = r'''package com.vztechcore.vztune.ui.components.feedback
-
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import com.vztechcore.vztune.ui.icons.VzIcons
-import com.vztechcore.vztune.ui.icons.actions.Close
-
-/**
- * Viewer em tela cheia da foto de perfil / banner do canal (Parte 3).
- * - A imagem "viaja" pro centro com animacao de escala + fade.
- * - O fundo escurece (e o conteudo atras fica borrado via Modifier.blur na tela).
- * - Pinch zoom (1x a 5x) + arrastar quando zoomada; duplo toque reseta.
- * - Toque fora / no X fecha.
- */
-@Composable
-fun ImageViewerOverlay(url: String?, onDismiss: () -> Unit) {
-    if (url.isNullOrBlank()) return
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
-    val appear = remember { Animatable(0f) }
-    LaunchedEffect(url) {
-        scale = 1f
-        offset = Offset.Zero
-        appear.snapTo(0f)
-        appear.animateTo(1f, tween(260, easing = FastOutSlowInEasing))
-    }
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.88f * appear.value))
-            .clickable(enabled = scale <= 1.01f) { onDismiss() },
-        contentAlignment = Alignment.Center,
-    ) {
-        AsyncImage(
-            model = url,
-            contentDescription = null,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier
-                .fillMaxWidth()
-                .graphicsLayer {
-                    val s = (0.6f + 0.4f * appear.value) * scale
-                    scaleX = s
-                    scaleY = s
-                    translationX = offset.x
-                    translationY = offset.y
-                    alpha = appear.value
-                }
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onTap = { if (scale <= 1.01f) onDismiss() },
-                        onDoubleTap = { scale = 1f; offset = Offset.Zero },
-                    )
-                }
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false)
-                        var prevDist = -1f
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val pressed = event.changes.filter { it.pressed }
-                            if (pressed.isEmpty()) break
-                            if (pressed.size >= 2) {
-                                val dist = (pressed[0].position - pressed[1].position).getDistance()
-                                if (prevDist > 0f && dist > 0f) {
-                                    scale = (scale * (dist / prevDist)).coerceIn(1f, 5f)
-                                    if (scale <= 1.01f) offset = Offset.Zero
-                                    event.changes.forEach { it.consume() }
-                                }
-                                prevDist = dist
-                            } else {
-                                prevDist = -1f
-                            }
-                        }
-                    }
-                }
-                .pointerInput(scale > 1.01f) {
-                    if (scale > 1.01f) {
-                        detectDragGestures { change, drag ->
-                            change.consume()
-                            offset += drag
-                        }
-                    }
-                },
-        )
-        IconButton(
-            onClick = onDismiss,
-            modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp),
-        ) {
-            Icon(imageVector = VzIcons.Close, contentDescription = "Fechar", tint = Color.White, modifier = Modifier.size(26.dp))
-        }
-    }
-}
-'''
-
-# ---------------- Parte 2: feed em memoria ----------------
-NEW_FILES[f"{APP}/ui/screens/shorts/ShortsFeed.kt"] = r'''package com.vztechcore.vztune.ui.screens.shorts
-
-import com.vztechcore.vztune.core.domain.music.Track
-
-/**
- * Handoff em memoria da lista de Shorts pra tela cheia (a rota leva so a chave).
- * Guarda no maximo 5 feeds; o mais antigo sai quando entra um novo.
- */
-object ShortsFeed {
-    private val feeds = LinkedHashMap<String, List<Track>>()
-
-    @Synchronized
-    fun put(items: List<Track>): String {
-        val key = "shorts_" + System.nanoTime()
-        feeds[key] = items
-        while (feeds.size > 5) feeds.remove(feeds.keys.first())
-        return key
-    }
-
-    @Synchronized
-    fun get(key: String): List<Track> = feeds[key].orEmpty()
-}
-'''
-
-# ---------------- Parte 2: ViewModel (player proprio) ----------------
-NEW_FILES[f"{APP}/ui/screens/shorts/ShortsViewModel.kt"] = r'''package com.vztechcore.vztune.ui.screens.shorts
-
-import android.content.Context
-import androidx.lifecycle.SavedStateHandle
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.navigation.toRoute
-import com.vztechcore.vztune.core.domain.music.Track
-import com.vztechcore.vztune.data.music.MusicRepository
-import com.vztechcore.vztune.data.prefs.models.FollowedArtist
-import com.vztechcore.vztune.data.prefs.models.StoredTrack
-import com.vztechcore.vztune.data.prefs.store.FavoriteTracksStore
-import com.vztechcore.vztune.data.prefs.store.FollowedArtistsStore
-import com.vztechcore.vztune.data.youtube.YouTubeRepository
-import com.vztechcore.vztune.ui.navigation.Routes
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import javax.inject.Inject
-
-data class ShortsUiState(
-    val channelId: String = "",
-    val channelName: String = "",
-    val channelAvatarUrl: String? = null,
-    val channelHandle: String? = null,
-    val items: List<Track> = emptyList(),
-    val index: Int = 0,
-    val isPlaying: Boolean = false,
-    val isLoading: Boolean = true,
-    val isMuted: Boolean = false,
-    val speed: Float = 1f,
-    val info: YouTubeRepository.ShortPlaybackInfo? = null,
-    val selectedQuality: String? = null,
-    val isFollowing: Boolean = false,
-    val isFavorite: Boolean = false,
-    // Cue de pause/play: token muda a cada toque; a tela anima o icone.
-    val cueToken: Long = 0L,
-    val cueIsPause: Boolean = false,
-)
-
-/**
- * Tela Shorts: ExoPlayer PROPRIO (nao toca no PlayerController).
- * O foco de audio (handleAudioFocus = true) pausa a musica principal ao
- * entrar e o release() ao sair devolve o foco -> o MiniPlayer continua
- * exatamente na mesma faixa em que estava.
- */
-@HiltViewModel
-class ShortsViewModel @Inject constructor(
-    @ApplicationContext context: Context,
-    private val musicRepository: MusicRepository,
-    private val followedStore: FollowedArtistsStore,
-    private val favoriteTracksStore: FavoriteTracksStore,
-    savedStateHandle: SavedStateHandle,
-) : ViewModel() {
-
-    private val route = savedStateHandle.toRoute<Routes.Shorts>()
-    private val items: List<Track> = ShortsFeed.get(route.feedKey)
-    private val infoCache = mutableMapOf<String, YouTubeRepository.ShortPlaybackInfo>()
-    private var favKeys: Set<String> = emptySet()
-    private var loadJob: Job? = null
-
-    private val _state = MutableStateFlow(
-        ShortsUiState(
-            channelId = route.channelId,
-            channelName = route.channelName,
-            channelAvatarUrl = route.channelAvatarUrl,
-            channelHandle = route.channelHandle,
-            items = items,
-            index = route.startIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0)),
-            isLoading = items.isNotEmpty(),
-        )
-    )
-    val uiState: StateFlow<ShortsUiState> = _state.asStateFlow()
-
-    val player: ExoPlayer = ExoPlayer.Builder(context)
-        .setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(C.USAGE_MEDIA)
-                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-                .build(),
-            true,
-        )
-        .build()
-        .apply {
-            repeatMode = Player.REPEAT_MODE_ONE // Short roda em loop.
-            addListener(object : Player.Listener {
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    _state.update { it.copy(isPlaying = isPlaying) }
-                }
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == Player.STATE_READY) {
-                        _state.update { it.copy(isLoading = false) }
-                    }
-                }
-            })
-        }
-
-    init {
-        viewModelScope.launch {
-            followedStore.isFollowing(route.channelId).collect { f ->
-                _state.update { it.copy(isFollowing = f) }
-            }
-        }
-        viewModelScope.launch {
-            favoriteTracksStore.tracks
-                .map { list -> list.map { StoredTrack.from(it).key }.toSet() }
-                .collect { keys ->
-                    favKeys = keys
-                    _state.update { it.copy(isFavorite = keyOf(it.index) in keys) }
-                }
-        }
-    }
-
-    private fun keyOf(index: Int): String =
-        items.getOrNull(index)?.let { StoredTrack.from(it).key } ?: ""
-
-    /** Chamado quando o pager assenta numa pagina: carrega info + troca o video. */
-    fun onPageSettled(index: Int) {
-        if (index !in items.indices) return
-        val track = items[index]
-        val cached = infoCache[track.id]
-        _state.update {
-            it.copy(
-                index = index,
-                info = cached,
-                isLoading = cached == null,
-                isFavorite = keyOf(index) in favKeys,
-                selectedQuality = cached?.streams?.firstOrNull()?.qualityLabel,
-            )
-        }
-        loadJob?.cancel()
-        if (cached != null) {
-            playStream(cached.streams.firstOrNull(), 0L)
-            return
-        }
-        loadJob = viewModelScope.launch {
-            val info = musicRepository.getShortPlaybackInfo(track.id)
-            if (info != null) infoCache[track.id] = info
-            if (_state.value.index != index) return@launch
-            if (info == null) {
-                _state.update { it.copy(isLoading = false) }
-                return@launch
-            }
-            _state.update {
-                it.copy(info = info, isLoading = false, selectedQuality = info.streams.firstOrNull()?.qualityLabel)
-            }
-            playStream(info.streams.firstOrNull(), 0L)
-        }
-    }
-
-    private fun playStream(stream: YouTubeRepository.ShortVideoStream?, startPosMs: Long) {
-        if (stream == null) return
-        player.setMediaItem(MediaItem.fromUri(stream.url), startPosMs)
-        player.prepare()
-        player.playWhenReady = true
-        _state.update { it.copy(selectedQuality = stream.qualityLabel, isLoading = true) }
-    }
-
-    fun selectQuality(label: String) {
-        val info = _state.value.info ?: return
-        val stream = info.streams.firstOrNull { it.qualityLabel == label } ?: return
-        playStream(stream, player.currentPosition)
-    }
-
-    fun togglePlayPause() {
-        val nowPause = player.isPlaying
-        if (nowPause) player.pause() else player.play()
-        _state.update { it.copy(cueToken = System.nanoTime(), cueIsPause = nowPause) }
-    }
-
-    fun toggleMute() {
-        val muted = !_state.value.isMuted
-        player.volume = if (muted) 0f else 1f
-        _state.update { it.copy(isMuted = muted) }
-    }
-
-    fun setSpeed(value: Float) {
-        val v = value.coerceIn(0.35f, 4f)
-        player.setPlaybackSpeed(v)
-        _state.update { it.copy(speed = v) }
-    }
-
-    fun toggleFavorite() {
-        val track = items.getOrNull(_state.value.index) ?: return
-        viewModelScope.launch { favoriteTracksStore.toggle(track) }
-    }
-
-    fun toggleFollow() {
-        viewModelScope.launch {
-            followedStore.toggle(
-                FollowedArtist(
-                    id = route.channelId,
-                    name = route.channelName,
-                    thumbnailUrl = route.channelAvatarUrl,
-                    isYouTubeChannel = true,
-                )
-            )
-        }
-    }
-
-    override fun onCleared() {
-        loadJob?.cancel()
-        player.release() // devolve o foco de audio -> musica principal retoma.
-        super.onCleared()
-    }
-}
-'''
-
-# ---------------- Parte 2: Tela Shorts ----------------
-NEW_FILES[f"{APP}/ui/screens/shorts/ShortsScreen.kt"] = r'''package com.vztechcore.vztune.ui.screens.shorts
+CONTENT = r'''
+package com.vztechcore.vztune.ui.screens.shorts
 
 import android.content.Intent
 import android.widget.Toast
@@ -1420,14 +92,8 @@ import kotlinx.coroutines.delay
 
 private val SheetColor = Color(0xFF121829)
 private val HashtagBlue = Color(0xFF5AB0FF)
+private val ShortLineBreak = Char(10)
 
-/**
- * Tela cheia de Shorts (Parte 2):
- *  - Rolagem vertical (VerticalPager) entre Shorts, loop no atual.
- *  - Player PROPRIO do ShortsViewModel - o MiniPlayer principal nao e tocado.
- *  - Toque pausa/despausa com cue animado; pinch zoom sem pausar (interface
- *    some e volta pelo botao inferior); barra superior preta AMOLED.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShortsScreen(
@@ -1487,9 +153,6 @@ fun ShortsScreen(
         label = "shortsDescPad",
     )
 
-    // Gestos da pagina atual: tap = pause/play, duplo toque = reseta zoom,
-    // pinch (2 dedos) = zoom sem pausar, 1 dedo so arrasta quando zoomado
-    // (senao o VerticalPager cuida do swipe pra proximo/anterior).
     val gestureModifier = Modifier
         .pointerInput(Unit) {
             detectTapGestures(
@@ -1529,7 +192,6 @@ fun ShortsScreen(
         }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        // ---- Video (encolhe quando a Descricao sobe, sem parar de tocar) ----
         Box(Modifier.fillMaxSize().padding(bottom = bottomPad)) {
             VerticalPager(
                 state = pagerState,
@@ -1549,7 +211,7 @@ fun ShortsScreen(
                         }
                     ) {
                         AsyncImage(
-                            model = track.thumbnailUrl ?: "https://i.ytimg.com/vi/${track.id}/hqdefault.jpg",
+                            model = track.thumbnailUrl ?: ("https://i.ytimg.com/vi/" + track.id + "/hqdefault.jpg"),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
@@ -1573,7 +235,6 @@ fun ShortsScreen(
             }
         }
 
-        // ---- Cue de pause/play (aparece e some rapido) ----
         AnimatedVisibility(
             visible = cueVisible,
             enter = fadeIn(tween(100)),
@@ -1601,7 +262,6 @@ fun ShortsScreen(
             )
         }
 
-        // ---- Interface (barra superior + acoes + infos) ----
         if (interfaceVisible) {
             Row(
                 Modifier
@@ -1634,12 +294,12 @@ fun ShortsScreen(
                     onClick = onToggleFavorite,
                 )
                 ShortAction(VzIcons.Share, "Compartilhar") {
+                    val shareText = "Olha esse Short no VzTune" + ShortLineBreak +
+                        currentTrack.title + ShortLineBreak +
+                        "https://www.youtube.com/shorts/" + currentTrack.id
                     val send = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(
-                            Intent.EXTRA_TEXT,
-                            "Olha esse Short no VzTune\n" + currentTrack.title + "\nhttps://www.youtube.com/shorts/" + currentTrack.id,
-                        )
+                        putExtra(Intent.EXTRA_TEXT, shareText)
                     }
                     context.startActivity(Intent.createChooser(send, "Compartilhar Short"))
                 }
@@ -1649,12 +309,11 @@ fun ShortsScreen(
                 ShortAction(VzIcons.Bookmark, "Salvar") {
                     Toast.makeText(context, "Salvar em breve ;)", Toast.LENGTH_SHORT).show()
                 }
-                // Som usado no Short (visual por enquanto): so a thumbnail.
                 Box(
                     Modifier.size(44.dp).clip(RoundedCornerShape(10.dp))
                         .background(Color.White.copy(alpha = 0.08f))
                         .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                        .clickable { Toast.makeText(context, "Som do Short em breve ;)", Toast.LENGTH_SHORT).show()
+                        .clickable { Toast.makeText(context, "Som do Short em breve ;)", Toast.LENGTH_SHORT).show() }
                 ) {
                     AsyncImage(
                         model = currentTrack.thumbnailUrl,
@@ -1718,7 +377,6 @@ fun ShortsScreen(
             }
         }
 
-        // ---- Botao inferior pra voltar a interface (zoom ou oculta) ----
         if (!interfaceVisible) {
             Row(
                 Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 26.dp)
@@ -1736,7 +394,6 @@ fun ShortsScreen(
         }
     }
 
-    // ---- Sheet dos 3 pontinhos ----
     if (showMenu) {
         ModalBottomSheet(
             onDismissRequest = { showMenu = false },
@@ -1753,7 +410,6 @@ fun ShortsScreen(
         }
     }
 
-    // ---- Sheet de qualidade ----
     if (showQuality) {
         ModalBottomSheet(
             onDismissRequest = { showQuality = false },
@@ -1798,7 +454,6 @@ fun ShortsScreen(
         }
     }
 
-    // ---- Sheet de velocidade ----
     if (showSpeed) {
         ModalBottomSheet(
             onDismissRequest = { showSpeed = false },
@@ -1839,7 +494,7 @@ fun ShortsScreen(
                                 .padding(horizontal = 14.dp, vertical = 8.dp)
                         ) {
                             Text(
-                                "${label}x",
+                                label + "x",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = if (selected) Color.Black else Color.White,
                                 fontWeight = FontWeight.Bold,
@@ -1851,7 +506,6 @@ fun ShortsScreen(
         }
     }
 
-    // ---- Sheet de Descricao (video encolhe e continua tocando) ----
     if (showDescription) {
         ModalBottomSheet(
             onDismissRequest = { showDescription = false },
@@ -1903,7 +557,7 @@ fun ShortsScreen(
                 Spacer(Modifier.height(14.dp))
                 DescStatRow("Marcações gostei:", formatPlainCount(state.info?.likeCount))
                 DescStatRow("Visualizações:", formatPlainCount(state.info?.viewCount))
-                DescStatRow("Data em que foi lançado:", state.info?.publishedText ?: currentTrack.publishedText ?: "—")
+                DescStatRow("Data em que foi lançado:", state.info?.publishedText ?: currentTrack.publishedText ?: "-")
                 Spacer(Modifier.height(12.dp))
                 val descText = state.info?.description?.takeIf { it.isNotBlank() } ?: currentTrack.title
                 Text(
@@ -1945,11 +599,10 @@ private fun DescStatRow(label: String, value: String) {
 }
 
 private fun formatPlainCount(n: Long?): String {
-    if (n == null || n <= 0L) return "—"
+    if (n == null || n <= 0L) return "-"
     return String.format("%,d", n).replace(',', '.')
 }
 
-/** Descricao com #hashtags em azul. */
 @Composable
 private fun rememberHashtagText(text: String): AnnotatedString = remember(text) {
     buildAnnotatedString {
@@ -1964,445 +617,91 @@ private fun rememberHashtagText(text: String): AnnotatedString = remember(text) 
 }
 '''
 
-# ===========================================================================
-# PATCHES em arquivos existentes
-# ===========================================================================
-PATCHES = {}
 
-# ---------------- YouTubeSearchParser: avatar do canal na busca ----------------
-_AVATAR_HELPER = r'''    /** Foto do canal num videoRenderer da busca (channelThumbnailSupportedRenderers). */
-    fun channelAvatarOf(r: JSONObject): String? {
-        val node = r.optJSONObject("channelThumbnailSupportedRenderers")
-            ?.optJSONObject("channelThumbnailWithLinkRenderer")
-            ?.optJSONObject("thumbnail")
-        return thumbnailOf(node) ?: thumbnailOf(r.optJSONObject("channelThumbnail"))
-    }
-'''
-_SEARCH_TRACK_OLD = 'Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, publishedText = published)'
-_SEARCH_TRACK_NEW = 'Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, publishedText = published, channelAvatarUrl = channelAvatarOf(r))'
+def balance(src):
+    stack = []
+    i, n = 0, len(src)
+    line = 1
+    pairs = {')': '(', ']': '[', '}': '{'}
+    in_str = in_char = in_lc = in_bc = False
+    while i < n:
+        c = src[i]
+        if c == chr(10):
+            line += 1
+            in_lc = False
+            if in_str:
+                return "ERRO: string nao fechada na linha %d" % (line - 1)
+            i += 1; continue
+        if in_lc:
+            i += 1; continue
+        if in_bc:
+            if c == '*' and i + 1 < n and src[i + 1] == '/':
+                in_bc = False; i += 2; continue
+            i += 1; continue
+        if in_str:
+            if c == chr(92):
+                i += 2; continue
+            if c == '"':
+                in_str = False
+            i += 1; continue
+        if in_char:
+            if c == chr(92):
+                i += 2; continue
+            if c == "'":
+                in_char = False
+            i += 1; continue
+        if c == '/' and i + 1 < n and src[i + 1] == '/':
+            in_lc = True; i += 2; continue
+        if c == '/' and i + 1 < n and src[i + 1] == '*':
+            in_bc = True; i += 2; continue
+        if c == '"':
+            in_str = True; i += 1; continue
+        if c == "'":
+            in_char = True; i += 1; continue
+        if c in '([{':
+            stack.append((c, line))
+        elif c in ')]}':
+            if not stack or stack[-1][0] != pairs[c]:
+                return "ERRO: fechamento inesperado '%s' na linha %d" % (c, line)
+            stack.pop()
+        i += 1
+    if stack:
+        return "ERRO: nao fechado %s" % (stack[-1],)
+    return "ok"
 
-PATCHES[f"{DATA}/youtube/YouTubeSearchParser.kt"] = [
-    InsertBefore("    fun parsePlaylists(json: JSONObject): List<SearchHit.PlaylistHit> {", _AVATAR_HELPER, marker="fun channelAvatarOf("),
-    Replace(_SEARCH_TRACK_OLD, _SEARCH_TRACK_NEW, marker="channelAvatarUrl = channelAvatarOf(r)"),
-]
 
-# ---------------- YouTubeChannelParser: avatar nos videos do canal ----------------
-PATCHES[f"{DATA}/youtube/YouTubeChannelParser.kt"] = [
-    Replace(
-        'out += ' + _SEARCH_TRACK_OLD,
-        'out += ' + _SEARCH_TRACK_OLD[:-1] + ', channelAvatarUrl = YouTubeSearchParser.channelAvatarOf(r))',
-        marker="channelAvatarUrl = YouTubeSearchParser.channelAvatarOf(r)",
-    ),
-]
-
-# ---------------- YouTubeRepository ----------------
-_FORMAT_PUBLISHED_NEW = r'''    /** "agora", "há X min", "há X horas", "há 1 dia", "há X semanas", "há X meses", "há X anos". */
-    fun formatPublished(uploadDate: DateWrapper?): String? {
-        val odt = runCatching { uploadDate?.offsetDateTime() }.getOrNull() ?: return null
-        val now = OffsetDateTime.now()
-        val minutes = ChronoUnit.MINUTES.between(odt, now)
-        if (minutes < 0) return null
-        val hours = ChronoUnit.HOURS.between(odt, now)
-        val days = ChronoUnit.DAYS.between(odt, now)
-        return when {
-            minutes < 1 -> "agora"
-            minutes < 60 -> if (minutes == 1L) "há 1 min" else "há $minutes min"
-            hours < 24 -> if (hours == 1L) "há 1 hora" else "há $hours horas"
-            days == 1L -> "há 1 dia"
-            days < 7 -> "há $days dias"
-            days < 30 -> { val w = days / 7; if (w == 1L) "há 1 semana" else "há $w semanas" }
-            days < 365 -> { val m = days / 30; if (m == 1L) "há 1 mês" else "há $m meses" }
-            else -> { val y = days / 365; if (y == 1L) "há 1 ano" else "há $y anos" }
-        }
-    }
-'''
-
-_NP_TRACK_OLD = 'Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate))'
-_NP_TRACK_NEW = 'Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate), channelAvatarUrl = runCatching { stream.uploaderAvatars?.lastOrNull()?.url }.getOrNull())'
-
-_FILL_BLOCK_OLD = '''if (channelName.isNotBlank()) {
-videos = videos.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }.toMutableList()
-shorts = shorts.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }.toMutableList()
-}'''
-_FILL_BLOCK_NEW = r'''if (channelName.isNotBlank()) {
-    val chAvatar = homeParsed.avatarUrl
-    videos = videos.map { t ->
-        var v = if (t.artist.isBlank()) t.copy(artist = channelName) else t
-        if (v.channelAvatarUrl.isNullOrBlank() && !chAvatar.isNullOrBlank()) v = v.copy(channelAvatarUrl = chAvatar)
-        v
-    }.toMutableList()
-    shorts = shorts.map { t ->
-        var v = if (t.artist.isBlank()) t.copy(artist = channelName) else t
-        if (v.channelAvatarUrl.isNullOrBlank() && !chAvatar.isNullOrBlank()) v = v.copy(channelAvatarUrl = chAvatar)
-        v
-    }.toMutableList()
-}'''
-
-_SHORT_INFO_CODE = r'''    // ================= SHORTS (tela cheia) =================
-    /** Stream de video com audio (muxed) pra tela Shorts. */
-    data class ShortVideoStream(val url: String, val qualityLabel: String, val height: Int)
-
-    /** Tudo que a tela Shorts precisa de um video: streams + detalhes. */
-    data class ShortPlaybackInfo(
-        val streams: List<ShortVideoStream>,
-        val viewCount: Long?,
-        val likeCount: Long?,
-        val description: String?,
-        val publishedText: String?,
-        val channelAvatarUrl: String?,
-        val durationSeconds: Long,
-    )
-
-    /**
-     * Busca streams de VIDEO (com audio) + detalhes do Short.
-     * NewPipe da likes/views/descricao/data/avatar + streams muxed;
-     * InnerTube (formats) entra com as qualidades extras/fallback.
-     */
-    suspend fun getShortPlaybackInfo(videoId: String): ShortPlaybackInfo? = withContext(Dispatchers.IO) {
-        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
-        val np = runCatching {
-            val ex = ServiceList.YouTube.getStreamExtractor("https://www.youtube.com/watch?v=$videoId")
-            ex.fetchPage()
-            ex
-        }.getOrNull()
-        val streams = mutableListOf<ShortVideoStream>()
-        if (np != null) {
-            runCatching {
-                np.videoStreams.filter { !it.isVideoOnly }.forEach { s ->
-                    val u = s.content
-                    if (!u.isNullOrBlank()) {
-                        val res = s.resolution.orEmpty()
-                        val h = res.removeSuffix("p").toIntOrNull() ?: 0
-                        streams += ShortVideoStream(u, res.ifBlank { "Auto" }, h)
-                    }
-                }
-            }
-            runCatching {
-                np.hlsUrl?.takeIf { it.isNotBlank() }?.let { streams += ShortVideoStream(it, "Auto (HLS)", 0) }
-            }
-        }
-        // InnerTube: formatos muxed (qualityLabel) - extras/fallback.
-        runCatching {
-            val player = InnerTubeYouTube.player(videoId)
-            val formats = player.optJSONObject("streamingData")?.optJSONArray("formats")
-            if (formats != null) {
-                for (i in 0 until formats.length()) {
-                    val f = formats.optJSONObject(i) ?: continue
-                    val url = f.optString("url").takeIf { it.isNotBlank() } ?: continue
-                    val label = f.optString("qualityLabel").takeIf { it.isNotBlank() } ?: f.optString("quality").ifBlank { "Auto" }
-                    val h = f.optInt("height", 0)
-                    if (h <= 0 || streams.none { it.height == h }) streams += ShortVideoStream(url, label, h)
-                }
-            }
-        }.onFailure { Log.w(TAG, "InnerTube short formats failed: ${it.message}") }
-        if (streams.isEmpty()) return@withContext null
-        ShortPlaybackInfo(
-            streams = streams.sortedByDescending { it.height },
-            viewCount = runCatching { np?.viewCount?.takeIf { it > 0 } }.getOrNull(),
-            likeCount = runCatching { np?.likeCount?.takeIf { it > 0 } }.getOrNull(),
-            description = runCatching { np?.description?.content }.getOrNull()?.takeIf { it.isNotBlank() },
-            publishedText = formatPublished(runCatching { np?.uploadDate }.getOrNull()),
-            channelAvatarUrl = runCatching { np?.uploaderAvatars?.lastOrNull()?.url }.getOrNull(),
-            durationSeconds = runCatching { np?.length ?: 0L }.getOrDefault(0L),
-        )
-    }
-'''
-
-PATCHES[f"{DATA}/youtube/YouTubeRepository.kt"] = [
-    ReplaceBetween(
-        "    fun formatPublished(uploadDate: DateWrapper?): String? {",
-        "    /** Faixas de uma playlist do YouTube (PL..., UU..., OL...). Usado no menu da playlist do canal. */",
-        _FORMAT_PUBLISHED_NEW,
-        marker="ChronoUnit.MINUTES.between",
-    ),
-    Replace(
-        "thumbnailUrl = stream.thumbnails.firstOrNull()?.url,",
-        "thumbnailUrl = stream.thumbnails.firstOrNull()?.url,\nchannelAvatarUrl = runCatching { stream.uploaderAvatars?.lastOrNull()?.url }.getOrNull(),",
-        marker="channelAvatarUrl = runCatching { stream.uploaderAvatars",
-    ),
-    Replace(_NP_TRACK_OLD, _NP_TRACK_NEW, marker="publishedText = formatPublished(stream.uploadDate), channelAvatarUrl", all=True),
-    Replace(_FILL_BLOCK_OLD, _FILL_BLOCK_NEW, marker="val chAvatar = homeParsed.avatarUrl"),
-    InsertBefore("    private companion object {", _SHORT_INFO_CODE, marker="data class ShortPlaybackInfo("),
-]
-
-# ---------------- MusicRepository: fachada ----------------
-PATCHES[f"{DATA}/music/MusicRepository.kt"] = [
-    InsertBefore(
-        "    /** Sugestões de busca — delegate direto pro YTMusic. */",
-        r'''    /** Shorts: streams de video + detalhes (views, likes, descricao, data, avatar). */
-    suspend fun getShortPlaybackInfo(videoId: String) =
-        runCatching { youTubeRepository.getShortPlaybackInfo(videoId) }.getOrNull()
-''',
-        marker="suspend fun getShortPlaybackInfo(",
-    ),
-]
-
-# ---------------- AppNavHost ----------------
-PATCHES[f"{APP}/ui/navigation/AppNavHost.kt"] = [
-    InsertBefore(
-        "import com.vztechcore.vztune.ui.screens.search.SearchScreen",
-        '''import com.vztechcore.vztune.ui.screens.shorts.ShortsFeed
-import com.vztechcore.vztune.ui.screens.shorts.ShortsScreen
-import com.vztechcore.vztune.ui.screens.shorts.ShortsViewModel''',
-        marker="import com.vztechcore.vztune.ui.screens.shorts.ShortsScreen",
-    ),
-    InsertBefore(
-        "val isTrackInfoScreen = backStackEntry?.destination?.hasRoute<Routes.TrackInfo>() == true",
-        "val isShortsScreen = backStackEntry?.destination?.hasRoute<Routes.Shorts>() == true",
-        marker="val isShortsScreen =",
-    ),
-    InsertBefore(
-        "onLoadMoreChannelVideos = vm::loadMoreChannelVideos,",
-        r'''favoriteKeys = favoriteKeys,
-onToggleFavorite = menuVm::onToggleFavorite,
-onShortClick = { t ->
-    val idx = state.shorts.indexOfFirst { it.id == t.id }.coerceAtLeast(0)
-    val feedKey = ShortsFeed.put(state.shorts)
-    navController.navigate(
-        Routes.Shorts(
-            feedKey = feedKey,
-            startIndex = idx,
-            channelId = state.artistId,
-            channelName = state.name,
-            channelAvatarUrl = state.thumbnailUrl,
-            channelHandle = state.channelHandle,
-        )
-    )
-},''',
-        marker="val feedKey = ShortsFeed.put(state.shorts)",
-    ),
-    InsertBefore(
-        "composable<Routes.TrackInfo> {",
-        r'''composable<Routes.Shorts> {
-    ScreenSlideIn(fromLeft = false) {
-        val vm: ShortsViewModel = hiltViewModel()
-        val state by vm.uiState.collectAsStateWithLifecycle()
-        ShortsScreen(
-            state = state,
-            player = vm.player,
-            onBackClick = { navController.popBackStack() },
-            onPageSettled = vm::onPageSettled,
-            onTogglePlayPause = vm::togglePlayPause,
-            onToggleMute = vm::toggleMute,
-            onSpeedChange = vm::setSpeed,
-            onQualitySelect = vm::selectQuality,
-            onToggleFavorite = vm::toggleFavorite,
-            onToggleFollow = vm::toggleFollow,
-            onOpenChannel = {
-                navController.navigate(
-                    Routes.Artist(
-                        id = state.channelId,
-                        name = state.channelName,
-                        thumbnailUrl = state.channelAvatarUrl,
-                        isYouTubeChannel = true,
-                        initialTab = 3,
-                    )
-                )
-            },
-        )
-    }
-}''',
-        marker="composable<Routes.Shorts> {",
-    ),
-    Replace(
-        "isTrackInfoScreen = isTrackInfoScreen,",
-        "isTrackInfoScreen = isTrackInfoScreen,\nisShortsScreen = isShortsScreen,",
-        marker="isShortsScreen = isShortsScreen,",
-    ),
-]
-
-# ---------------- ArtistViewModel: initialTab ----------------
-PATCHES[f"{APP}/ui/screens/artist/ArtistViewModel.kt"] = [
-    Replace(
-        '''thumbnailUrl = route.thumbnailUrl,
-isYouTubeChannel = route.isYouTubeChannel,
-)''',
-        '''thumbnailUrl = route.thumbnailUrl,
-isYouTubeChannel = route.isYouTubeChannel,
-initialTab = route.initialTab,
-)''',
-        marker="initialTab = route.initialTab,",
-    ),
-]
-
-# ---------------- ArtistScreen ----------------
-PATCHES[f"{APP}/ui/screens/artist/ArtistScreen.kt"] = [
-    InsertBefore(
-        "import com.vztechcore.vztune.ui.components.text.LinkifiedText",
-        '''import androidx.compose.ui.draw.blur
-import com.vztechcore.vztune.ui.components.feedback.ImageViewerOverlay''',
-        marker="import com.vztechcore.vztune.ui.components.feedback.ImageViewerOverlay",
-    ),
-    InsertBefore(
-        "var playlistMenu by remember { mutableStateOf<Playlist?>(null) }",
-        '''var shortMenu by remember { mutableStateOf<Track?>(null) }
-var viewerImageUrl by remember { mutableStateOf<String?>(null) }''',
-        marker="var viewerImageUrl by remember",
-    ),
-    Replace(
-        "var selectedChannelTab by remember { mutableStateOf(0) }",
-        "var selectedChannelTab by remember(state.initialTab) { mutableStateOf(state.initialTab) }",
-        marker="remember(state.initialTab) { mutableStateOf(state.initialTab) }",
-    ),
-    InsertBefore(
-        "if (profileMenuOpen) {",
-        r'''shortMenu?.let { sh ->
-    val shKey = StoredTrack.from(sh).key
-    ShortsOptionsSheet(
-        track = sh,
-        isFavorite = shKey in favoriteKeys,
-        onToggleFavorite = onToggleFavorite,
-        onDismiss = { shortMenu = null },
-    )
-}''',
-        marker="shortMenu?.let { sh ->",
-    ),
-    Replace(
-        '''LazyColumn(
-state = listState,
-contentPadding = PaddingValues(bottom = 140.dp),
-modifier = Modifier.fillMaxSize(),
-) {''',
-        '''LazyColumn(
-state = listState,
-contentPadding = PaddingValues(bottom = 140.dp),
-modifier = Modifier.fillMaxSize().blur(if (viewerImageUrl != null) 28.dp else 0.dp),
-) {''',
-        marker=".blur(if (viewerImageUrl != null) 28.dp else 0.dp)",
-    ),
-    Replace(
-        "CollapsedHeaderHost(visible = isCollapsed) {",
-        '''if (viewerImageUrl != null) {
-    ImageViewerOverlay(url = viewerImageUrl, onDismiss = { viewerImageUrl = null })
-}
-CollapsedHeaderHost(visible = isCollapsed && viewerImageUrl == null) {''',
-        marker="ImageViewerOverlay(url = viewerImageUrl",
-    ),
-    Replace(
-        "onLoadMoreChannelClick = { onLoadMoreChannelVideos(); onLoadMoreChannelPlaylists() },",
-        '''onLoadMoreChannelClick = { onLoadMoreChannelVideos(); onLoadMoreChannelPlaylists() },
-onAvatarClick = { viewerImageUrl = state.thumbnailUrl },
-onBannerClick = { viewerImageUrl = state.bannerUrl },''',
-        marker="onAvatarClick = { viewerImageUrl = state.thumbnailUrl },",
-    ),
-    Replace(
-        '''onLoadMoreChannelClick: () -> Unit = {},
-searchOpen: Boolean = false,''',
-        '''onLoadMoreChannelClick: () -> Unit = {},
-onAvatarClick: () -> Unit = {},
-onBannerClick: () -> Unit = {},
-searchOpen: Boolean = false,''',
-        marker="onAvatarClick: () -> Unit = {},",
-    ),
-    Replace(
-        "Modifier.fillMaxWidth().padding(horizontal = 16.dp).aspectRatio(1707f / 283f).clip(RoundedCornerShape(12.dp))",
-        "Modifier.fillMaxWidth().padding(horizontal = 16.dp).aspectRatio(1707f / 283f).clip(RoundedCornerShape(12.dp)).clickable { onBannerClick() }",
-        marker=".clickable { onBannerClick() }",
-    ),
-    Replace(
-        "Modifier.size(80.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)",
-        "Modifier.size(80.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape).clickable { onAvatarClick() }",
-        marker=".clickable { onAvatarClick() }",
-    ),
-    Replace(
-        '''ShortsGridRows(
-tracks = displayState.shorts,
-onClick = onVideoClick,
-onMoreClick = onTrackInfoClick,
-)''',
-        '''ShortsGridRows(
-tracks = displayState.shorts,
-onClick = { onShortClick(it) },
-onMoreClick = { shortMenu = it },
-)''',
-        marker="onClick = { onShortClick(it) },",
-    ),
-    Replace(
-        '''Box(Modifier.width(300.dp)) {
-val pv = nowPlaying.playbackOf(video)
-VzVideoCard(track = video, isPlaying = pv.isPlaying, isPaused = pv.isPaused, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }, horizontalPadding = 0.dp)
-}''',
-        '''Box(Modifier.width(300.dp)) {
-val pv = nowPlaying.playbackOf(video)
-VzVideoCard(track = video, isPlaying = pv.isPlaying, isPaused = pv.isPaused, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }, horizontalPadding = 0.dp, showChannelRow = false)
-}''',
-        marker="horizontalPadding = 0.dp, showChannelRow = false)",
-    ),
-]
-
-# ---------------- Dependencia media3-ui (PlayerView) ----------------
-PATCHES["gradle/libs.versions.toml"] = [
-    InsertBefore(
-        "# ---- DataStore (preferences storage) ----",
-        'androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }',
-        marker='name = "media3-ui"',
-    ),
-]
-PATCHES["app/build.gradle.kts"] = [
-    InsertBefore(
-        "// Activity + Navigation + Lifecycle",
-        "// Media3 (tela Shorts - :data usa implementation, nao expoe pro :app)\nimplementation(libs.androidx.media3.exoplayer)\nimplementation(libs.androidx.media3.common)\nimplementation(libs.androidx.media3.ui)",
-        marker="implementation(libs.androidx.media3.ui)",
-    ),
-]
-
-# ===========================================================================
-# MAIN
-# ===========================================================================
 def main():
     dry = "--dry" in sys.argv
-    results, errors, staged = [], [], {}
-
-    for rel, ops in PATCHES.items():
-        path = os.path.join(ROOT, rel)
-        if not os.path.exists(path):
-            errors.append("[%s] arquivo nao existe" % rel)
-            continue
-        with open(path, encoding="utf-8") as f:
-            s = f.read()
-        for n, op in enumerate(ops, 1):
-            try:
-                s, st = op.apply(s)
-                results.append("  %-12s %s #%d" % (st, rel.split("/")[-1], n))
-            except PatchError as e:
-                errors.append("[%s] op #%d: %s" % (rel, n, e))
-        staged[rel] = s
-
-    print("\n".join(results))
-    if errors:
-        print("\nERROS (nada foi gravado):")
-        print("\n".join("  - " + e for e in errors))
+    path = os.path.join(ROOT, REL)
+    if not os.path.exists(path):
+        print("ERRO: nao achei", REL)
         sys.exit(1)
 
-    if dry:
-        print("\nDRY-RUN ok: todos os trechos batem. Rode sem --dry para aplicar.")
+    st = balance(CONTENT)
+    print("Verificacao do conteudo novo:", st)
+    if st != "ok":
+        print("Conteudo novo esta quebrado, abortando (nada gravado).")
+        sys.exit(1)
+
+    old = open(path, encoding="utf-8").read()
+    if old == CONTENT:
+        print("ShortsScreen.kt ja esta correto, nada a fazer.")
         return
 
-    changed = 0
-    for rel, s in staged.items():
-        path = os.path.join(ROOT, rel)
-        with open(path, encoding="utf-8") as f:
-            old = f.read()
-        if old != s:
-            with open(path, "w", encoding="utf-8", newline="\n") as f:
-                f.write(s)
-            print("alterado:", rel)
-            changed += 1
+    if dry:
+        print("DRY-RUN: reescreveria", REL)
+        print("  linhas atuais:", old.count(chr(10)) + 1, "-> novas:", CONTENT.count(chr(10)) + 1)
+        return
 
-    for rel, content in NEW_FILES.items():
-        path = os.path.join(ROOT, rel)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        if os.path.exists(path):
-            with open(path, encoding="utf-8") as f:
-                if f.read() == content:
-                    continue
-        with open(path, "w", encoding="utf-8", newline="\n") as f:
-            f.write(content)
-        print("criado/atualizado:", rel)
-        changed += 1
+    # guarda o quebrado pra referencia (nao compila, so pra nao perder)
+    with open(path + ".broken", "w", encoding="utf-8", newline=chr(10)) as f:
+        f.write(old)
+    with open(path, "w", encoding="utf-8", newline=chr(10)) as f:
+        f.write(CONTENT)
+    print("ShortsScreen.kt reescrito com sucesso.")
+    print("  quebrado guardado em:", REL + ".broken")
+    print("Agora compila: ./gradlew :app:assembleDebug")
 
-    print("\nPronto (%d arquivos). Compile o projeto." % changed)
-    print("Obs: dependencia nova media3-ui -> primeiro build baixa do Maven.")
 
 if __name__ == "__main__":
     main()

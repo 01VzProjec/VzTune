@@ -1989,8 +1989,8 @@ PATCHES[f"{DATA}/youtube/YouTubeSearchParser.kt"] = [
 # ---------------- YouTubeChannelParser: avatar nos videos do canal ----------------
 PATCHES[f"{DATA}/youtube/YouTubeChannelParser.kt"] = [
     Replace(
-        _SEARCH_TRACK_OLD,
-        'Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, publishedText = published, channelAvatarUrl = YouTubeSearchParser.channelAvatarOf(r))',
+        'out += ' + _SEARCH_TRACK_OLD,
+        'out += ' + _SEARCH_TRACK_OLD[:-1] + ', channelAvatarUrl = YouTubeSearchParser.channelAvatarOf(r))',
         marker="channelAvatarUrl = YouTubeSearchParser.channelAvatarOf(r)",
     ),
 ]

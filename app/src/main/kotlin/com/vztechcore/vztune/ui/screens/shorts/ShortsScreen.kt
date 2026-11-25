@@ -1,3 +1,4 @@
+
 package com.vztechcore.vztune.ui.screens.shorts
 
 import android.content.Intent
@@ -72,14 +73,8 @@ import kotlinx.coroutines.delay
 
 private val SheetColor = Color(0xFF121829)
 private val HashtagBlue = Color(0xFF5AB0FF)
+private val ShortLineBreak = Char(10)
 
-/**
- * Tela cheia de Shorts (Parte 2):
- *  - Rolagem vertical (VerticalPager) entre Shorts, loop no atual.
- *  - Player PROPRIO do ShortsViewModel - o MiniPlayer principal nao e tocado.
- *  - Toque pausa/despausa com cue animado; pinch zoom sem pausar (interface
- *    some e volta pelo botao inferior); barra superior preta AMOLED.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShortsScreen(
@@ -139,9 +134,6 @@ fun ShortsScreen(
         label = "shortsDescPad",
     )
 
-    // Gestos da pagina atual: tap = pause/play, duplo toque = reseta zoom,
-    // pinch (2 dedos) = zoom sem pausar, 1 dedo so arrasta quando zoomado
-    // (senao o VerticalPager cuida do swipe pra proximo/anterior).
     val gestureModifier = Modifier
         .pointerInput(Unit) {
             detectTapGestures(
@@ -181,7 +173,6 @@ fun ShortsScreen(
         }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        // ---- Video (encolhe quando a Descricao sobe, sem parar de tocar) ----
         Box(Modifier.fillMaxSize().padding(bottom = bottomPad)) {
             VerticalPager(
                 state = pagerState,
@@ -201,7 +192,7 @@ fun ShortsScreen(
                         }
                     ) {
                         AsyncImage(
-                            model = track.thumbnailUrl ?: "https://i.ytimg.com/vi/${track.id}/hqdefault.jpg",
+                            model = track.thumbnailUrl ?: ("https://i.ytimg.com/vi/" + track.id + "/hqdefault.jpg"),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
@@ -225,7 +216,6 @@ fun ShortsScreen(
             }
         }
 
-        // ---- Cue de pause/play (aparece e some rapido) ----
         AnimatedVisibility(
             visible = cueVisible,
             enter = fadeIn(tween(100)),
@@ -253,7 +243,6 @@ fun ShortsScreen(
             )
         }
 
-        // ---- Interface (barra superior + acoes + infos) ----
         if (interfaceVisible) {
             Row(
                 Modifier
@@ -286,12 +275,12 @@ fun ShortsScreen(
                     onClick = onToggleFavorite,
                 )
                 ShortAction(VzIcons.Share, "Compartilhar") {
+                    val shareText = "Olha esse Short no VzTune" + ShortLineBreak +
+                        currentTrack.title + ShortLineBreak +
+                        "https://www.youtube.com/shorts/" + currentTrack.id
                     val send = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(
-                            Intent.EXTRA_TEXT,
-                            "Olha esse Short no VzTune\n" + currentTrack.title + "\nhttps://www.youtube.com/shorts/" + currentTrack.id,
-                        )
+                        putExtra(Intent.EXTRA_TEXT, shareText)
                     }
                     context.startActivity(Intent.createChooser(send, "Compartilhar Short"))
                 }
@@ -301,12 +290,11 @@ fun ShortsScreen(
                 ShortAction(VzIcons.Bookmark, "Salvar") {
                     Toast.makeText(context, "Salvar em breve ;)", Toast.LENGTH_SHORT).show()
                 }
-                // Som usado no Short (visual por enquanto): so a thumbnail.
                 Box(
                     Modifier.size(44.dp).clip(RoundedCornerShape(10.dp))
                         .background(Color.White.copy(alpha = 0.08f))
                         .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                        .clickable { Toast.makeText(context, "Som do Short em breve ;)", Toast.LENGTH_SHORT).show()
+                        .clickable { Toast.makeText(context, "Som do Short em breve ;)", Toast.LENGTH_SHORT).show() }
                 ) {
                     AsyncImage(
                         model = currentTrack.thumbnailUrl,
@@ -370,7 +358,6 @@ fun ShortsScreen(
             }
         }
 
-        // ---- Botao inferior pra voltar a interface (zoom ou oculta) ----
         if (!interfaceVisible) {
             Row(
                 Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 26.dp)
@@ -388,7 +375,6 @@ fun ShortsScreen(
         }
     }
 
-    // ---- Sheet dos 3 pontinhos ----
     if (showMenu) {
         ModalBottomSheet(
             onDismissRequest = { showMenu = false },
@@ -405,7 +391,6 @@ fun ShortsScreen(
         }
     }
 
-    // ---- Sheet de qualidade ----
     if (showQuality) {
         ModalBottomSheet(
             onDismissRequest = { showQuality = false },
@@ -450,7 +435,6 @@ fun ShortsScreen(
         }
     }
 
-    // ---- Sheet de velocidade ----
     if (showSpeed) {
         ModalBottomSheet(
             onDismissRequest = { showSpeed = false },
@@ -491,7 +475,7 @@ fun ShortsScreen(
                                 .padding(horizontal = 14.dp, vertical = 8.dp)
                         ) {
                             Text(
-                                "${label}x",
+                                label + "x",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = if (selected) Color.Black else Color.White,
                                 fontWeight = FontWeight.Bold,
@@ -503,7 +487,6 @@ fun ShortsScreen(
         }
     }
 
-    // ---- Sheet de Descricao (video encolhe e continua tocando) ----
     if (showDescription) {
         ModalBottomSheet(
             onDismissRequest = { showDescription = false },
@@ -555,7 +538,7 @@ fun ShortsScreen(
                 Spacer(Modifier.height(14.dp))
                 DescStatRow("Marcações gostei:", formatPlainCount(state.info?.likeCount))
                 DescStatRow("Visualizações:", formatPlainCount(state.info?.viewCount))
-                DescStatRow("Data em que foi lançado:", state.info?.publishedText ?: currentTrack.publishedText ?: "—")
+                DescStatRow("Data em que foi lançado:", state.info?.publishedText ?: currentTrack.publishedText ?: "-")
                 Spacer(Modifier.height(12.dp))
                 val descText = state.info?.description?.takeIf { it.isNotBlank() } ?: currentTrack.title
                 Text(
@@ -597,11 +580,10 @@ private fun DescStatRow(label: String, value: String) {
 }
 
 private fun formatPlainCount(n: Long?): String {
-    if (n == null || n <= 0L) return "—"
+    if (n == null || n <= 0L) return "-"
     return String.format("%,d", n).replace(',', '.')
 }
 
-/** Descricao com #hashtags em azul. */
 @Composable
 private fun rememberHashtagText(text: String): AnnotatedString = remember(text) {
     buildAnnotatedString {

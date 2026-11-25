@@ -50,6 +50,7 @@ import com.vztechcore.vztune.ui.icons.actions.FavoriteFilled
 import com.vztechcore.vztune.ui.icons.actions.FavoriteOutline
 import com.vztechcore.vztune.ui.icons.actions.MoreVert
 import com.vztechcore.vztune.ui.icons.actions.Share
+import com.vztechcore.vztune.ui.icons.player.PlayArrow
 import com.vztechcore.vztune.ui.icons.media.Lists
 import com.vztechcore.vztune.ui.icons.media.PlaylistAdd
 import com.vztechcore.vztune.ui.icons.actions.PlayNext
@@ -137,8 +138,18 @@ fun ChannelVideoCard(track: Track, onClick: () -> Unit, onMoreClick: () -> Unit,
         Column(Modifier.weight(1f)) {
             Text(text = track.title, style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(4.dp))
-            val meta = videoViewsDate(track)
-            if (!meta.isNullOrBlank()) Text(text = meta, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+val viewsDate = videoViewsDate(track)
+Row(verticalAlignment = Alignment.CenterVertically) {
+if (track.artist.isNotBlank()) {
+Text(text = track.artist, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+}
+if (!viewsDate.isNullOrBlank()) {
+if (track.artist.isNotBlank()) Spacer(Modifier.width(6.dp))
+Icon(imageVector = VzIcons.PlayArrow, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(12.dp))
+Spacer(Modifier.width(2.dp))
+Text(text = viewsDate, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+}
+}
         }
         IconButton(onClick = onMoreClick, modifier = Modifier.size(36.dp)) {
             Icon(imageVector = VzIcons.MoreVert, contentDescription = "Mais", tint = Color.White.copy(alpha = 0.75f))

@@ -8,6 +8,9 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.navigation.toRoute
 import com.vztechcore.vztune.core.domain.music.Track
@@ -161,12 +164,20 @@ class ShortsViewModel @Inject constructor(
 
     private fun playStream(stream: YouTubeRepository.ShortVideoStream?, startPosMs: Long) {
         if (stream == null) return
-        player.setMediaItem(MediaItem.fromUri(stream.url), startPosMs)
+        val audioUrl = stream.audioUrl
+        if (audioUrl != null) {
+            val factory = ProgressiveMediaSource.Factory(DefaultHttpDataSource.Factory())
+            val video = factory.createMediaSource(MediaItem.fromUri(stream.url))
+            val audio = factory.createMediaSource(MediaItem.fromUri(audioUrl))
+            player.setMediaSource(MergingMediaSource(true, true, video, audio))
+            if (startPosMs > 0) player.seekTo(startPosMs)
+        } else {
+            player.setMediaItem(MediaItem.fromUri(stream.url), startPosMs)
+        }
         player.prepare()
         player.playWhenReady = true
         _state.update { it.copy(selectedQuality = stream.qualityLabel, isLoading = true) }
     }
-
     fun selectQuality(label: String) {
         val info = _state.value.info ?: return
         val stream = info.streams.firstOrNull { it.qualityLabel == label } ?: return

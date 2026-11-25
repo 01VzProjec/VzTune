@@ -97,8 +97,9 @@ object YouTubePlaylistParser {
                     is JSONArray -> for (i in 0 until n.length()) walk(n.opt(i))
                 }
             }
-            walk(lvm.optJSONObject("contentImage"))
-            out += Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE)
+walk(lvm.optJSONObject("contentImage"))
+val (lv, ld) = YouTubeChannelParser.lockupViewsDate(lvm)
+out += Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, viewCount = lv, publishedText = ld)
         }
         // UUSH / Shorts via UU: usa o MESMO parser de Shorts do canal (reel, shortsLockupViewModel e lockup SHORTS),
         // que nunca descarta Short sem titulo e sempre devolve thumbnail.

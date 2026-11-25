@@ -14,6 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -265,7 +266,7 @@ fun ShortsScreen(
             }
 
             Column(
-                Modifier.align(Alignment.CenterEnd).padding(end = 10.dp, top = 90.dp),
+Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
@@ -370,10 +371,11 @@ fun ShortsScreen(
             ) {
                 Icon(VzIcons.Visibility, null, tint = Color.White, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Mostrar interface", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
-            }
-        }
-    }
+Text("Mostrar interface", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
+}
+}
+ShortsProgressBar(player = player, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+}
 
     if (showMenu) {
         ModalBottomSheet(
@@ -538,7 +540,7 @@ fun ShortsScreen(
                 Spacer(Modifier.height(14.dp))
                 DescStatRow("Marcações gostei:", formatPlainCount(state.info?.likeCount))
                 DescStatRow("Visualizações:", formatPlainCount(state.info?.viewCount))
-                DescStatRow("Data em que foi lançado:", state.info?.publishedText ?: currentTrack.publishedText ?: "-")
+DescStatRow("Data:", state.info?.publishDateText ?: state.info?.publishedText ?: currentTrack.publishedText ?: "-")
                 Spacer(Modifier.height(12.dp))
                 val descText = state.info?.description?.takeIf { it.isNotBlank() } ?: currentTrack.title
                 Text(
@@ -551,10 +553,61 @@ fun ShortsScreen(
     }
 }
 
+/** Barrinha inferior de progresso do Short: mostra e permite arrastar pra buscar. */
+@Composable
+private fun ShortsProgressBar(player: ExoPlayer, modifier: Modifier = Modifier) {
+    var progress by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
+    var dragProgress by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(player) {
+        while (true) {
+            if (!dragging) {
+                val d = player.duration
+                progress = if (d > 0) (player.currentPosition.toFloat() / d.toFloat()).coerceIn(0f, 1f) else 0f
+            }
+            delay(200)
+        }
+    }
+    val shown = if (dragging) dragProgress else progress
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(16.dp)
+            .pointerInput(Unit) {
+                detectTapGestures { off ->
+                    val d = player.duration
+                    if (d > 0) player.seekTo((off.x / size.width.toFloat() * d).toLong())
+                }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { off ->
+                        dragging = true
+                        dragProgress = (off.x / size.width.toFloat()).coerceIn(0f, 1f)
+                    },
+                    onDragEnd = {
+                        dragging = false
+                        val d = player.duration
+                        if (d > 0) player.seekTo((dragProgress * d).toLong())
+                    },
+                    onDragCancel = { dragging = false },
+                ) { change, _ ->
+                    change.consume()
+                    dragProgress = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
+                }
+            },
+        contentAlignment = Alignment.BottomStart,
+    ) {
+        Box(Modifier.fillMaxWidth().height(if (dragging) 6.dp else 3.dp).background(Color.White.copy(alpha = 0.25f)))
+        if (shown > 0f) {
+            Box(Modifier.fillMaxWidth(shown).height(if (dragging) 6.dp else 3.dp).background(Color.White))
+        }
+    }
+}
 @Composable
 private fun ShortsCircleButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f)).clickable { onClick() },
+Modifier.size(40.dp).clip(CircleShape).clickable { onClick() },
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription, tint = Color.White, modifier = Modifier.size(21.dp))
@@ -564,7 +617,7 @@ private fun ShortsCircleButton(icon: ImageVector, contentDescription: String, on
 @Composable
 private fun ShortAction(icon: ImageVector, label: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(46.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f)).clickable { onClick() },
+Modifier.size(46.dp).clip(CircleShape).clickable { onClick() },
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, label, tint = Color.White, modifier = Modifier.size(28.dp))

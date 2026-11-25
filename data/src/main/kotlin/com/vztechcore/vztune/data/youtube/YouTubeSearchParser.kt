@@ -28,7 +28,7 @@ object YouTubeSearchParser {
             val channel = textOf(r.optJSONObject("ownerText")) ?: textOf(r.optJSONObject("shortBylineText")) ?: ""
             val published = textOf(r.optJSONObject("publishedTimeText"))
             out += SearchHit.VideoHit(
-Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, publishedText = published, channelAvatarUrl = channelAvatarOf(r))
+Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, publishedText = published, viewCount = textOf(r.optJSONObject("viewCountText"))?.let { YouTubeChannelParser.parseViewCount(it) }, channelAvatarUrl = channelAvatarOf(r))
             )
         }
         return out.distinctBy { it.track.id }

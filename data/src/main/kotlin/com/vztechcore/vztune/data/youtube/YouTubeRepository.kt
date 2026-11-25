@@ -1890,8 +1890,8 @@ Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, duratio
     }
 
     // ================= SHORTS (tela cheia) =================
-    /** Stream de video com audio (muxed) pra tela Shorts. */
-    data class ShortVideoStream(val url: String, val qualityLabel: String, val height: Int)
+    /** Stream de video pra tela Shorts. [audioUrl] != null = video-only que precisa merge com audio. */
+    data class ShortVideoStream(val url: String, val qualityLabel: String, val height: Int, val audioUrl: String? = null)
 
     /** Tudo que a tela Shorts precisa de um video: streams + detalhes. */
     data class ShortPlaybackInfo(
@@ -1902,12 +1902,16 @@ Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, duratio
         val publishedText: String?,
         val channelAvatarUrl: String?,
         val durationSeconds: Long,
+        val publishDateText: String? = null,
     )
 
+    private val shortMonths = listOf("Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez")
+
     /**
-     * Busca streams de VIDEO (com audio) + detalhes do Short.
-     * NewPipe da likes/views/descricao/data/avatar + streams muxed;
-     * InnerTube (formats) entra com as qualidades extras/fallback.
+     * Busca streams de VIDEO + detalhes do Short.
+     * NewPipe: videoStreams (muxed, com audio) + videoOnlyStreams (video-only, merge com audio).
+     * InnerTube: adaptiveFormats (video-only + audio) e formats (muxed) como extra/fallback.
+     * Ordena da MAIOR qualidade pra menor; HLS (height 0) fica por ultimo.
      */
     suspend fun getShortPlaybackInfo(videoId: String): ShortPlaybackInfo? = withContext(Dispatchers.IO) {
         if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
@@ -1917,9 +1921,13 @@ Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, duratio
             ex
         }.getOrNull()
         val streams = mutableListOf<ShortVideoStream>()
+        var npAudio: String? = null
         if (np != null) {
+            npAudio = runCatching {
+                np.audioStreams.filter { !it.content.isNullOrBlank() }.maxByOrNull { it.averageBitrate }?.content
+            }.getOrNull()
             runCatching {
-                np.videoStreams.filter { !it.isVideoOnly }.forEach { s ->
+                np.videoStreams.forEach { s ->
                     val u = s.content
                     if (!u.isNullOrBlank()) {
                         val res = s.resolution.orEmpty()
@@ -1929,32 +1937,72 @@ Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, duratio
                 }
             }
             runCatching {
-                np.hlsUrl?.takeIf { it.isNotBlank() }?.let { streams += ShortVideoStream(it, "Auto (HLS)", 0) }
+                np.videoOnlyStreams.forEach { s ->
+                    val u = s.content
+                    if (!u.isNullOrBlank() && npAudio != null) {
+                        val res = s.resolution.orEmpty()
+                        val h = res.removeSuffix("p").toIntOrNull() ?: 0
+                        streams += ShortVideoStream(u, res.ifBlank { "Auto" }, h, npAudio)
+                    }
+                }
             }
         }
-        // InnerTube: formatos muxed (qualityLabel) - extras/fallback.
+        var itDesc: String? = null
+        var itViews: Long? = null
         runCatching {
             val player = InnerTubeYouTube.player(videoId)
-            val formats = player.optJSONObject("streamingData")?.optJSONArray("formats")
+            itDesc = player.optJSONObject("videoDetails")?.optString("shortDescription")?.takeIf { it.isNotBlank() }
+            itViews = player.optJSONObject("videoDetails")?.optString("viewCount")?.toLongOrNull()?.takeIf { it > 0 }
+            val streaming = player.optJSONObject("streamingData")
+            val adaptive = streaming?.optJSONArray("adaptiveFormats")
+            var itAudio: String? = null
+            var itAudioBr = -1L
+            if (adaptive != null) {
+                for (i in 0 until adaptive.length()) {
+                    val f = adaptive.optJSONObject(i) ?: continue
+                    if (!f.optString("mimeType").contains("audio")) continue
+                    val url = f.optString("url").takeIf { it.isNotBlank() } ?: continue
+                    val br = f.optLong("bitrate", 0)
+                    if (br > itAudioBr) { itAudioBr = br; itAudio = url }
+                }
+                for (i in 0 until adaptive.length()) {
+                    val f = adaptive.optJSONObject(i) ?: continue
+                    if (!f.optString("mimeType").contains("video")) continue
+                    val url = f.optString("url").takeIf { it.isNotBlank() } ?: continue
+                    val h = f.optInt("height", 0)
+                    val label = f.optString("qualityLabel").takeIf { it.isNotBlank() } ?: (h.toString() + "p")
+                    val audio = itAudio ?: npAudio
+                    if (h > 0 && streams.none { it.height == h } && audio != null) {
+                        streams += ShortVideoStream(url, label, h, audio)
+                    }
+                }
+            }
+            val formats = streaming?.optJSONArray("formats")
             if (formats != null) {
                 for (i in 0 until formats.length()) {
                     val f = formats.optJSONObject(i) ?: continue
                     val url = f.optString("url").takeIf { it.isNotBlank() } ?: continue
-                    val label = f.optString("qualityLabel").takeIf { it.isNotBlank() } ?: f.optString("quality").ifBlank { "Auto" }
                     val h = f.optInt("height", 0)
+                    val label = f.optString("qualityLabel").takeIf { it.isNotBlank() } ?: f.optString("quality").ifBlank { "Auto" }
                     if (h <= 0 || streams.none { it.height == h }) streams += ShortVideoStream(url, label, h)
                 }
             }
         }.onFailure { Log.w(TAG, "InnerTube short formats failed: ${it.message}") }
+        runCatching { np?.hlsUrl?.takeIf { it.isNotBlank() }?.let { streams += ShortVideoStream(it, "Auto (HLS)", 0) } }
         if (streams.isEmpty()) return@withContext null
+        val sorted = streams.sortedByDescending { it.height }
+        val dateText = runCatching { np?.uploadDate?.offsetDateTime() }.getOrNull()?.let { d ->
+            "%02d, %s, %d".format(d.dayOfMonth, shortMonths[(d.monthValue - 1).coerceIn(0, 11)], d.year)
+        }
         ShortPlaybackInfo(
-            streams = streams.sortedByDescending { it.height },
-            viewCount = runCatching { np?.viewCount?.takeIf { it > 0 } }.getOrNull(),
+            streams = sorted,
+            viewCount = runCatching { np?.viewCount?.takeIf { it > 0 } }.getOrNull() ?: itViews,
             likeCount = runCatching { np?.likeCount?.takeIf { it > 0 } }.getOrNull(),
-            description = runCatching { np?.description?.content }.getOrNull()?.takeIf { it.isNotBlank() },
+            description = runCatching { np?.description?.content }.getOrNull()?.takeIf { it.isNotBlank() } ?: itDesc,
             publishedText = formatPublished(runCatching { np?.uploadDate }.getOrNull()),
             channelAvatarUrl = runCatching { np?.uploaderAvatars?.lastOrNull()?.url }.getOrNull(),
             durationSeconds = runCatching { np?.length ?: 0L }.getOrDefault(0L),
+            publishDateText = dateText,
         )
     }
     private companion object {

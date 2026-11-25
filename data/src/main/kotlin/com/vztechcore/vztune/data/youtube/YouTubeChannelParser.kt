@@ -511,7 +511,7 @@ object YouTubeChannelParser {
             val channel = YouTubeSearchParser.textOf(r.optJSONObject("ownerText"))
                 ?: YouTubeSearchParser.textOf(r.optJSONObject("shortBylineText")) ?: ""
             val published = YouTubeSearchParser.textOf(r.optJSONObject("publishedTimeText"))
-out += Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, publishedText = published, channelAvatarUrl = YouTubeSearchParser.channelAvatarOf(r))
+out += Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, publishedText = published, viewCount = YouTubeSearchParser.textOf(r.optJSONObject("viewCountText"))?.let { parseViewCount(it) }, channelAvatarUrl = YouTubeSearchParser.channelAvatarOf(r))
         }
         // Layout 2026: lockupViewModel LOCKUP_CONTENT_TYPE_VIDEO (invio lockup_to_video)
         val lockups = mutableListOf<JSONObject>()
@@ -527,7 +527,8 @@ out += Track(id = videoId, title = title, artist = channel, durationSeconds = du
             val thumb = YouTubeSearchParser.lockupThumbnail(lvm) ?: bestSources(lvm.optJSONObject("contentImage"))
             val duration = lockupVideoDuration(lvm)
             val published = lockupPublished(lvm)
-            out += Track(id = videoId, title = title, artist = "", durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, publishedText = published)
+val (lv, ld) = lockupViewsDate(lvm)
+out += Track(id = videoId, title = title, artist = "", durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, publishedText = published ?: ld, viewCount = lv)
         }
         return out
     }
@@ -684,6 +685,42 @@ out += Track(id = videoId, title = title, artist = channel, durationSeconds = du
         return ChannelReleases(items, hasAlbums, hasSingles)
     }
 
+    /** Views + data dos metadataRows do lockup ("1,2 mi de visualizações • há 2 dias"). */
+    fun lockupViewsDate(lvm: JSONObject): Pair<Long?, String?> {
+        val rows = lvm.optJSONObject("metadata")?.optJSONObject("lockupMetadataViewModel")
+            ?.optJSONObject("metadata")?.optJSONObject("contentMetadataViewModel")
+            ?.optJSONArray("metadataRows") ?: return null to null
+        var views: Long? = null
+        var date: String? = null
+        for (i in 0 until rows.length()) {
+            val parts = rows.optJSONObject(i)?.optJSONArray("metadataParts") ?: continue
+            for (j in 0 until parts.length()) {
+                val txt = parts.optJSONObject(j)?.optJSONObject("text")?.optString("content")?.takeIf { it.isNotBlank() } ?: continue
+                for (seg in txt.split("•", "·")) {
+                    val s = seg.trim()
+                    val low = s.lowercase()
+                    if (views == null && (low.contains("visualiza") || low.contains("view"))) views = parseViewCount(s)
+                    if (date == null && (low.contains("há ") || low.contains("ago") || low.contains("atrás"))) date = s
+                }
+            }
+        }
+        return views to date
+    }
+
+    /** "1,2 mi de visualizações" -> 1200000; "534 mil" -> 534000; "1.234" -> 1234. */
+    fun parseViewCount(text: String): Long? {
+        val m = Regex("([\\d.,]+)\\s*(milh(?:ão|ões|oes)|mil|mi|bi|k|m|b)?", RegexOption.IGNORE_CASE).find(text) ?: return null
+        val numRaw = m.groupValues[1]
+        val suffix = m.groupValues[2].lowercase()
+        val num = (if (numRaw.contains(",")) numRaw.replace(".", "").replace(",", ".").toDoubleOrNull() else numRaw.replace(".", "").toDoubleOrNull()) ?: return null
+        val mult = when {
+            suffix == "mil" || suffix == "k" -> 1_000.0
+            suffix.startsWith("milh") || suffix == "mi" || suffix == "m" -> 1_000_000.0
+            suffix == "bi" || suffix == "b" -> 1_000_000_000.0
+            else -> 1.0
+        }
+        return (num * mult).toLong().takeIf { it > 0 }
+    }
     private fun collect(node: Any?, key: String, out: MutableList<JSONObject>) {
         when (node) {
             is JSONObject -> {

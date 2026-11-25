@@ -144,7 +144,8 @@ object InnerTubeYouTube {
     private fun post(endpoint: String, client: Client, body: JSONObject): JSONObject {
         val request = Request.Builder()
             .url("$API/$endpoint?prettyPrint=false&key=${client.apiKey}")
-            .addHeader("Content-Type", "application/json")
+.addHeader("Content-Type", "application/json")
+.addHeader("Accept-Language", "pt-BR,pt;q=0.9")
             .addHeader("User-Agent", client.userAgent)
             .addHeader("X-Goog-Api-Format-Version", "1")
             .addHeader("X-YouTube-Client-Name", client.name)

@@ -86,8 +86,19 @@ fun formatDurationLabel(seconds: Long): String? {
 }
 
 /** "1,2 mi visualizações • há 2 dias" (o que existir dos dois). */
+/** Views compactas pros cards: "534", "1,2 mil", "1,2 mi", "1,2 bi" (sem a palavra visualizacoes). */
+fun formatViewsCompact(count: Long?): String? {
+    if (count == null || count <= 0) return null
+    return when {
+        count < 1_000 -> "$count"
+        count < 1_000_000 -> formatOneDecimal(count / 1_000.0) + " mil"
+        count < 1_000_000_000 -> formatOneDecimal(count / 1_000_000.0) + " mi"
+        else -> formatOneDecimal(count / 1_000_000_000.0) + " bi"
+    }
+}
+
 fun videoViewsDate(track: Track): String? {
-    val views = formatViewCount(track.viewCount)
+    val views = formatViewsCompact(track.viewCount)
     val date = track.publishedText?.takeIf { it.isNotBlank() }
     return listOfNotNull(views, date).joinToString(" • ").takeIf { it.isNotBlank() }
 }

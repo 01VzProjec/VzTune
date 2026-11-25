@@ -460,7 +460,9 @@ ShortsProgressBar(player = player, modifier = Modifier.align(Alignment.BottomCen
     # Data: aceita a versao sem acento (fix_shorts) e a acentuada
     ReplaceAny([
         'DescStatRow("Data em que foi lancado:", state.info?.publishedText ?: currentTrack.publishedText ?: "-")',
+        'DescStatRow("Data em que foi lançado:", state.info?.publishedText ?: currentTrack.publishedText ?: "-")',
         'DescStatRow("Data em que foi lançado:", state.info?.publishedText ?: currentTrack.publishedText ?: "—")',
+        'DescStatRow("Data em que foi lancado:", state.info?.publishedText ?: currentTrack.publishedText ?: "—")',
     ],
         'DescStatRow("Data:", state.info?.publishDateText ?: state.info?.publishedText ?: currentTrack.publishedText ?: "-")',
         marker='DescStatRow("Data:",'),

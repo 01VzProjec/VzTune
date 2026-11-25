@@ -125,6 +125,21 @@ class ShortsViewModel @Inject constructor(
         }
     }
 
+    private val prefetchJobs = mutableMapOf<String, Job>()
+
+    /** Assim que assenta num Short, ja resolve o link do proximo, do anterior e do +2.
+     *  Quando o usuario desliza, o cache ja tem tudo -> toca sem delay de busca. */
+    private fun prefetchAround(index: Int) {
+        for (i in listOf(index + 1, index - 1, index + 2)) {
+            val t = items.getOrNull(i) ?: continue
+            if (infoCache.containsKey(t.id)) continue
+            if (prefetchJobs[t.id]?.isActive == true) continue
+            prefetchJobs[t.id] = viewModelScope.launch {
+                val info = musicRepository.getShortPlaybackInfo(t.id)
+                if (info != null) infoCache[t.id] = info
+            }
+        }
+    }
     private fun keyOf(index: Int): String =
         items.getOrNull(index)?.let { StoredTrack.from(it).key } ?: ""
 
@@ -142,8 +157,9 @@ class ShortsViewModel @Inject constructor(
                 selectedQuality = cached?.streams?.firstOrNull()?.qualityLabel,
             )
         }
-        loadJob?.cancel()
-        if (cached != null) {
+loadJob?.cancel()
+prefetchAround(index)
+if (cached != null) {
             playStream(cached.streams.firstOrNull(), 0L)
             return
         }

@@ -28,12 +28,19 @@ object YouTubeSearchParser {
             val channel = textOf(r.optJSONObject("ownerText")) ?: textOf(r.optJSONObject("shortBylineText")) ?: ""
             val published = textOf(r.optJSONObject("publishedTimeText"))
             out += SearchHit.VideoHit(
-                Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, publishedText = published)
+Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, publishedText = published, channelAvatarUrl = channelAvatarOf(r))
             )
         }
         return out.distinctBy { it.track.id }
     }
 
+    /** Foto do canal num videoRenderer da busca (channelThumbnailSupportedRenderers). */
+    fun channelAvatarOf(r: JSONObject): String? {
+        val node = r.optJSONObject("channelThumbnailSupportedRenderers")
+            ?.optJSONObject("channelThumbnailWithLinkRenderer")
+            ?.optJSONObject("thumbnail")
+        return thumbnailOf(node) ?: thumbnailOf(r.optJSONObject("channelThumbnail"))
+    }
         fun parsePlaylists(json: JSONObject): List<SearchHit.PlaylistHit> {
         val out = mutableListOf<SearchHit.PlaylistHit>()
         // Layout antigo: playlistRenderer / gridPlaylistRenderer (ainda usado em algumas abas)

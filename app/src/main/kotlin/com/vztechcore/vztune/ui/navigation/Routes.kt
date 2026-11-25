@@ -25,8 +25,9 @@ object Routes {
         val thumbnailUrl: String? = null,
         // true = canal do YouTube (videos/shorts/playlists via NewPipe).
         // false = artista do YT Music (musicas/albuns via InnerTube).
-        // Sem essa flag, o AppNavHost perdia o source e todo mundo caia no YT Music.
         val isYouTubeChannel: Boolean = false,
+        // Aba inicial do canal (0 Inicio, 1 Videos, 2 Playlists, 3 Shorts, 4 Sobre).
+        val initialTab: Int = 0,
     )
 
     /** "See all" list of an artist. [kind] is an ArtistListKind name. */
@@ -49,5 +50,18 @@ object Routes {
         val thumbnailUrl: String?,
         val sourceName: String, // "YOUTUBE" or "YOUTUBE_MUSIC"
         val durationSeconds: Long,
+    )
+
+    /**
+     * Tela cheia de Shorts (rolagem vertical). A lista de Shorts vai no
+     * ShortsFeed (memoria); a rota leva so a chave + indice inicial + canal.
+     */
+    @Serializable data class Shorts(
+        val feedKey: String,
+        val startIndex: Int = 0,
+        val channelId: String,
+        val channelName: String,
+        val channelAvatarUrl: String? = null,
+        val channelHandle: String? = null,
     )
 }

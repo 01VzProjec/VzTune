@@ -29,10 +29,12 @@ data class ArtistUiState(
     val shorts: List<Track> = emptyList(),
     val channelPlaylists: List<Playlist> = emptyList(),
     val bannerUrl: String? = null,
-    // Canal: total de videos (InnerTube), nome da aba de playlists (Playlists / Albuns / Albuns e Singles) e aba Sobre.
+    // Canal: total de videos (InnerTube), nome da aba de playlists e aba Sobre.
     val videoCountText: String? = null,
     val playlistsLabel: String? = null,
     val about: ChannelAboutInfo? = null,
+    // Aba inicial do canal (vinda da rota; tela Shorts abre o canal ja em Shorts).
+    val initialTab: Int = 0,
     // FIX18 - Canal: tem mais videos no UU? + carregando Buscar mais?
     val channelVideosHasMore: Boolean = false,
     val channelPlaylistsHasMore: Boolean = false,
@@ -44,7 +46,7 @@ data class ArtistUiState(
     val featuredMore: BrowseRef? = null,
     val relatedArtists: List<Artist> = emptyList(),
     val isFollowing: Boolean = false,
-    // Perfis com o MESMO nome no outro mundo (canal <-> artista), usados no menu de 3 pontinhos.
+    // Perfis com o MESMO nome no outro mundo (canal <-> artista).
     val foundProfiles: List<Artist> = emptyList(),
     val isLoadingFoundProfiles: Boolean = true,
     // Canal: ainda tem video/playlist la no YouTube que nao foi carregado.
@@ -62,6 +64,7 @@ data class ArtistUiState(
 val ArtistUiState.mostViewedVideo: com.vztechcore.vztune.core.domain.music.Track?
     get() = videos.maxByOrNull { it.viewCount ?: -1L }?.takeIf { (it.viewCount ?: 0L) > 0 }
         ?: videos.firstOrNull()
+
 /** Videos do canal ordenados do mais visto para o menos visto. */
 val ArtistUiState.videosByViews: List<com.vztechcore.vztune.core.domain.music.Track>
     get() = videos.sortedByDescending { it.viewCount ?: -1L }

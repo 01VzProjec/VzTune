@@ -511,7 +511,7 @@ object YouTubeChannelParser {
             val channel = YouTubeSearchParser.textOf(r.optJSONObject("ownerText"))
                 ?: YouTubeSearchParser.textOf(r.optJSONObject("shortBylineText")) ?: ""
             val published = YouTubeSearchParser.textOf(r.optJSONObject("publishedTimeText"))
-            out += Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, publishedText = published)
+out += Track(id = videoId, title = title, artist = channel, durationSeconds = duration, thumbnailUrl = thumb, source = Source.YOUTUBE, publishedText = published, channelAvatarUrl = YouTubeSearchParser.channelAvatarOf(r))
         }
         // Layout 2026: lockupViewModel LOCKUP_CONTENT_TYPE_VIDEO (invio lockup_to_video)
         val lockups = mutableListOf<JSONObject>()

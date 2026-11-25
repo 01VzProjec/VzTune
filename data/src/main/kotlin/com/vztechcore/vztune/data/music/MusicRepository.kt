@@ -70,6 +70,9 @@ class MusicRepository @Inject constructor(
         TechnicalInfo(itag = info.itag, mimeType = info.mimeType, quality = info.quality)
     }.getOrNull()
 
+    /** Shorts: streams de video + detalhes (views, likes, descricao, data, avatar). */
+    suspend fun getShortPlaybackInfo(videoId: String) =
+        runCatching { youTubeRepository.getShortPlaybackInfo(videoId) }.getOrNull()
     /** Sugestões de busca — delegate direto pro YTMusic. */
     suspend fun suggestions(query: String): SearchSuggestions =
         ytMusicRepository.suggestions(query)

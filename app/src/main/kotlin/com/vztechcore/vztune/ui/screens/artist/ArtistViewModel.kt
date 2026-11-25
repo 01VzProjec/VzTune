@@ -40,9 +40,10 @@ class ArtistViewModel @Inject constructor(
         ArtistUiState(
             artistId = route.id,
             name = route.name,
-            thumbnailUrl = route.thumbnailUrl,
-            isYouTubeChannel = route.isYouTubeChannel,
-        )
+thumbnailUrl = route.thumbnailUrl,
+isYouTubeChannel = route.isYouTubeChannel,
+initialTab = route.initialTab,
+)
     )
     val uiState: StateFlow<ArtistUiState> = _uiState.asStateFlow()
 

@@ -107,7 +107,7 @@ class YouTubeRepository @Inject constructor(
     private fun parseChannelStreamItems(items: List<InfoItem>, channelName: String): List<Track> {
         return items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
             val vid = extractVideoId(stream.url) ?: return@mapNotNull null
-            Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate))
+Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate), channelAvatarUrl = runCatching { stream.uploaderAvatars?.lastOrNull()?.url }.getOrNull())
         }
     }
 
@@ -902,7 +902,8 @@ class YouTubeRepository @Inject constructor(
                     title = stream.name ?: "Untitled",
                     artist = stream.uploaderName ?: "",
                     durationSeconds = stream.duration,
-                    thumbnailUrl = stream.thumbnails.firstOrNull()?.url,
+thumbnailUrl = stream.thumbnails.firstOrNull()?.url,
+channelAvatarUrl = runCatching { stream.uploaderAvatars?.lastOrNull()?.url }.getOrNull(),
                     source = Source.YOUTUBE,
                 )
             )
@@ -1367,10 +1368,19 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                     videos = videos.filter { it.id !in shortIds }.toMutableList()
                 }
                 // Preenche artista em branco com nome do canal (lockup nao traz autor)
-                if (channelName.isNotBlank()) {
-                    videos = videos.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }.toMutableList()
-                    shorts = shorts.map { if (it.artist.isBlank()) it.copy(artist = channelName) else it }.toMutableList()
-                }
+if (channelName.isNotBlank()) {
+    val chAvatar = homeParsed.avatarUrl
+    videos = videos.map { t ->
+        var v = if (t.artist.isBlank()) t.copy(artist = channelName) else t
+        if (v.channelAvatarUrl.isNullOrBlank() && !chAvatar.isNullOrBlank()) v = v.copy(channelAvatarUrl = chAvatar)
+        v
+    }.toMutableList()
+    shorts = shorts.map { t ->
+        var v = if (t.artist.isBlank()) t.copy(artist = channelName) else t
+        if (v.channelAvatarUrl.isNullOrBlank() && !chAvatar.isNullOrBlank()) v = v.copy(channelAvatarUrl = chAvatar)
+        v
+    }.toMutableList()
+}
                 // ---- PLAYLISTS via aba Playlists loop (SEMPRE, mesmo que Home tenha destaque) ----
                 var playlists = mutableListOf<com.vztechcore.vztune.core.domain.music.Playlist>()
                 var playlistsCont: String? = null
@@ -1616,7 +1626,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
                 pl.fetchPage()
                 pl.initialPage.items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
                     val vid = extractVideoId(stream.url) ?: return@mapNotNull null
-                    Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate))
+Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate), channelAvatarUrl = runCatching { stream.uploaderAvatars?.lastOrNull()?.url }.getOrNull())
                 }
             }.getOrDefault(emptyList())
         }
@@ -1750,7 +1760,7 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
     private fun parseChannelStreams(items: List<*>, channelName: String): List<Track> {
         return items.filterIsInstance<StreamInfoItem>().mapNotNull { stream ->
             val vid = extractVideoId(stream.url) ?: return@mapNotNull null
-            Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate))
+Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, durationSeconds = stream.duration, thumbnailUrl = stream.thumbnails.lastOrNull()?.url, source = Source.YOUTUBE, viewCount = stream.viewCount.takeIf { it > 0 }, publishedText = formatPublished(stream.uploadDate), channelAvatarUrl = runCatching { stream.uploaderAvatars?.lastOrNull()?.url }.getOrNull())
         }
     }
     private fun parseChannelPlaylists(items: List<*>, channelName: String): List<Playlist> {
@@ -1768,21 +1778,25 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
     /** Carrega mais videos do canal: avanca ate 5 paginas da UU por chamada. Retorna SO os novos. */
     /** Carrega mais playlists do canal: avanca ate 3 paginas por chamada. Retorna SO as novas. */
     /** "hoje", "ha 1 dia", "ha 3 semanas", "ha 5 meses", "ha 2 anos" a partir do uploadDate do NewPipe. */
+    /** "agora", "há X min", "há X horas", "há 1 dia", "há X semanas", "há X meses", "há X anos". */
     fun formatPublished(uploadDate: DateWrapper?): String? {
         val odt = runCatching { uploadDate?.offsetDateTime() }.getOrNull() ?: return null
         val now = OffsetDateTime.now()
+        val minutes = ChronoUnit.MINUTES.between(odt, now)
+        if (minutes < 0) return null
+        val hours = ChronoUnit.HOURS.between(odt, now)
         val days = ChronoUnit.DAYS.between(odt, now)
-        if (days < 0) return null
         return when {
-            days == 0L -> "hoje"
-            days == 1L -> "ha 1 dia"
-            days < 7 -> "ha $days dias"
-            days < 30 -> { val w = days / 7; if (w == 1L) "ha 1 semana" else "ha $w semanas" }
-            days < 365 -> { val m = days / 30; if (m == 1L) "ha 1 mes" else "ha $m meses" }
-            else -> { val y = days / 365; if (y == 1L) "ha 1 ano" else "ha $y anos" }
+            minutes < 1 -> "agora"
+            minutes < 60 -> if (minutes == 1L) "há 1 min" else "há $minutes min"
+            hours < 24 -> if (hours == 1L) "há 1 hora" else "há $hours horas"
+            days == 1L -> "há 1 dia"
+            days < 7 -> "há $days dias"
+            days < 30 -> { val w = days / 7; if (w == 1L) "há 1 semana" else "há $w semanas" }
+            days < 365 -> { val m = days / 30; if (m == 1L) "há 1 mês" else "há $m meses" }
+            else -> { val y = days / 365; if (y == 1L) "há 1 ano" else "há $y anos" }
         }
     }
-
     /** Faixas de uma playlist do YouTube (PL..., UU..., OL...). Usado no menu da playlist do canal. */
     suspend fun getYouTubePlaylistTracks(playlistId: String): List<Track> = withContext(Dispatchers.IO) {
 
@@ -1875,6 +1889,74 @@ suspend fun browseChannel(channelIdOrHandle: String): ChannelPage? = withContext
         list.distinctBy { it.id }.take(50)
     }
 
+    // ================= SHORTS (tela cheia) =================
+    /** Stream de video com audio (muxed) pra tela Shorts. */
+    data class ShortVideoStream(val url: String, val qualityLabel: String, val height: Int)
+
+    /** Tudo que a tela Shorts precisa de um video: streams + detalhes. */
+    data class ShortPlaybackInfo(
+        val streams: List<ShortVideoStream>,
+        val viewCount: Long?,
+        val likeCount: Long?,
+        val description: String?,
+        val publishedText: String?,
+        val channelAvatarUrl: String?,
+        val durationSeconds: Long,
+    )
+
+    /**
+     * Busca streams de VIDEO (com audio) + detalhes do Short.
+     * NewPipe da likes/views/descricao/data/avatar + streams muxed;
+     * InnerTube (formats) entra com as qualidades extras/fallback.
+     */
+    suspend fun getShortPlaybackInfo(videoId: String): ShortPlaybackInfo? = withContext(Dispatchers.IO) {
+        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
+        val np = runCatching {
+            val ex = ServiceList.YouTube.getStreamExtractor("https://www.youtube.com/watch?v=$videoId")
+            ex.fetchPage()
+            ex
+        }.getOrNull()
+        val streams = mutableListOf<ShortVideoStream>()
+        if (np != null) {
+            runCatching {
+                np.videoStreams.filter { !it.isVideoOnly }.forEach { s ->
+                    val u = s.content
+                    if (!u.isNullOrBlank()) {
+                        val res = s.resolution.orEmpty()
+                        val h = res.removeSuffix("p").toIntOrNull() ?: 0
+                        streams += ShortVideoStream(u, res.ifBlank { "Auto" }, h)
+                    }
+                }
+            }
+            runCatching {
+                np.hlsUrl?.takeIf { it.isNotBlank() }?.let { streams += ShortVideoStream(it, "Auto (HLS)", 0) }
+            }
+        }
+        // InnerTube: formatos muxed (qualityLabel) - extras/fallback.
+        runCatching {
+            val player = InnerTubeYouTube.player(videoId)
+            val formats = player.optJSONObject("streamingData")?.optJSONArray("formats")
+            if (formats != null) {
+                for (i in 0 until formats.length()) {
+                    val f = formats.optJSONObject(i) ?: continue
+                    val url = f.optString("url").takeIf { it.isNotBlank() } ?: continue
+                    val label = f.optString("qualityLabel").takeIf { it.isNotBlank() } ?: f.optString("quality").ifBlank { "Auto" }
+                    val h = f.optInt("height", 0)
+                    if (h <= 0 || streams.none { it.height == h }) streams += ShortVideoStream(url, label, h)
+                }
+            }
+        }.onFailure { Log.w(TAG, "InnerTube short formats failed: ${it.message}") }
+        if (streams.isEmpty()) return@withContext null
+        ShortPlaybackInfo(
+            streams = streams.sortedByDescending { it.height },
+            viewCount = runCatching { np?.viewCount?.takeIf { it > 0 } }.getOrNull(),
+            likeCount = runCatching { np?.likeCount?.takeIf { it > 0 } }.getOrNull(),
+            description = runCatching { np?.description?.content }.getOrNull()?.takeIf { it.isNotBlank() },
+            publishedText = formatPublished(runCatching { np?.uploadDate }.getOrNull()),
+            channelAvatarUrl = runCatching { np?.uploaderAvatars?.lastOrNull()?.url }.getOrNull(),
+            durationSeconds = runCatching { np?.length ?: 0L }.getOrDefault(0L),
+        )
+    }
     private companion object {
         const val TAG = "VzTuneYT"
         const val MIN_SCORE = 60

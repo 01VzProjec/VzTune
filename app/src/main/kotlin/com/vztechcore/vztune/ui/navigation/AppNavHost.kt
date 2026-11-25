@@ -51,6 +51,9 @@ import com.vztechcore.vztune.ui.screens.library.list.LibraryListViewModel
 import com.vztechcore.vztune.ui.screens.main.MiniPlayerViewModel
 import com.vztechcore.vztune.ui.screens.medialist.MediaListScreen
 import com.vztechcore.vztune.ui.screens.medialist.MediaListViewModel
+import com.vztechcore.vztune.ui.screens.shorts.ShortsFeed
+import com.vztechcore.vztune.ui.screens.shorts.ShortsScreen
+import com.vztechcore.vztune.ui.screens.shorts.ShortsViewModel
 import com.vztechcore.vztune.ui.screens.search.SearchScreen
 import com.vztechcore.vztune.ui.screens.search.SearchViewModel
 import com.vztechcore.vztune.ui.screens.trackinfo.TrackInfoScreen
@@ -96,6 +99,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
     val isLibraryListScreen = backStackEntry?.destination?.hasRoute<Routes.LibraryList>() == true
     val isDownloadsScreen = backStackEntry?.destination?.hasRoute<Routes.Downloads>() == true
     val isDetailScreen = isMediaListScreen || isArtistScreen || isArtistListScreen || isLibraryListScreen || isDownloadsScreen
+val isShortsScreen = backStackEntry?.destination?.hasRoute<Routes.Shorts>() == true
     val isTrackInfoScreen = backStackEntry?.destination?.hasRoute<Routes.TrackInfo>() == true
 
     val playback = LocalNowPlaying.current
@@ -440,6 +444,22 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                                     )
                                 )
                             },
+favoriteKeys = favoriteKeys,
+onToggleFavorite = menuVm::onToggleFavorite,
+onShortClick = { t ->
+    val idx = state.shorts.indexOfFirst { it.id == t.id }.coerceAtLeast(0)
+    val feedKey = ShortsFeed.put(state.shorts)
+    navController.navigate(
+        Routes.Shorts(
+            feedKey = feedKey,
+            startIndex = idx,
+            channelId = state.artistId,
+            channelName = state.name,
+            channelAvatarUrl = state.thumbnailUrl,
+            channelHandle = state.channelHandle,
+        )
+    )
+},
                             onLoadMoreChannelVideos = vm::loadMoreChannelVideos,
                             onLoadMoreChannelPlaylists = vm::loadMoreChannelPlaylists,
                             onPlaylistPlayNext = vm::onPlaylistPlayNext,
@@ -471,6 +491,35 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     }
                 }
 
+composable<Routes.Shorts> {
+    ScreenSlideIn(fromLeft = false) {
+        val vm: ShortsViewModel = hiltViewModel()
+        val state by vm.uiState.collectAsStateWithLifecycle()
+        ShortsScreen(
+            state = state,
+            player = vm.player,
+            onBackClick = { navController.popBackStack() },
+            onPageSettled = vm::onPageSettled,
+            onTogglePlayPause = vm::togglePlayPause,
+            onToggleMute = vm::toggleMute,
+            onSpeedChange = vm::setSpeed,
+            onQualitySelect = vm::selectQuality,
+            onToggleFavorite = vm::toggleFavorite,
+            onToggleFollow = vm::toggleFollow,
+            onOpenChannel = {
+                navController.navigate(
+                    Routes.Artist(
+                        id = state.channelId,
+                        name = state.channelName,
+                        thumbnailUrl = state.channelAvatarUrl,
+                        isYouTubeChannel = true,
+                        initialTab = 3,
+                    )
+                )
+            },
+        )
+    }
+}
                 composable<Routes.TrackInfo> {
                     ScreenSlideIn(fromLeft = false) {
                         val vm: TrackInfoViewModel = hiltViewModel()
@@ -498,7 +547,8 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 miniPlayerVm = miniPlayerVm,
                 isMinimized = isMinimized,
                 isDetailScreen = isDetailScreen,
-                isTrackInfoScreen = isTrackInfoScreen,
+isTrackInfoScreen = isTrackInfoScreen,
+isShortsScreen = isShortsScreen,
                 bannerTrack = bannerTrack,
                 onDismissBanner = bannerVm::dismissBanner,
                 onViewDownloadsClick = { navController.navigate(Routes.Downloads) },

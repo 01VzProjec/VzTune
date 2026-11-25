@@ -55,36 +55,70 @@ import com.vztechcore.vztune.ui.icons.media.PlaylistAdd
 import com.vztechcore.vztune.ui.icons.actions.PlayNext
 import com.vztechcore.vztune.ui.icons.actions.AddToQueue
 
-
 fun formatViewCount(count: Long?): String? {
     if (count == null || count <= 0) return null
-    if (count == 1L) return "1 visualizacao"
+    if (count == 1L) return "1 visualização"
     return when {
-        count < 1_000 -> "$count visualizacoes"
-        count < 1_000_000 -> formatOneDecimal(count / 1_000.0) + " mil visualizacoes"
+        count < 1_000 -> "$count visualizações"
+        count < 1_000_000 -> formatOneDecimal(count / 1_000.0) + " mil visualizações"
         count < 1_000_000_000 -> {
             val v = count / 1_000_000.0
             val base = formatOneDecimal(v)
-            if (v < 1.05) base + " milhao visualizacoes" else base + " milhoes visualizacoes"
+            if (v < 1.05) base + " milhão visualizações" else base + " milhões visualizações"
         }
-        else -> formatOneDecimal(count / 1_000_000_000.0) + " bilhoes visualizacoes"
+        else -> formatOneDecimal(count / 1_000_000_000.0) + " bilhões visualizações"
     }
 }
+
 private fun formatOneDecimal(v: Double): String {
     val s = "%.1f".format(v).replace(".", ",")
     return if (s.endsWith(",0")) s.dropLast(2) else s
 }
-fun videoMetaLine(track: Track): String? {
-    val views = formatViewCount(track.viewCount)
-    return listOfNotNull(views, track.publishedText?.takeIf { it.isNotBlank() }).joinToString(" - ").takeIf { it.isNotBlank() }
+
+/** Duração "m:ss" / "h:mm:ss" pra bolha da thumbnail. Null quando não sabe. */
+fun formatDurationLabel(seconds: Long): String? {
+    if (seconds <= 0) return null
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    val s = seconds % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
+
+/** "1,2 mi visualizações • há 2 dias" (o que existir dos dois). */
+fun videoViewsDate(track: Track): String? {
+    val views = formatViewCount(track.viewCount)
+    val date = track.publishedText?.takeIf { it.isNotBlank() }
+    return listOfNotNull(views, date).joinToString(" • ").takeIf { it.isNotBlank() }
+}
+
+fun videoMetaLine(track: Track): String? = videoViewsDate(track)
+
+/** Bolha preta com a duração total do vídeo (canto da thumbnail decidido pelo pai). */
+@Composable
+fun DurationBubble(seconds: Long, modifier: Modifier = Modifier) {
+    val label = formatDurationLabel(seconds) ?: return
+    Box(
+        modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color.Black.copy(alpha = 0.78f))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+    }
+}
+
 @Composable
 fun ChannelVideoCard(track: Track, onClick: () -> Unit, onMoreClick: () -> Unit, modifier: Modifier = Modifier) {
     val nowPlaying = LocalNowPlaying.current
     val playback = nowPlaying.playbackOf(track)
-    val isCurrent = playback.isPlaying || playback.isPaused
     Row(modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.Top) {
-        // FIX15: mesmo sistema dos cards de faixa do Search - MediaThumbnail WIDE: tocando = equalizador animado, pausado = icone pause no meio + equalizador pequeno no canto inferior direito. Sem thumbnail = holder_video.png.
+        // Thumbnail na esquerda + bolha de duração no canto inferior esquerdo.
         Box(Modifier.width(160.dp)) {
             MediaThumbnail(
                 imageUrl = track.thumbnailUrl,
@@ -94,12 +128,16 @@ fun ChannelVideoCard(track: Track, onClick: () -> Unit, onMoreClick: () -> Unit,
                 isPaused = playback.isPaused,
                 placeholderRes = R.drawable.holder_video,
             )
+            DurationBubble(
+                seconds = track.durationSeconds,
+                modifier = Modifier.align(Alignment.BottomStart).padding(6.dp),
+            )
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(text = track.title, style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(4.dp))
-            val meta = videoMetaLine(track)
+            val meta = videoViewsDate(track)
             if (!meta.isNullOrBlank()) Text(text = meta, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         IconButton(onClick = onMoreClick, modifier = Modifier.size(36.dp)) {
@@ -107,6 +145,7 @@ fun ChannelVideoCard(track: Track, onClick: () -> Unit, onMoreClick: () -> Unit,
         }
     }
 }
+
 @Composable
 fun ChannelPlaylistCard(playlist: Playlist, onClick: () -> Unit, onMoreClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.Top) {
@@ -133,17 +172,23 @@ fun ChannelPlaylistCard(playlist: Playlist, onClick: () -> Unit, onMoreClick: ()
         }
     }
 }
+
+/**
+ * Card do Short (grade 9:16). SEM overlay "Tocando/Pausado" - o playback
+ * agora mora na tela Shorts. Bolha de duração no canto SUPERIOR ESQUERDO
+ * (quando a API informa a duração; a listagem de Shorts nem sempre traz).
+ */
 @Composable
 fun ShortCard(track: Track, onClick: () -> Unit, onMoreClick: () -> Unit, modifier: Modifier = Modifier) {
-    val nowPlaying = LocalNowPlaying.current
-    val playback = nowPlaying.playbackOf(track)
-    val isCurrent = playback.isPlaying || playback.isPaused
-    // Sem thumbnail vinda do parser, usa a miniatura padrao do YouTube pelo id do video.
     val thumb = track.thumbnailUrl?.takeIf { it.isNotBlank() } ?: "https://i.ytimg.com/vi/${track.id}/hqdefault.jpg"
     Column(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onClick() }) {
         Box(Modifier.fillMaxWidth().aspectRatio(9f / 16f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(12.dp))) {
             AsyncImage(model = thumb, contentDescription = track.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             Box(Modifier.fillMaxWidth().height(96.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)))))
+            DurationBubble(
+                seconds = track.durationSeconds,
+                modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
+            )
             Box(Modifier.align(Alignment.TopEnd).padding(6.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable { onMoreClick() }.padding(6.dp)) {
                 Icon(imageVector = VzIcons.MoreVert, contentDescription = "Mais", tint = Color.White, modifier = Modifier.size(18.dp))
             }
@@ -156,12 +201,10 @@ fun ShortCard(track: Track, onClick: () -> Unit, onMoreClick: () -> Unit, modifi
                     Text(text = views, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            if (isCurrent) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
-                Text(text = if (playback.isPlaying) "Tocando" else "Pausado", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
-            }
         }
     }
 }
+
 @Composable
 fun ShortsGridRows(tracks: List<Track>, onClick: (Track) -> Unit, onMoreClick: (Track) -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -175,6 +218,8 @@ fun ShortsGridRows(tracks: List<Track>, onClick: (Track) -> Unit, onMoreClick: (
         }
     }
 }
+
+/** Menu do Short: SOMENTE favoritos + compartilhar (pedido da Parte 1). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShortsOptionsSheet(track: Track, isFavorite: Boolean, onToggleFavorite: (Track) -> Unit, onDismiss: () -> Unit) {
@@ -210,6 +255,7 @@ fun ShortsOptionsSheet(track: Track, isFavorite: Boolean, onToggleFavorite: (Tra
         }
     }
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistOptionsSheet(playlist: Playlist, onDismiss: () -> Unit, onPlayNext: (Playlist) -> Unit, onAddToQueue: (Playlist) -> Unit, onSaveToLibrary: (Playlist) -> Unit, onShare: (Playlist) -> Unit = {}) {

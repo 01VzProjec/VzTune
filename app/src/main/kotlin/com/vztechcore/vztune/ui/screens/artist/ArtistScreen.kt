@@ -101,6 +101,8 @@ import com.vztechcore.vztune.ui.icons.actions.MoreVert
 import com.vztechcore.vztune.ui.icons.navigation.Search
 import com.vztechcore.vztune.ui.components.sheets.FoundProfilesSheet
 import com.vztechcore.vztune.ui.components.sheets.ProfileOptionsSheet
+import androidx.compose.ui.draw.blur
+import com.vztechcore.vztune.ui.components.feedback.ImageViewerOverlay
 import com.vztechcore.vztune.ui.components.text.LinkifiedText
 
 private val RowPadding = PaddingValues(horizontal = 16.dp)
@@ -143,10 +145,12 @@ fun ArtistScreen(
     val listState = rememberLazyListState()
     val isCollapsed by rememberHeaderCollapsed(listState)
     val nowPlaying = LocalNowPlaying.current
-    var selectedChannelTab by remember { mutableStateOf(0) }
+var selectedChannelTab by remember(state.initialTab) { mutableStateOf(state.initialTab) }
     var channelVideosSort by remember { mutableStateOf(0) } // 0 = Recentes, 1 = Em alta (mais vistos)
     var channelSort by remember { mutableStateOf(0) } // 0 = Mais recentes, 1 = Em alta, 2 = Mais antigos
     var channelDescExpanded by remember { mutableStateOf(false) }
+var shortMenu by remember { mutableStateOf<Track?>(null) }
+var viewerImageUrl by remember { mutableStateOf<String?>(null) }
     var playlistMenu by remember { mutableStateOf<Playlist?>(null) }
     // Menu de 3 pontinhos (Canais/Contas encontradas + Compartilhar) e a lista de perfis com o mesmo nome.
     var profileMenuOpen by remember { mutableStateOf(false) }
@@ -194,6 +198,15 @@ fun ArtistScreen(
         PlaylistOptionsSheet(playlist = pl, onDismiss = { playlistMenu = null }, onPlayNext = { onPlaylistPlayNext(it); playlistMenu = null }, onAddToQueue = { onPlaylistAddToQueue(it); playlistMenu = null }, onSaveToLibrary = { onSavePlaylistToLibrary(it); playlistMenu = null }, onShare = { p -> val url = "https://www.youtube.com/playlist?list=" + p.id; val si = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, p.title + "\n" + url) }; context.startActivity(Intent.createChooser(si, "Compartilhar playlist")); playlistMenu = null })
     }
     // Menu de 3 pontinhos: "Canais/Contas encontradas" + Compartilhar. O primeiro abre a lista de perfis com o mesmo nome.
+shortMenu?.let { sh ->
+    val shKey = StoredTrack.from(sh).key
+    ShortsOptionsSheet(
+        track = sh,
+        isFavorite = shKey in favoriteKeys,
+        onToggleFavorite = onToggleFavorite,
+        onDismiss = { shortMenu = null },
+    )
+}
     if (profileMenuOpen) {
         ProfileOptionsSheet(
             isYouTubeChannel = state.isYouTubeChannel,
@@ -218,11 +231,11 @@ fun ArtistScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        LazyColumn(
-            state = listState,
-            contentPadding = PaddingValues(bottom = 140.dp),
-            modifier = Modifier.fillMaxSize(),
-        ) {
+LazyColumn(
+state = listState,
+contentPadding = PaddingValues(bottom = 140.dp),
+modifier = Modifier.fillMaxSize().blur(if (viewerImageUrl != null) 28.dp else 0.dp),
+) {
             item(key = "header") {
                 if (state.isYouTubeChannel) {
                     ChannelHeader(
@@ -234,7 +247,9 @@ fun ArtistScreen(
                         onBackClick = onBackClick,
                         onFollowClick = onFollowClick,
                         onMoreClick = { profileMenuOpen = true },
-                        onLoadMoreChannelClick = { onLoadMoreChannelVideos(); onLoadMoreChannelPlaylists() },
+onLoadMoreChannelClick = { onLoadMoreChannelVideos(); onLoadMoreChannelPlaylists() },
+onAvatarClick = { viewerImageUrl = state.thumbnailUrl },
+onBannerClick = { viewerImageUrl = state.bannerUrl },
                         searchOpen = channelSearchOpen,
                         searchQuery = channelSearchQuery,
                         onSearchQueryChange = { channelSearchQuery = it },
@@ -306,10 +321,10 @@ fun ArtistScreen(
                                     item(key = "home_foryou_row") {
                                         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                             items(forYouVideos, key = { "fy_" + it.id }) { video ->
-                                                Box(Modifier.width(300.dp)) {
-                                                    val pv = nowPlaying.playbackOf(video)
-                                                    VzVideoCard(track = video, isPlaying = pv.isPlaying, isPaused = pv.isPaused, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }, horizontalPadding = 0.dp)
-                                                }
+Box(Modifier.width(300.dp)) {
+val pv = nowPlaying.playbackOf(video)
+VzVideoCard(track = video, isPlaying = pv.isPlaying, isPaused = pv.isPaused, onClick = { onVideoClick(video) }, onMoreClick = { onTrackInfoClick(video) }, horizontalPadding = 0.dp, showChannelRow = false)
+}
                                             }
                                         }
                                     }
@@ -407,11 +422,11 @@ fun ArtistScreen(
                                 // --- SHORTS DO CANAL ---
                                 if (displayState.shorts.isNotEmpty()) {
                                     item(key = "channel_shorts_grid") {
-                                        ShortsGridRows(
-                                            tracks = displayState.shorts,
-                                            onClick = onVideoClick,
-                                            onMoreClick = onTrackInfoClick,
-                                        )
+ShortsGridRows(
+tracks = displayState.shorts,
+onClick = { onShortClick(it) },
+onMoreClick = { shortMenu = it },
+)
                                     }
                                 } else {
                                     item(key = "channel_shorts_empty") {
@@ -515,7 +530,10 @@ fun ArtistScreen(
             item(key = "credits") { AppCredits() }
         }
 
-        CollapsedHeaderHost(visible = isCollapsed) {
+if (viewerImageUrl != null) {
+    ImageViewerOverlay(url = viewerImageUrl, onDismiss = { viewerImageUrl = null })
+}
+CollapsedHeaderHost(visible = isCollapsed && viewerImageUrl == null) {
             MediaListCollapsedHeader(
                 title = state.name,
                 thumbnailUrl = state.thumbnailUrl,
@@ -648,8 +666,10 @@ private fun ChannelHeader(
     onBackClick: () -> Unit,
     onFollowClick: () -> Unit,
     onMoreClick: () -> Unit,
-    onLoadMoreChannelClick: () -> Unit = {},
-    searchOpen: Boolean = false,
+onLoadMoreChannelClick: () -> Unit = {},
+onAvatarClick: () -> Unit = {},
+onBannerClick: () -> Unit = {},
+searchOpen: Boolean = false,
     searchQuery: String = "",
     onSearchQueryChange: (String) -> Unit = {},
     onSearchToggle: () -> Unit = {},
@@ -702,7 +722,7 @@ private fun ChannelHeader(
         // FIX18 - Banner: so aparece se o criador tem banner. Sem banner = sem card vazio. Tamanho exato do criador: sem aspectRatio fixo, a imagem manda na altura (FillWidth).
         if (!state.bannerUrl.isNullOrBlank()) {
             Box(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp).aspectRatio(1707f / 283f).clip(RoundedCornerShape(12.dp))
+Modifier.fillMaxWidth().padding(horizontal = 16.dp).aspectRatio(1707f / 283f).clip(RoundedCornerShape(12.dp)).clickable { onBannerClick() }
             ) {
                 AsyncImage(model = state.bannerUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
@@ -713,7 +733,7 @@ private fun ChannelHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                Modifier.size(80.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
+Modifier.size(80.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape).clickable { onAvatarClick() }
             ) {
                 if (!state.thumbnailUrl.isNullOrBlank()) {
                     AsyncImage(model = state.thumbnailUrl, contentDescription = state.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())

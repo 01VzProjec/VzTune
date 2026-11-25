@@ -101,6 +101,10 @@ dependencies {
 
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 
+// Media3 (tela Shorts - :data usa implementation, nao expoe pro :app)
+implementation(libs.androidx.media3.exoplayer)
+implementation(libs.androidx.media3.common)
+implementation(libs.androidx.media3.ui)
     // Activity + Navigation + Lifecycle
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)

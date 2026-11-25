@@ -40,7 +40,7 @@ import com.vztechcore.vztune.ui.screens.main.MiniPlayerViewModel
 
 /**
  * Bottom chrome of the app: download banner, mini player (expanded or compact) and bottom bar.
- * Rendered from [AppNavHost] inside the root Box, hence the [BoxScope].
+ * Na tela Shorts nada disso aparece (imersiva, player proprio).
  */
 @Composable
 fun BoxScope.PlaybackChrome(
@@ -53,10 +53,12 @@ fun BoxScope.PlaybackChrome(
     isMinimized: Boolean,
     isDetailScreen: Boolean,
     isTrackInfoScreen: Boolean,
+    isShortsScreen: Boolean = false,
     bannerTrack: Track? = null,
     onDismissBanner: () -> Unit = {},
     onViewDownloadsClick: () -> Unit = {},
 ) {
+    if (isShortsScreen) return
     Column(
         modifier = Modifier
             .align(Alignment.BottomCenter)
@@ -69,7 +71,6 @@ fun BoxScope.PlaybackChrome(
             onDismiss = onDismissBanner,
             onViewClick = onViewDownloadsClick,
         )
-
         if (!isTrackInfoScreen) {
             when {
                 track != null && isDetailScreen -> {
@@ -86,7 +87,6 @@ fun BoxScope.PlaybackChrome(
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                 }
-
                 track != null -> {
                     AnimatedVisibility(
                         visible = isMinimized,
@@ -128,7 +128,6 @@ fun BoxScope.PlaybackChrome(
                             )
                         }
                     }
-
                     AnimatedVisibility(
                         visible = !isMinimized,
                         enter = slideInVertically(
@@ -156,7 +155,6 @@ fun BoxScope.PlaybackChrome(
                         }
                     }
                 }
-
                 !isDetailScreen -> {
                     AppBottomBar(
                         selected = currentTab,

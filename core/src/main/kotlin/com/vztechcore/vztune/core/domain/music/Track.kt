@@ -19,4 +19,6 @@ data class Track(
     val viewCount: Long? = null,
     // Texto ja formatado em pt-BR: hoje, ha 1 dia, ha 3 semanas, ha 2 meses, ha 1 ano.
     val publishedText: String? = null,
+    // Foto de perfil do canal que postou o video (cards 16:9 e tela Shorts).
+    val channelAvatarUrl: String? = null,
 )

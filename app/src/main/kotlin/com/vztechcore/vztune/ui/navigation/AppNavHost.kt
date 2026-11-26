@@ -503,7 +503,7 @@ composable<Routes.Shorts> {
             onTogglePlayPause = vm::togglePlayPause,
             onToggleMute = vm::toggleMute,
             onSpeedChange = vm::setSpeed,
-            onQualitySelect = vm::selectQuality,
+onQualityModeSelect = vm::selectQualityMode,
             onToggleFavorite = vm::toggleFavorite,
             onToggleFollow = vm::toggleFollow,
             onOpenChannel = {

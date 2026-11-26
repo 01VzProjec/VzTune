@@ -45,6 +45,7 @@ data class ShortsUiState(
     val speed: Float = 1f,
     val info: YouTubeRepository.ShortPlaybackInfo? = null,
     val selectedQuality: String? = null,
+    val qualityMode: String = "auto",
     val isFollowing: Boolean = false,
     val isFavorite: Boolean = false,
     // Cue de pause/play: token muda a cada toque; a tela anima o icone.
@@ -60,7 +61,7 @@ data class ShortsUiState(
  */
 @HiltViewModel
 class ShortsViewModel @Inject constructor(
-    @ApplicationContext context: Context,
+@ApplicationContext private val context: Context,
     private val musicRepository: MusicRepository,
     private val followedStore: FollowedArtistsStore,
     private val favoriteTracksStore: FavoriteTracksStore,
@@ -73,6 +74,35 @@ class ShortsViewModel @Inject constructor(
     private var favKeys: Set<String> = emptySet()
     private var loadJob: Job? = null
 
+    private val prefs = context.getSharedPreferences("vztune_shorts", Context.MODE_PRIVATE)
+
+    private fun loadMode(): String = prefs.getString("quality_mode", "auto") ?: "auto"
+
+    private fun isWifi(): Boolean = runCatching {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val net = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(net) ?: return false
+        caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)
+    }.getOrDefault(true)
+
+    /** Escolhe o stream pelo modo: auto(wifi=melhor, dados=menor), high=melhor, save=480/360. */
+    private fun pickStream(streams: List<YouTubeRepository.ShortVideoStream>, mode: String): YouTubeRepository.ShortVideoStream? {
+        if (streams.isEmpty()) return null
+        val sorted = streams.sortedByDescending { it.height }
+        val effective = when (mode) {
+            "high" -> "high"
+            "save" -> "save"
+            else -> if (isWifi()) "high" else "save"
+        }
+        return if (effective == "high") {
+            sorted.firstOrNull { it.height > 0 } ?: sorted.first()
+        } else {
+            sorted.firstOrNull { it.height in 360..480 }
+                ?: sorted.firstOrNull { it.height > 240 }
+                ?: sorted.first()
+        }
+    }
     private val _state = MutableStateFlow(
         ShortsUiState(
             channelId = route.channelId,
@@ -82,6 +112,7 @@ class ShortsViewModel @Inject constructor(
             items = items,
             index = route.startIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0)),
             isLoading = items.isNotEmpty(),
+            qualityMode = loadMode(),
         )
     )
     val uiState: StateFlow<ShortsUiState> = _state.asStateFlow()
@@ -130,7 +161,7 @@ class ShortsViewModel @Inject constructor(
     /** Assim que assenta num Short, ja resolve o link do proximo, do anterior e do +2.
      *  Quando o usuario desliza, o cache ja tem tudo -> toca sem delay de busca. */
     private fun prefetchAround(index: Int) {
-        for (i in listOf(index + 1, index - 1, index + 2)) {
+for (i in listOf(index + 1, index - 1, index + 2, index + 3)) {
             val t = items.getOrNull(i) ?: continue
             if (infoCache.containsKey(t.id)) continue
             if (prefetchJobs[t.id]?.isActive == true) continue
@@ -154,30 +185,42 @@ class ShortsViewModel @Inject constructor(
                 info = cached,
                 isLoading = cached == null,
                 isFavorite = keyOf(index) in favKeys,
-                selectedQuality = cached?.streams?.firstOrNull()?.qualityLabel,
+selectedQuality = pickStream(cached.streams, _state.value.qualityMode)?.qualityLabel,
             )
         }
 loadJob?.cancel()
 prefetchAround(index)
 if (cached != null) {
-            playStream(cached.streams.firstOrNull(), 0L)
+playStream(pickStream(cached.streams, _state.value.qualityMode), 0L)
             return
         }
         loadJob = viewModelScope.launch {
-            val info = musicRepository.getShortPlaybackInfo(track.id)
-            if (info != null) infoCache[track.id] = info
+            // Fast-path: InnerTube primeiro (1 request) -> toca na hora, igual YouTube.
+            val fast = musicRepository.getShortStreamsFast(track.id)
             if (_state.value.index != index) return@launch
-            if (info == null) {
+            if (fast.isNotEmpty()) {
+                val pick = pickStream(fast, _state.value.qualityMode)
+                _state.update {
+                    it.copy(
+                        info = YouTubeRepository.ShortPlaybackInfo(streams = fast),
+                        isLoading = false,
+                        selectedQuality = pick?.qualityLabel,
+                    )
+                }
+                playStream(pick, 0L)
+            }
+            // Detalhes (likes, comentarios, descricao, data) chegam depois, sem reiniciar o video.
+            val full = musicRepository.getShortPlaybackInfo(track.id)
+            if (full != null) {
+                infoCache[track.id] = full
+                if (_state.value.index == index) {
+                    _state.update { it.copy(info = full, isLoading = false) }
+                }
+            } else if (fast.isEmpty()) {
                 _state.update { it.copy(isLoading = false) }
-                return@launch
             }
-            _state.update {
-                it.copy(info = info, isLoading = false, selectedQuality = info.streams.firstOrNull()?.qualityLabel)
-            }
-            playStream(info.streams.firstOrNull(), 0L)
         }
     }
-
     private fun playStream(stream: YouTubeRepository.ShortVideoStream?, startPosMs: Long) {
         if (stream == null) return
         val audioUrl = stream.audioUrl
@@ -200,6 +243,14 @@ if (cached != null) {
         playStream(stream, player.currentPosition)
     }
 
+    /** Modo de qualidade persistido: fica salvo ate o usuario trocar de novo. */
+    fun selectQualityMode(mode: String) {
+        prefs.edit().putString("quality_mode", mode).apply()
+        _state.update { it.copy(qualityMode = mode) }
+        val info = _state.value.info ?: return
+        val pick = pickStream(info.streams, mode) ?: return
+        playStream(pick, player.currentPosition)
+    }
     fun togglePlayPause() {
         val nowPause = player.isPlaying
         if (nowPause) player.pause() else player.play()

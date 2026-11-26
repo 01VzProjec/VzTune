@@ -71,6 +71,8 @@ class MusicRepository @Inject constructor(
     }.getOrNull()
 
     /** Shorts: streams de video + detalhes (views, likes, descricao, data, avatar). */
+    suspend fun getShortStreamsFast(videoId: String): List<YouTubeRepository.ShortVideoStream> =
+        runCatching { youTubeRepository.getShortStreamsFast(videoId) }.getOrDefault(emptyList())
     suspend fun getShortPlaybackInfo(videoId: String) =
         runCatching { youTubeRepository.getShortPlaybackInfo(videoId) }.getOrNull()
     /** Sugestões de busca — delegate direto pro YTMusic. */

@@ -50,6 +50,8 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.ui.components.text.openUrlInBrowser
+import com.vztechcore.vztune.ui.components.cards.formatViewsCompact
 import com.vztechcore.vztune.ui.components.rows.SheetOptionRow
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Add
@@ -86,7 +88,7 @@ fun ShortsScreen(
     onTogglePlayPause: () -> Unit,
     onToggleMute: () -> Unit,
     onSpeedChange: (Float) -> Unit,
-    onQualitySelect: (String) -> Unit,
+onQualityModeSelect: (String) -> Unit,
     onToggleFavorite: () -> Unit,
     onToggleFollow: () -> Unit,
     onOpenChannel: () -> Unit,
@@ -130,7 +132,7 @@ fun ShortsScreen(
     val interfaceVisible = !interfaceHidden && !zoomed
     val currentTrack = state.items.getOrElse(pagerState.settledPage) { state.items.first() }
     val bottomPad by animateDpAsState(
-        targetValue = if (showDescription) 300.dp else 0.dp,
+targetValue = if (showDescription) 460.dp else 0.dp,
         animationSpec = tween(250),
         label = "shortsDescPad",
     )
@@ -266,46 +268,40 @@ fun ShortsScreen(
             }
 
             Column(
-Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 24.dp),
+                Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                ShortAction(
+                ShortActionLabeled(
                     icon = if (state.isFavorite) VzIcons.FavoriteFilled else VzIcons.FavoriteOutline,
-                    label = "Favoritar",
+                    label = state.info?.likeCount?.let { formatPlainCount(it) } ?: "",
                     onClick = onToggleFavorite,
                 )
-                ShortAction(VzIcons.Share, "Compartilhar") {
-                    val shareText = "Olha esse Short no VzTune" + ShortLineBreak +
-                        currentTrack.title + ShortLineBreak +
-                        "https://www.youtube.com/shorts/" + currentTrack.id
-                    val send = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, shareText)
-                    }
-                    context.startActivity(Intent.createChooser(send, "Compartilhar Short"))
-                }
-                ShortAction(VzIcons.Comment, "Comentários") {
+                ShortActionLabeled(
+                    icon = VzIcons.Comment,
+                    label = state.info?.commentCount?.let { formatPlainCount(it) } ?: "",
+                ) {
                     Toast.makeText(context, "Comentários em breve ;)", Toast.LENGTH_SHORT).show()
                 }
-                ShortAction(VzIcons.Bookmark, "Salvar") {
+                ShortActionLabeled(VzIcons.Bookmark, "Salvar") {
                     Toast.makeText(context, "Salvar em breve ;)", Toast.LENGTH_SHORT).show()
+                }
+                ShortActionLabeled(VzIcons.Share, "Compartilhar") {
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, "Olha esse Short no VzTune" + ShortLineBreak + currentTrack.title + ShortLineBreak + "https://www.youtube.com/shorts/" + currentTrack.id)
+                    }
+                    context.startActivity(Intent.createChooser(send, "Compartilhar Short"))
                 }
                 Box(
                     Modifier.size(44.dp).clip(RoundedCornerShape(10.dp))
                         .background(Color.White.copy(alpha = 0.08f))
                         .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                        .clickable { Toast.makeText(context, "Som do Short em breve ;)", Toast.LENGTH_SHORT).show() }
+                        .clickable { Toast.makeText(context, "Som do Short em breve ;)", Toast.LENGTH_SHORT).show()
                 ) {
-                    AsyncImage(
-                        model = currentTrack.thumbnailUrl,
-                        contentDescription = "Som do Short",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    AsyncImage(model = currentTrack.thumbnailUrl, contentDescription = "Som do Short", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 }
             }
-
             Column(
                 Modifier.align(Alignment.BottomStart).navigationBarsPadding()
                     .padding(start = 14.dp, end = 84.dp, bottom = 20.dp)
@@ -401,42 +397,14 @@ ShortsProgressBar(player = player, modifier = Modifier.align(Alignment.BottomCen
             contentColor = Color.White,
         ) {
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 16.dp)) {
-                Text(
-                    "Qualidade",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                )
-                val streams = state.info?.streams.orEmpty()
-                if (streams.isEmpty()) {
-                    Text(
-                        "Nenhuma qualidade encontrada ainda.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                    )
-                } else {
-                    streams.forEach { s ->
-                        Row(
-                            Modifier.fillMaxWidth().clickable { onQualitySelect(s.qualityLabel); showQuality = false }
-                                .padding(horizontal = 16.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(
-                                selected = s.qualityLabel == state.selectedQuality,
-                                onClick = { onQualitySelect(s.qualityLabel); showQuality = false },
-                                colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF60A5FA), unselectedColor = Color.White.copy(alpha = 0.5f)),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(s.qualityLabel, style = MaterialTheme.typography.bodyLarge, color = Color.White)
-                        }
-                    }
-                }
+                Text("Qualidade", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+                Text("Agora: " + (state.selectedQuality ?: "Automática"), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp))
+                QualityModeRow("auto", "Automática (Recomendado)", "Melhor qualidade no Wi-Fi; menor nos dados móveis.", state.qualityMode, onQualityModeSelect) { showQuality = false }
+                QualityModeRow("high", "Qualidade de imagem mais alta", "Sempre a melhor disponível (1080p60 / 720p / HLS).", state.qualityMode, onQualityModeSelect) { showQuality = false }
+                QualityModeRow("save", "Economia de dados", "Prefere 480p / 360p; evita 240p e 144p.", state.qualityMode, onQualityModeSelect) { showQuality = false }
             }
         }
     }
-
     if (showSpeed) {
         ModalBottomSheet(
             onDismissRequest = { showSpeed = false },
@@ -492,13 +460,13 @@ ShortsProgressBar(player = player, modifier = Modifier.align(Alignment.BottomCen
     if (showDescription) {
         ModalBottomSheet(
             onDismissRequest = { showDescription = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = SheetColor,
             contentColor = Color.White,
             scrimColor = Color.Transparent,
         ) {
             Column(
-                Modifier.fillMaxWidth().heightIn(max = 460.dp).verticalScroll(rememberScrollState())
+                Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState())
                     .navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 24.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -537,22 +505,27 @@ ShortsProgressBar(player = player, modifier = Modifier.align(Alignment.BottomCen
                         }
                     }
                 }
-                Spacer(Modifier.height(14.dp))
-                DescStatRow("Marcações gostei:", formatPlainCount(state.info?.likeCount))
-                DescStatRow("Visualizações:", formatPlainCount(state.info?.viewCount))
-DescStatRow("Data:", state.info?.publishDateText ?: state.info?.publishedText ?: currentTrack.publishedText ?: "-")
-                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    DescStatColumn(formatPlainCount(state.info?.likeCount), "Marcações Gostei")
+                    DescStatColumn(state.info?.viewCount?.let { formatViewsCompact(it) } ?: "—", "Visualizações")
+                    DescStatColumn(shortAgo(state.info?.publishedText), "Atrás")
+                }
                 val descText = state.info?.description?.takeIf { it.isNotBlank() } ?: currentTrack.title
-                Text(
-                    text = rememberHashtagText(descText),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.85f),
-                )
+                Box(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.08f))
+                        .padding(12.dp)
+                ) {
+                    ShortDescriptionText(descText)
+                }
             }
         }
     }
-}
 
+}
 /** Barrinha inferior de progresso do Short: mostra e permite arrastar pra buscar. */
 @Composable
 private fun ShortsProgressBar(player: ExoPlayer, modifier: Modifier = Modifier) {
@@ -603,6 +576,93 @@ private fun ShortsProgressBar(player: ExoPlayer, modifier: Modifier = Modifier) 
             Box(Modifier.fillMaxWidth(shown).height(if (dragging) 6.dp else 3.dp).background(Color.White))
         }
     }
+}
+@Composable
+private fun ShortActionLabeled(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Column(
+        Modifier.clip(RoundedCornerShape(12.dp)).clickable { onClick() }.padding(4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, label, tint = Color.White, modifier = Modifier.size(28.dp))
+        if (label.isNotBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Text(label, style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun QualityModeRow(mode: String, title: String, subtitle: String, current: String, onSelect: (String) -> Unit, onDone: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable { onSelect(mode); onDone() }.padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(
+            selected = current == mode,
+            onClick = { onSelect(mode); onDone() },
+            colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF60A5FA), unselectedColor = Color.White.copy(alpha = 0.5f)),
+        )
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = Color.White, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.55f))
+        }
+    }
+}
+
+@Composable
+private fun DescStatColumn(value: String, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
+        Spacer(Modifier.height(2.dp))
+        Text(label, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1)
+    }
+}
+
+private fun shortAgo(text: String?): String {
+    val t = text?.trim().orEmpty()
+    if (t.isBlank()) return "—"
+    return t.removePrefix("há ")
+        .replace(" horas", " h").replace(" hora", " h")
+        .replace(" minutos", " min").replace(" minuto", " min")
+        .replace(" dias", " d").replace(" dia", " d")
+        .replace(" semanas", " sem").replace(" semana", " sem")
+        .replace(" meses", " mês").replace(" mês", " mês")
+        .replace(" anos", " a").replace(" ano", " a")
+}
+
+/** Descricao limpa: hashtag azul + link azul clicavel (abre navegador), igual YouTube. */
+@Composable
+private fun ShortDescriptionText(text: String) {
+    val context = LocalContext.current
+    val annotated = remember(text) {
+        buildAnnotatedString {
+            var last = 0
+            Regex("(#[A-Za-z0-9_À-ÿ]+)|(https?://[^\\s<>\"']+)|(www\\.[^\\s<>\"']+)").findAll(text).forEach { m ->
+                if (m.range.first > last) append(text.substring(last, m.range.first))
+                val v = m.value
+                val isTag = v.startsWith("#")
+                withStyle(SpanStyle(color = HashtagBlue)) { append(v) }
+                if (!isTag) addStringAnnotation("url", v, length - v.length, length)
+                last = m.range.last + 1
+            }
+            if (last < text.length) append(text.substring(last))
+        }
+    }
+    var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+    Text(
+        text = annotated,
+        style = MaterialTheme.typography.bodyMedium,
+        color = Color.White.copy(alpha = 0.85f),
+        onTextLayout = { layout = it },
+        modifier = Modifier.pointerInput(annotated) {
+            detectTapGestures { pos ->
+                val off = layout?.getOffsetForPosition(pos) ?: return@detectTapGestures
+                val hit = annotated.getStringAnnotations("url", off, off).firstOrNull()
+                if (hit != null) openUrlInBrowser(context, hit.item)
+            }
+        },
+    )
 }
 @Composable
 private fun ShortsCircleButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {

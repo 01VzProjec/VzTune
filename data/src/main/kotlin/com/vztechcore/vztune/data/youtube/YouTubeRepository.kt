@@ -9,6 +9,8 @@ import com.vztechcore.vztune.core.domain.music.Track
 import com.vztechcore.vztune.core.domain.search.SearchHit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import org.schabi.newpipe.extractor.InfoItem
 import org.schabi.newpipe.extractor.Page
 import org.schabi.newpipe.extractor.ServiceList
@@ -1896,23 +1898,126 @@ Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, duratio
     /** Tudo que a tela Shorts precisa de um video: streams + detalhes. */
     data class ShortPlaybackInfo(
         val streams: List<ShortVideoStream>,
-        val viewCount: Long?,
-        val likeCount: Long?,
-        val description: String?,
-        val publishedText: String?,
-        val channelAvatarUrl: String?,
-        val durationSeconds: Long,
+        val viewCount: Long? = null,
+        val likeCount: Long? = null,
+        val description: String? = null,
+        val publishedText: String? = null,
+        val channelAvatarUrl: String? = null,
+        val durationSeconds: Long = 0L,
         val publishDateText: String? = null,
+        val commentCount: Long? = null,
     )
 
     private val shortMonths = listOf("Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez")
 
-    /**
-     * Busca streams de VIDEO + detalhes do Short.
-     * NewPipe: videoStreams (muxed, com audio) + videoOnlyStreams (video-only, merge com audio).
-     * InnerTube: adaptiveFormats (video-only + audio) e formats (muxed) como extra/fallback.
-     * Ordena da MAIOR qualidade pra menor; HLS (height 0) fica por ultimo.
-     */
+    /** Escolhe o audio ORIGINAL / pt-BR (evita a dublagem em ingles que o YouTube empurra). */
+    private fun pickBestAudio(np: org.schabi.newpipe.extractor.stream.StreamExtractor?): String? = runCatching {
+        val list = np?.audioStreams?.filter { !it.content.isNullOrBlank() } ?: return@runCatching null
+        if (list.isEmpty()) return@runCatching null
+        fun score(s: AudioStream): Int {
+            var v = 0
+            if (runCatching { s.audioTrackType?.name }.getOrNull() == "ORIGINAL") v += 4
+            if (runCatching { s.audioLocale?.language }.getOrNull() == "pt") v += 4
+            if (runCatching { s.audioTrackId }.getOrNull().orEmpty().startsWith("pt")) v += 2
+            return v
+        }
+        list.sortedWith(compareByDescending<AudioStream> { score(it) }.thenByDescending { it.averageBitrate }).first().content
+    }.getOrNull()
+
+    /** Audio do InnerTube: prefere pt / faixa original / default, nunca a dublagem inglesa por bitrate. */
+    private fun pickInnerTubeAudio(adaptive: JSONArray?): String? {
+        if (adaptive == null) return null
+        var best: String? = null
+        var bestScore = -1
+        var bestBr = -1L
+        for (i in 0 until adaptive.length()) {
+            val f = adaptive.optJSONObject(i) ?: continue
+            if (!f.optString("mimeType").contains("audio")) continue
+            val url = f.optString("url").takeIf { it.isNotBlank() } ?: continue
+            val track = f.optJSONObject("audioTrack")
+            val id = track?.optString("id").orEmpty()
+            var score = 0
+            if (id.startsWith("pt")) score += 4
+            if (track?.optBoolean("audioIsDefault", false) == true) score += 2
+            if (id.endsWith(".4")) score += 2
+            val br = f.optLong("bitrate", 0)
+            if (score > bestScore || (score == bestScore && br > bestBr)) { bestScore = score; bestBr = br; best = url }
+        }
+        return best
+    }
+
+    /** Streams so do InnerTube (rapido, 1 request) - usado pra tocar na hora. */
+    private fun buildInnerTubeStreams(player: JSONObject, npAudio: String?): List<ShortVideoStream> {
+        val out = mutableListOf<ShortVideoStream>()
+        val streaming = player.optJSONObject("streamingData") ?: return out
+        val adaptive = streaming.optJSONArray("adaptiveFormats")
+        val itAudio = pickInnerTubeAudio(adaptive) ?: npAudio
+        if (adaptive != null) {
+            for (i in 0 until adaptive.length()) {
+                val f = adaptive.optJSONObject(i) ?: continue
+                if (!f.optString("mimeType").contains("video")) continue
+                val url = f.optString("url").takeIf { it.isNotBlank() } ?: continue
+                val h = f.optInt("height", 0)
+                val label = f.optString("qualityLabel").takeIf { it.isNotBlank() } ?: (h.toString() + "p")
+                if (h > 0 && itAudio != null) out += ShortVideoStream(url, label, h, itAudio)
+            }
+        }
+        val formats = streaming.optJSONArray("formats")
+        if (formats != null) {
+            for (i in 0 until formats.length()) {
+                val f = formats.optJSONObject(i) ?: continue
+                val url = f.optString("url").takeIf { it.isNotBlank() } ?: continue
+                val h = f.optInt("height", 0)
+                val label = f.optString("qualityLabel").takeIf { it.isNotBlank() } ?: f.optString("quality").ifBlank { "Auto" }
+                if (h <= 0 || out.none { it.height == h }) out += ShortVideoStream(url, label, h)
+            }
+        }
+        streaming.optString("hlsManifestUrl").takeIf { it.isNotBlank() }?.let { out += ShortVideoStream(it, "Auto (HLS)", 0) }
+        return out.sortedByDescending { it.height }
+    }
+
+    /** Fast-path: so InnerTube, sem NewPipe. Toca quase instantaneo igual o YouTube. */
+    suspend fun getShortStreamsFast(videoId: String): List<ShortVideoStream> = withContext(Dispatchers.IO) {
+        runCatching { buildInnerTubeStreams(InnerTubeYouTube.player(videoId), null) }.getOrDefault(emptyList())
+    }
+
+    /** Contagem de comentarios via next (commentsEntryPointHeaderRenderer.commentCount). */
+    private fun extractCommentCount(json: JSONObject): Long? {
+        var found: Long? = null
+        fun walk(n: Any?) {
+            if (found != null) return
+            when (n) {
+                is JSONObject -> {
+                    n.optJSONObject("commentsEntryPointHeaderRenderer")?.let { h ->
+                        val txt = YouTubeSearchParser.textOf(h.optJSONObject("commentCount"))
+                        if (txt != null) {
+                            found = YouTubeChannelParser.parseViewCount(txt) ?: txt.filter { it.isDigit() }.toLongOrNull()
+                            return
+                        }
+                    }
+                    val keys = n.keys()
+                    while (keys.hasNext()) walk(n.opt(keys.next()))
+                }
+                is JSONArray -> for (i in 0 until n.length()) walk(n.opt(i))
+            }
+        }
+        walk(json)
+        return found
+    }
+
+    /** Descricao HTML do NewPipe -> texto limpo igual YouTube: <br> vira linha, link vira a URL, hashtag mantida. */
+    private fun htmlDescriptionToText(html: String): String {
+        var s = html
+        s = s.replace(Regex("(?i)<br\\s*/?>"), "\n")
+        s = s.replace(Regex("(?i)</p>"), "\n")
+        s = s.replace(Regex("(?i)<a[^>]*href=\"[^\"]*hashtag[^\"]*\"[^>]*>(.*?)</a>")) { it.groupValues[1] }
+        s = s.replace(Regex("(?i)<a[^>]*href=\"([^\"]+)\"[^>]*>.*?</a>")) { it.groupValues[1] }
+        s = s.replace(Regex("(?i)<[^>]+>"), "")
+        s = s.replace("&nbsp;", " ").replace("&amp;", "&").replace("&quot;", "\"").replace("&#39;", "'").replace("&lt;", "<").replace("&gt;", ">")
+        return s.replace(Regex("\n{3,}"), "\n\n").trim()
+    }
+
+    /** Completo (streams + detalhes). Usado no prefetch dos vizinhos. */
     suspend fun getShortPlaybackInfo(videoId: String): ShortPlaybackInfo? = withContext(Dispatchers.IO) {
         if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
         val np = runCatching {
@@ -1920,12 +2025,9 @@ Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, duratio
             ex.fetchPage()
             ex
         }.getOrNull()
+        val npAudio = pickBestAudio(np)
         val streams = mutableListOf<ShortVideoStream>()
-        var npAudio: String? = null
         if (np != null) {
-            npAudio = runCatching {
-                np.audioStreams.filter { !it.content.isNullOrBlank() }.maxByOrNull { it.averageBitrate }?.content
-            }.getOrNull()
             runCatching {
                 np.videoStreams.forEach { s ->
                     val u = s.content
@@ -1953,56 +2055,27 @@ Track(id = vid, title = stream.name ?: "Untitled", artist = channelName, duratio
             val player = InnerTubeYouTube.player(videoId)
             itDesc = player.optJSONObject("videoDetails")?.optString("shortDescription")?.takeIf { it.isNotBlank() }
             itViews = player.optJSONObject("videoDetails")?.optString("viewCount")?.toLongOrNull()?.takeIf { it > 0 }
-            val streaming = player.optJSONObject("streamingData")
-            val adaptive = streaming?.optJSONArray("adaptiveFormats")
-            var itAudio: String? = null
-            var itAudioBr = -1L
-            if (adaptive != null) {
-                for (i in 0 until adaptive.length()) {
-                    val f = adaptive.optJSONObject(i) ?: continue
-                    if (!f.optString("mimeType").contains("audio")) continue
-                    val url = f.optString("url").takeIf { it.isNotBlank() } ?: continue
-                    val br = f.optLong("bitrate", 0)
-                    if (br > itAudioBr) { itAudioBr = br; itAudio = url }
-                }
-                for (i in 0 until adaptive.length()) {
-                    val f = adaptive.optJSONObject(i) ?: continue
-                    if (!f.optString("mimeType").contains("video")) continue
-                    val url = f.optString("url").takeIf { it.isNotBlank() } ?: continue
-                    val h = f.optInt("height", 0)
-                    val label = f.optString("qualityLabel").takeIf { it.isNotBlank() } ?: (h.toString() + "p")
-                    val audio = itAudio ?: npAudio
-                    if (h > 0 && streams.none { it.height == h } && audio != null) {
-                        streams += ShortVideoStream(url, label, h, audio)
-                    }
-                }
-            }
-            val formats = streaming?.optJSONArray("formats")
-            if (formats != null) {
-                for (i in 0 until formats.length()) {
-                    val f = formats.optJSONObject(i) ?: continue
-                    val url = f.optString("url").takeIf { it.isNotBlank() } ?: continue
-                    val h = f.optInt("height", 0)
-                    val label = f.optString("qualityLabel").takeIf { it.isNotBlank() } ?: f.optString("quality").ifBlank { "Auto" }
-                    if (h <= 0 || streams.none { it.height == h }) streams += ShortVideoStream(url, label, h)
-                }
-            }
+            val fromIt = buildInnerTubeStreams(player, npAudio)
+            val have = streams.map { it.height }.toSet()
+            streams += fromIt.filter { it.height !in have || it.height == 0 }
         }.onFailure { Log.w(TAG, "InnerTube short formats failed: ${it.message}") }
         runCatching { np?.hlsUrl?.takeIf { it.isNotBlank() }?.let { streams += ShortVideoStream(it, "Auto (HLS)", 0) } }
         if (streams.isEmpty()) return@withContext null
-        val sorted = streams.sortedByDescending { it.height }
+        val comments = runCatching { extractCommentCount(InnerTubeYouTube.next(videoId)) }.getOrNull()
+        val rawDesc = runCatching { np?.description?.content }.getOrNull()?.takeIf { it.isNotBlank() } ?: itDesc
         val dateText = runCatching { np?.uploadDate?.offsetDateTime() }.getOrNull()?.let { d ->
             "%02d, %s, %d".format(d.dayOfMonth, shortMonths[(d.monthValue - 1).coerceIn(0, 11)], d.year)
         }
         ShortPlaybackInfo(
-            streams = sorted,
+            streams = streams.sortedByDescending { it.height },
             viewCount = runCatching { np?.viewCount?.takeIf { it > 0 } }.getOrNull() ?: itViews,
             likeCount = runCatching { np?.likeCount?.takeIf { it > 0 } }.getOrNull(),
-            description = runCatching { np?.description?.content }.getOrNull()?.takeIf { it.isNotBlank() } ?: itDesc,
+            description = rawDesc?.let { htmlDescriptionToText(it) }?.takeIf { it.isNotBlank() },
             publishedText = formatPublished(runCatching { np?.uploadDate }.getOrNull()),
             channelAvatarUrl = runCatching { np?.uploaderAvatars?.lastOrNull()?.url }.getOrNull(),
             durationSeconds = runCatching { np?.length ?: 0L }.getOrDefault(0L),
             publishDateText = dateText,
+            commentCount = comments,
         )
     }
     private companion object {

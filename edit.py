@@ -1,382 +1,283 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-edit.py - VzTune Shorts: audio original pt-BR, descricao limpa (igual YouTube),
-          sheet menor c/ stats em colunas, Qualidade em 3 modos persistidos,
-          icones direita com contagens, playback instantaneo (InnerTube fast-path).
-Uso: python3 edit.py --dry  |  python3 edit.py   (sem .bak, tudo-ou-nada, idempotente)
+fix_shorts2.py - Regenera ShortsScreen.kt limpo (corrige Expecting element/)/}).
+Uso: python3 fix_shorts2.py --dry | python3 fix_shorts2.py
 """
-import os, re, sys
+import os, sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-APP = "app/src/main/kotlin/com/vztechcore/vztune"
-DATA = "data/src/main/kotlin/com/vztechcore/vztune/data"
+REL = "app/src/main/kotlin/com/vztechcore/vztune/ui/screens/shorts/ShortsScreen.kt"
 
-class PatchError(Exception): pass
+CONTENT = r'''package com.vztechcore.vztune.ui.screens.shorts
 
-def _flex_regex(anchor):
-    lines = anchor.strip("\n").split("\n")
-    if not lines or lines[0].strip() == "":
-        raise PatchError("ancora invalida")
-    parts = [r"(?m)^[ \t]*" + re.escape(lines[0].strip())]
-    for ln in lines[1:]:
-        t = ln.strip()
-        parts.append(r"\n[ \t]*" + (re.escape(t) if t else ""))
-    return re.compile("".join(parts))
+import android.content.Intent
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+import coil.compose.AsyncImage
+import com.vztechcore.vztune.core.domain.music.Track
+import com.vztechcore.vztune.ui.components.cards.formatViewsCompact
+import com.vztechcore.vztune.ui.components.rows.SheetOptionRow
+import com.vztechcore.vztune.ui.components.text.openUrlInBrowser
+import com.vztechcore.vztune.ui.icons.VzIcons
+import com.vztechcore.vztune.ui.icons.actions.Add
+import com.vztechcore.vztune.ui.icons.actions.ArrowBackIos
+import com.vztechcore.vztune.ui.icons.actions.Bookmark
+import com.vztechcore.vztune.ui.icons.actions.Close
+import com.vztechcore.vztune.ui.icons.actions.Comment
+import com.vztechcore.vztune.ui.icons.actions.FavoriteFilled
+import com.vztechcore.vztune.ui.icons.actions.FavoriteOutline
+import com.vztechcore.vztune.ui.icons.actions.Info
+import com.vztechcore.vztune.ui.icons.actions.MoreVert
+import com.vztechcore.vztune.ui.icons.actions.Remove
+import com.vztechcore.vztune.ui.icons.actions.Share
+import com.vztechcore.vztune.ui.icons.actions.Visibility
+import com.vztechcore.vztune.ui.icons.player.Pause
+import com.vztechcore.vztune.ui.icons.player.Play
+import com.vztechcore.vztune.ui.icons.player.Speed
+import com.vztechcore.vztune.ui.icons.player.VolumeMute
+import com.vztechcore.vztune.ui.icons.player.VolumeUp
+import com.vztechcore.vztune.ui.icons.settings.Tune
+import kotlinx.coroutines.delay
 
-def _find_all(s, a): return list(_flex_regex(a).finditer(s))
+private val SheetColor = Color(0xFF121829)
+private val HashtagBlue = Color(0xFF5AB0FF)
+private val ShortLineBreak = Char(10)
 
-class Replace:
-    def __init__(self, old, new, marker=None):
-        self.old, self.new = old, new
-        self.marker = marker if marker is not None else new.strip("\n")
-    def apply(self, s):
-        if self.marker and self.marker in s: return s, "ja aplicado"
-        ms = _find_all(s, self.old)
-        if len(ms) != 1:
-            raise PatchError("trecho %dx (esperado 1): %r" % (len(ms), self.old.strip()[:80]))
-        return _flex_regex(self.old).sub(lambda m: self.new, s), "ok"
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ShortsScreen(
+    state: ShortsUiState,
+    player: ExoPlayer,
+    onBackClick: () -> Unit,
+    onPageSettled: (Int) -> Unit,
+    onTogglePlayPause: () -> Unit,
+    onToggleMute: () -> Unit,
+    onSpeedChange: (Float) -> Unit,
+    onQualityModeSelect: (String) -> Unit,
+    onToggleFavorite: () -> Unit,
+    onToggleFollow: () -> Unit,
+    onOpenChannel: () -> Unit,
+) {
+    val context = LocalContext.current
+    if (state.items.isEmpty()) {
+        Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Nenhum Short para mostrar", color = Color.White.copy(alpha = 0.7f))
+                Spacer(Modifier.height(12.dp))
+                TextButton(onClick = onBackClick) { Text("Voltar", color = Color.White) }
+            }
+        }
+        return
+    }
 
-class InsertBefore:
-    def __init__(self, anchor, text, marker=None):
-        self.anchor, self.text = anchor, text
-        self.marker = marker if marker is not None else text.strip("\n")
-    def apply(self, s):
-        if self.marker and self.marker in s: return s, "ja aplicado"
-        ms = _find_all(s, self.anchor)
-        if len(ms) != 1:
-            raise PatchError("ancora %dx (esperado 1): %r" % (len(ms), self.anchor.strip()[:80]))
-        i = ms[0].start()
-        return s[:i] + self.text.rstrip("\n") + "\n" + s[i:], "ok"
+    val pagerState = rememberPagerState(initialPage = state.index) { state.items.size }
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    var interfaceHidden by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    var showDescription by remember { mutableStateOf(false) }
+    var showQuality by remember { mutableStateOf(false) }
+    var showSpeed by remember { mutableStateOf(false) }
+    var cueVisible by remember { mutableStateOf(false) }
 
-class ReplaceBetween:
-    def __init__(self, start, end, new, marker):
-        self.start, self.end, self.new, self.marker = start, end, new, marker
-    def apply(self, s):
-        if self.marker in s: return s, "ja aplicado"
-        ms = _find_all(s, self.start)
-        if len(ms) != 1: raise PatchError("inicio %dx: %r" % (len(ms), self.start.strip()[:80]))
-        a = ms[0]
-        me = _flex_regex(self.end).search(s, a.end())
-        if me is None: raise PatchError("fim nao encontrado: %r" % self.end.strip()[:80])
-        return s[:a.start()] + self.new.rstrip("\n") + "\n" + s[me.start():], "ok"
+    LaunchedEffect(pagerState.settledPage) {
+        scale = 1f
+        offset = Offset.Zero
+        onPageSettled(pagerState.settledPage)
+    }
+    LaunchedEffect(state.cueToken) {
+        if (state.cueToken != 0L) {
+            cueVisible = true
+            delay(500)
+            cueVisible = false
+        }
+    }
 
-PATCHES = {}
-
-# ============ REPO: imports org.json + bloco SHORTS novo ============
-PATCHES[f"{DATA}/youtube/YouTubeRepository.kt"] = [
-    InsertBefore("import org.schabi.newpipe.extractor.InfoItem",
-        "import org.json.JSONArray\nimport org.json.JSONObject",
-        marker="import org.json.JSONObject"),
-    ReplaceBetween(
-        "    // ================= SHORTS (tela cheia) =================",
-        "    private companion object {",
-        r'''    // ================= SHORTS (tela cheia) =================
-    /** Stream de video pra tela Shorts. [audioUrl] != null = video-only que precisa merge com audio. */
-    data class ShortVideoStream(val url: String, val qualityLabel: String, val height: Int, val audioUrl: String? = null)
-
-    /** Tudo que a tela Shorts precisa de um video: streams + detalhes. */
-    data class ShortPlaybackInfo(
-        val streams: List<ShortVideoStream>,
-        val viewCount: Long? = null,
-        val likeCount: Long? = null,
-        val description: String? = null,
-        val publishedText: String? = null,
-        val channelAvatarUrl: String? = null,
-        val durationSeconds: Long = 0L,
-        val publishDateText: String? = null,
-        val commentCount: Long? = null,
+    val zoomed = scale > 1.01f
+    val interfaceVisible = !interfaceHidden && !zoomed
+    val currentTrack = state.items.getOrElse(pagerState.settledPage) { state.items.first() }
+    val bottomPad by animateDpAsState(
+        targetValue = if (showDescription) 460.dp else 0.dp,
+        animationSpec = tween(250),
+        label = "shortsDescPad",
     )
 
-    private val shortMonths = listOf("Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez")
-
-    /** Escolhe o audio ORIGINAL / pt-BR (evita a dublagem em ingles que o YouTube empurra). */
-    private fun pickBestAudio(np: org.schabi.newpipe.extractor.stream.StreamExtractor?): String? = runCatching {
-        val list = np?.audioStreams?.filter { !it.content.isNullOrBlank() } ?: return@runCatching null
-        if (list.isEmpty()) return@runCatching null
-        fun score(s: AudioStream): Int {
-            var v = 0
-            if (runCatching { s.audioTrackType?.name }.getOrNull() == "ORIGINAL") v += 4
-            if (runCatching { s.audioLocale?.language }.getOrNull() == "pt") v += 4
-            if (runCatching { s.audioTrackId }.getOrNull().orEmpty().startsWith("pt")) v += 2
-            return v
+    val gestureModifier = Modifier
+        .pointerInput(Unit) {
+            detectTapGestures(
+                onTap = { onTogglePlayPause() },
+                onDoubleTap = { scale = 1f; offset = Offset.Zero },
+            )
         }
-        list.sortedWith(compareByDescending<AudioStream> { score(it) }.thenByDescending { it.averageBitrate }).first().content
-    }.getOrNull()
-
-    /** Audio do InnerTube: prefere pt / faixa original / default, nunca a dublagem inglesa por bitrate. */
-    private fun pickInnerTubeAudio(adaptive: JSONArray?): String? {
-        if (adaptive == null) return null
-        var best: String? = null
-        var bestScore = -1
-        var bestBr = -1L
-        for (i in 0 until adaptive.length()) {
-            val f = adaptive.optJSONObject(i) ?: continue
-            if (!f.optString("mimeType").contains("audio")) continue
-            val url = f.optString("url").takeIf { it.isNotBlank() } ?: continue
-            val track = f.optJSONObject("audioTrack")
-            val id = track?.optString("id").orEmpty()
-            var score = 0
-            if (id.startsWith("pt")) score += 4
-            if (track?.optBoolean("audioIsDefault", false) == true) score += 2
-            if (id.endsWith(".4")) score += 2
-            val br = f.optLong("bitrate", 0)
-            if (score > bestScore || (score == bestScore && br > bestBr)) { bestScore = score; bestBr = br; best = url }
-        }
-        return best
-    }
-
-    /** Streams so do InnerTube (rapido, 1 request) - usado pra tocar na hora. */
-    private fun buildInnerTubeStreams(player: JSONObject, npAudio: String?): List<ShortVideoStream> {
-        val out = mutableListOf<ShortVideoStream>()
-        val streaming = player.optJSONObject("streamingData") ?: return out
-        val adaptive = streaming.optJSONArray("adaptiveFormats")
-        val itAudio = pickInnerTubeAudio(adaptive) ?: npAudio
-        if (adaptive != null) {
-            for (i in 0 until adaptive.length()) {
-                val f = adaptive.optJSONObject(i) ?: continue
-                if (!f.optString("mimeType").contains("video")) continue
-                val url = f.optString("url").takeIf { it.isNotBlank() } ?: continue
-                val h = f.optInt("height", 0)
-                val label = f.optString("qualityLabel").takeIf { it.isNotBlank() } ?: (h.toString() + "p")
-                if (h > 0 && itAudio != null) out += ShortVideoStream(url, label, h, itAudio)
-            }
-        }
-        val formats = streaming.optJSONArray("formats")
-        if (formats != null) {
-            for (i in 0 until formats.length()) {
-                val f = formats.optJSONObject(i) ?: continue
-                val url = f.optString("url").takeIf { it.isNotBlank() } ?: continue
-                val h = f.optInt("height", 0)
-                val label = f.optString("qualityLabel").takeIf { it.isNotBlank() } ?: f.optString("quality").ifBlank { "Auto" }
-                if (h <= 0 || out.none { it.height == h }) out += ShortVideoStream(url, label, h)
-            }
-        }
-        streaming.optString("hlsManifestUrl").takeIf { it.isNotBlank() }?.let { out += ShortVideoStream(it, "Auto (HLS)", 0) }
-        return out.sortedByDescending { it.height }
-    }
-
-    /** Fast-path: so InnerTube, sem NewPipe. Toca quase instantaneo igual o YouTube. */
-    suspend fun getShortStreamsFast(videoId: String): List<ShortVideoStream> = withContext(Dispatchers.IO) {
-        runCatching { buildInnerTubeStreams(InnerTubeYouTube.player(videoId), null) }.getOrDefault(emptyList())
-    }
-
-    /** Contagem de comentarios via next (commentsEntryPointHeaderRenderer.commentCount). */
-    private fun extractCommentCount(json: JSONObject): Long? {
-        var found: Long? = null
-        fun walk(n: Any?) {
-            if (found != null) return
-            when (n) {
-                is JSONObject -> {
-                    n.optJSONObject("commentsEntryPointHeaderRenderer")?.let { h ->
-                        val txt = YouTubeSearchParser.textOf(h.optJSONObject("commentCount"))
-                        if (txt != null) {
-                            found = YouTubeChannelParser.parseViewCount(txt) ?: txt.filter { it.isDigit() }.toLongOrNull()
-                            return
+        .pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false)
+                var prevDist = -1f
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val pressed = event.changes.filter { it.pressed }
+                    if (pressed.isEmpty()) break
+                    if (pressed.size >= 2) {
+                        val dist = (pressed[0].position - pressed[1].position).getDistance()
+                        if (prevDist > 0f && dist > 0f) {
+                            scale = (scale * (dist / prevDist)).coerceIn(1f, 5f)
+                            if (scale <= 1.01f) offset = Offset.Zero
+                            event.changes.forEach { it.consume() }
                         }
-                    }
-                    val keys = n.keys()
-                    while (keys.hasNext()) walk(n.opt(keys.next()))
-                }
-                is JSONArray -> for (i in 0 until n.length()) walk(n.opt(i))
-            }
-        }
-        walk(json)
-        return found
-    }
-
-    /** Descricao HTML do NewPipe -> texto limpo igual YouTube: <br> vira linha, link vira a URL, hashtag mantida. */
-    private fun htmlDescriptionToText(html: String): String {
-        var s = html
-        s = s.replace(Regex("(?i)<br\\s*/?>"), "\n")
-        s = s.replace(Regex("(?i)</p>"), "\n")
-        s = s.replace(Regex("(?i)<a[^>]*href=\"[^\"]*hashtag[^\"]*\"[^>]*>(.*?)</a>")) { it.groupValues[1] }
-        s = s.replace(Regex("(?i)<a[^>]*href=\"([^\"]+)\"[^>]*>.*?</a>")) { it.groupValues[1] }
-        s = s.replace(Regex("(?i)<[^>]+>"), "")
-        s = s.replace("&nbsp;", " ").replace("&amp;", "&").replace("&quot;", "\"").replace("&#39;", "'").replace("&lt;", "<").replace("&gt;", ">")
-        return s.replace(Regex("\n{3,}"), "\n\n").trim()
-    }
-
-    /** Completo (streams + detalhes). Usado no prefetch dos vizinhos. */
-    suspend fun getShortPlaybackInfo(videoId: String): ShortPlaybackInfo? = withContext(Dispatchers.IO) {
-        if (!NewPipeInitializer.ensureInitialized(downloader)) return@withContext null
-        val np = runCatching {
-            val ex = ServiceList.YouTube.getStreamExtractor("https://www.youtube.com/watch?v=$videoId")
-            ex.fetchPage()
-            ex
-        }.getOrNull()
-        val npAudio = pickBestAudio(np)
-        val streams = mutableListOf<ShortVideoStream>()
-        if (np != null) {
-            runCatching {
-                np.videoStreams.forEach { s ->
-                    val u = s.content
-                    if (!u.isNullOrBlank()) {
-                        val res = s.resolution.orEmpty()
-                        val h = res.removeSuffix("p").toIntOrNull() ?: 0
-                        streams += ShortVideoStream(u, res.ifBlank { "Auto" }, h)
-                    }
-                }
-            }
-            runCatching {
-                np.videoOnlyStreams.forEach { s ->
-                    val u = s.content
-                    if (!u.isNullOrBlank() && npAudio != null) {
-                        val res = s.resolution.orEmpty()
-                        val h = res.removeSuffix("p").toIntOrNull() ?: 0
-                        streams += ShortVideoStream(u, res.ifBlank { "Auto" }, h, npAudio)
+                        prevDist = dist
+                    } else {
+                        prevDist = -1f
                     }
                 }
             }
         }
-        var itDesc: String? = null
-        var itViews: Long? = null
-        runCatching {
-            val player = InnerTubeYouTube.player(videoId)
-            itDesc = player.optJSONObject("videoDetails")?.optString("shortDescription")?.takeIf { it.isNotBlank() }
-            itViews = player.optJSONObject("videoDetails")?.optString("viewCount")?.toLongOrNull()?.takeIf { it > 0 }
-            val fromIt = buildInnerTubeStreams(player, npAudio)
-            val have = streams.map { it.height }.toSet()
-            streams += fromIt.filter { it.height !in have || it.height == 0 }
-        }.onFailure { Log.w(TAG, "InnerTube short formats failed: ${it.message}") }
-        runCatching { np?.hlsUrl?.takeIf { it.isNotBlank() }?.let { streams += ShortVideoStream(it, "Auto (HLS)", 0) } }
-        if (streams.isEmpty()) return@withContext null
-        val comments = runCatching { extractCommentCount(InnerTubeYouTube.next(videoId)) }.getOrNull()
-        val rawDesc = runCatching { np?.description?.content }.getOrNull()?.takeIf { it.isNotBlank() } ?: itDesc
-        val dateText = runCatching { np?.uploadDate?.offsetDateTime() }.getOrNull()?.let { d ->
-            "%02d, %s, %d".format(d.dayOfMonth, shortMonths[(d.monthValue - 1).coerceIn(0, 11)], d.year)
-        }
-        ShortPlaybackInfo(
-            streams = streams.sortedByDescending { it.height },
-            viewCount = runCatching { np?.viewCount?.takeIf { it > 0 } }.getOrNull() ?: itViews,
-            likeCount = runCatching { np?.likeCount?.takeIf { it > 0 } }.getOrNull(),
-            description = rawDesc?.let { htmlDescriptionToText(it) }?.takeIf { it.isNotBlank() },
-            publishedText = formatPublished(runCatching { np?.uploadDate }.getOrNull()),
-            channelAvatarUrl = runCatching { np?.uploaderAvatars?.lastOrNull()?.url }.getOrNull(),
-            durationSeconds = runCatching { np?.length ?: 0L }.getOrDefault(0L),
-            publishDateText = dateText,
-            commentCount = comments,
-        )
-    }
-''',
-        marker="getShortStreamsFast",
-    ),
-]
-
-# ============ FACADE ============
-PATCHES[f"{DATA}/music/MusicRepository.kt"] = [
-    InsertBefore("    suspend fun getShortPlaybackInfo(videoId: String)",
-        "    suspend fun getShortStreamsFast(videoId: String): List<YouTubeRepository.ShortVideoStream> =\n        runCatching { youTubeRepository.getShortStreamsFast(videoId) }.getOrDefault(emptyList())",
-        marker="suspend fun getShortStreamsFast(",
-    ),
-]
-
-# ============ VIEWMODEL ============
-_VM_HELPERS = r'''    private val prefs = context.getSharedPreferences("vztune_shorts", Context.MODE_PRIVATE)
-
-    private fun loadMode(): String = prefs.getString("quality_mode", "auto") ?: "auto"
-
-    private fun isWifi(): Boolean = runCatching {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
-        val net = cm.activeNetwork ?: return false
-        val caps = cm.getNetworkCapabilities(net) ?: return false
-        caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
-            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)
-    }.getOrDefault(true)
-
-    /** Escolhe o stream pelo modo: auto(wifi=melhor, dados=menor), high=melhor, save=480/360. */
-    private fun pickStream(streams: List<YouTubeRepository.ShortVideoStream>, mode: String): YouTubeRepository.ShortVideoStream? {
-        if (streams.isEmpty()) return null
-        val sorted = streams.sortedByDescending { it.height }
-        val effective = when (mode) {
-            "high" -> "high"
-            "save" -> "save"
-            else -> if (isWifi()) "high" else "save"
-        }
-        return if (effective == "high") {
-            sorted.firstOrNull { it.height > 0 } ?: sorted.first()
-        } else {
-            sorted.firstOrNull { it.height in 360..480 }
-                ?: sorted.firstOrNull { it.height > 240 }
-                ?: sorted.first()
-        }
-    }
-
-'''
-PATCHES[f"{APP}/ui/screens/shorts/ShortsViewModel.kt"] = [
-    Replace("@ApplicationContext context: Context,", "@ApplicationContext private val context: Context,",
-            marker="@ApplicationContext private val context: Context,"),
-    Replace("    val selectedQuality: String? = null,",
-            "    val selectedQuality: String? = null,\n    val qualityMode: String = \"auto\",",
-            marker="val qualityMode: String ="),
-    InsertBefore("    private val _state = MutableStateFlow(", _VM_HELPERS, marker="private fun pickStream("),
-    Replace("            isLoading = items.isNotEmpty(),\n        )",
-            "            isLoading = items.isNotEmpty(),\n            qualityMode = loadMode(),\n        )",
-            marker="qualityMode = loadMode(),"),
-    Replace("selectedQuality = cached?.streams?.firstOrNull()?.qualityLabel,",
-            "selectedQuality = pickStream(cached.streams, _state.value.qualityMode)?.qualityLabel,",
-            marker="pickStream(cached.streams, _state.value.qualityMode)?.qualityLabel"),
-    Replace("playStream(cached.streams.firstOrNull(), 0L)",
-            "playStream(pickStream(cached.streams, _state.value.qualityMode), 0L)",
-            marker="playStream(pickStream(cached.streams, _state.value.qualityMode), 0L)"),
-    ReplaceBetween(
-        "        loadJob = viewModelScope.launch {",
-        "    private fun playStream(",
-        r'''        loadJob = viewModelScope.launch {
-            // Fast-path: InnerTube primeiro (1 request) -> toca na hora, igual YouTube.
-            val fast = musicRepository.getShortStreamsFast(track.id)
-            if (_state.value.index != index) return@launch
-            if (fast.isNotEmpty()) {
-                val pick = pickStream(fast, _state.value.qualityMode)
-                _state.update {
-                    it.copy(
-                        info = YouTubeRepository.ShortPlaybackInfo(streams = fast),
-                        isLoading = false,
-                        selectedQuality = pick?.qualityLabel,
-                    )
+        .pointerInput(zoomed) {
+            if (zoomed) {
+                detectDragGestures { change, drag ->
+                    change.consume()
+                    offset += drag
                 }
-                playStream(pick, 0L)
-            }
-            // Detalhes (likes, comentarios, descricao, data) chegam depois, sem reiniciar o video.
-            val full = musicRepository.getShortPlaybackInfo(track.id)
-            if (full != null) {
-                infoCache[track.id] = full
-                if (_state.value.index == index) {
-                    _state.update { it.copy(info = full, isLoading = false) }
-                }
-            } else if (fast.isEmpty()) {
-                _state.update { it.copy(isLoading = false) }
             }
         }
-    }
-''',
-        marker="val fast = musicRepository.getShortStreamsFast(track.id)",
-    ),
-    Replace("for (i in listOf(index + 1, index - 1, index + 2)) {",
-            "for (i in listOf(index + 1, index - 1, index + 2, index + 3)) {",
-            marker="index + 2, index + 3"),
-    InsertBefore("    fun togglePlayPause()",
-        r'''    /** Modo de qualidade persistido: fica salvo ate o usuario trocar de novo. */
-    fun selectQualityMode(mode: String) {
-        prefs.edit().putString("quality_mode", mode).apply()
-        _state.update { it.copy(qualityMode = mode) }
-        val info = _state.value.info ?: return
-        val pick = pickStream(info.streams, mode) ?: return
-        playStream(pick, player.currentPosition)
-    }
-''',
-        marker="fun selectQualityMode(",
-    ),
-]
 
-# ============ NAVHOST ============
-PATCHES[f"{APP}/ui/navigation/AppNavHost.kt"] = [
-    Replace("onQualitySelect = vm::selectQuality,", "onQualityModeSelect = vm::selectQualityMode,",
-            marker="onQualityModeSelect = vm::selectQualityMode,"),
-]
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Box(Modifier.fillMaxSize().padding(bottom = bottomPad)) {
+            VerticalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                userScrollEnabled = !zoomed,
+                beyondViewportPageCount = 1,
+            ) { page ->
+                val track = state.items[page]
+                val isSettled = page == pagerState.settledPage
+                Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+                    Box(
+                        Modifier.fillMaxSize().graphicsLayer {
+                            scaleX = if (isSettled) scale else 1f
+                            scaleY = if (isSettled) scale else 1f
+                            translationX = if (isSettled) offset.x else 0f
+                            translationY = if (isSettled) offset.y else 0f
+                        }
+                    ) {
+                        AsyncImage(
+                            model = track.thumbnailUrl ?: ("https://i.ytimg.com/vi/" + track.id + "/hqdefault.jpg"),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        AndroidView(
+                            factory = { ctx ->
+                                PlayerView(ctx).apply {
+                                    useController = false
+                                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                    setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                }
+                            },
+                            update = { pv -> pv.player = if (isSettled) player else null },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    if (isSettled) {
+                        Box(Modifier.fillMaxSize().then(gestureModifier))
+                    }
+                }
+            }
+        }
 
-# ============ SCREEN ============
-_RIGHT_COL = r'''            Column(
+        AnimatedVisibility(
+            visible = cueVisible,
+            enter = fadeIn(tween(100)),
+            exit = fadeOut(tween(220)),
+            modifier = Modifier.align(Alignment.Center),
+        ) {
+            Box(
+                Modifier.size(84.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = if (state.cueIsPause) VzIcons.Pause else VzIcons.Play,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(44.dp),
+                )
+            }
+        }
+
+        if (state.isLoading) {
+            CircularProgressIndicator(
+                color = Color.White,
+                strokeWidth = 2.dp,
+                modifier = Modifier.align(Alignment.Center).size(34.dp),
+            )
+        }
+
+        if (interfaceVisible) {
+            Row(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .background(Color.Black)
+                    .statusBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ShortsCircleButton(VzIcons.ArrowBackIos, "Voltar", onBackClick)
+                Spacer(Modifier.weight(1f))
+                ShortsCircleButton(
+                    icon = if (state.isMuted) VzIcons.VolumeMute else VzIcons.VolumeUp,
+                    contentDescription = if (state.isMuted) "Ativar áudio" else "Silenciar",
+                    onClick = onToggleMute,
+                )
+                Spacer(Modifier.width(8.dp))
+                ShortsCircleButton(VzIcons.MoreVert, "Mais opções") { showMenu = true }
+            }
+
+            Column(
                 Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -406,13 +307,101 @@ _RIGHT_COL = r'''            Column(
                     Modifier.size(44.dp).clip(RoundedCornerShape(10.dp))
                         .background(Color.White.copy(alpha = 0.08f))
                         .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                        .clickable { Toast.makeText(context, "Som do Short em breve ;)", Toast.LENGTH_SHORT).show()
+                        .clickable { Toast.makeText(context, "Som do Short em breve ;)", Toast.LENGTH_SHORT).show() }
                 ) {
                     AsyncImage(model = currentTrack.thumbnailUrl, contentDescription = "Som do Short", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 }
             }
-'''
-_QUALITY_SHEET = r'''    if (showQuality) {
+
+            Column(
+                Modifier.align(Alignment.BottomStart).navigationBarsPadding()
+                    .padding(start = 14.dp, end = 84.dp, bottom = 20.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.1f))
+                            .clickable { onOpenChannel() }
+                    ) {
+                        val avatar = state.channelAvatarUrl ?: state.info?.channelAvatarUrl
+                        if (!avatar.isNullOrBlank()) {
+                            AsyncImage(model = avatar, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = state.channelHandle?.takeIf { it.isNotBlank() } ?: state.channelName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false).clickable { onOpenChannel() },
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Box(
+                        Modifier.height(32.dp).clip(RoundedCornerShape(50))
+                            .background(if (state.isFollowing) Color.White.copy(alpha = 0.15f) else Color.Transparent)
+                            .border(1.dp, Color.White.copy(alpha = 0.4f), RoundedCornerShape(50))
+                            .clickable { onToggleFollow() }
+                            .padding(horizontal = 14.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = if (state.isFollowing) "Seguindo" else "Seguir",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = currentTrack.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.92f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().clickable { showDescription = true },
+                )
+            }
+        }
+
+        if (!interfaceVisible) {
+            Row(
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 26.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.Black.copy(alpha = 0.7f))
+                    .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(50))
+                    .clickable { interfaceHidden = false; scale = 1f; offset = Offset.Zero }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(VzIcons.Visibility, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Mostrar interface", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        ShortsProgressBar(player = player, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+    }
+
+    if (showMenu) {
+        ModalBottomSheet(
+            onDismissRequest = { showMenu = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = SheetColor,
+            contentColor = Color.White,
+        ) {
+            Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 16.dp)) {
+                SheetOptionRow(icon = VzIcons.Info, label = "Descrição", onClick = { showMenu = false; showDescription = true })
+                SheetOptionRow(icon = VzIcons.Visibility, label = "Ocultar interface", onClick = { showMenu = false; interfaceHidden = true })
+                SheetOptionRow(icon = VzIcons.Tune, label = "Qualidade", subtitle = state.selectedQuality ?: "Automática", onClick = { showMenu = false; showQuality = true })
+                SheetOptionRow(icon = VzIcons.Speed, label = "Velocidade de reprodução", subtitle = String.format("%.2fx", state.speed), onClick = { showMenu = false; showSpeed = true })
+            }
+        }
+    }
+
+    if (showQuality) {
         ModalBottomSheet(
             onDismissRequest = { showQuality = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -428,8 +417,60 @@ _QUALITY_SHEET = r'''    if (showQuality) {
             }
         }
     }
-'''
-_DESC_SHEET = r'''    if (showDescription) {
+
+    if (showSpeed) {
+        ModalBottomSheet(
+            onDismissRequest = { showSpeed = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = SheetColor,
+            contentColor = Color.White,
+        ) {
+            Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+                Text("Velocidade de reprodução", style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    String.format("%.2fx", state.speed),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ShortsCircleButton(VzIcons.Remove, "Diminuir 0.5") { onSpeedChange(state.speed - 0.5f) }
+                    Slider(
+                        value = state.speed,
+                        onValueChange = onSpeedChange,
+                        valueRange = 0.35f..4f,
+                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color(0xFF60A5FA)),
+                        modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
+                    )
+                    ShortsCircleButton(VzIcons.Add, "Aumentar 0.5") { onSpeedChange(state.speed + 0.5f) }
+                }
+                Spacer(Modifier.height(12.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(listOf("1.0" to 1f, "1.25" to 1.25f, "1.5" to 1.5f, "2.0" to 2f, "3.0" to 3f, "4.0" to 4f)) { (label, value) ->
+                        val selected = kotlin.math.abs(state.speed - value) < 0.01f
+                        Box(
+                            Modifier.clip(RoundedCornerShape(50))
+                                .background(if (selected) Color.White else Color.White.copy(alpha = 0.1f))
+                                .clickable { onSpeedChange(value) }
+                                .padding(horizontal = 14.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                label + "x",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (selected) Color.Black else Color.White,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showDescription) {
         ModalBottomSheet(
             onDismissRequest = { showDescription = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -496,8 +537,60 @@ _DESC_SHEET = r'''    if (showDescription) {
             }
         }
     }
-'''
-_HELPERS = r'''@Composable
+}
+
+@Composable
+private fun ShortsProgressBar(player: ExoPlayer, modifier: Modifier = Modifier) {
+    var progress by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
+    var dragProgress by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(player) {
+        while (true) {
+            if (!dragging) {
+                val d = player.duration
+                progress = if (d > 0) (player.currentPosition.toFloat() / d.toFloat()).coerceIn(0f, 1f) else 0f
+            }
+            delay(200)
+        }
+    }
+    val shown = if (dragging) dragProgress else progress
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(16.dp)
+            .pointerInput(Unit) {
+                detectTapGestures { off ->
+                    val d = player.duration
+                    if (d > 0) player.seekTo((off.x / size.width.toFloat() * d).toLong())
+                }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { off ->
+                        dragging = true
+                        dragProgress = (off.x / size.width.toFloat()).coerceIn(0f, 1f)
+                    },
+                    onDragEnd = {
+                        dragging = false
+                        val d = player.duration
+                        if (d > 0) player.seekTo((dragProgress * d).toLong())
+                    },
+                    onDragCancel = { dragging = false },
+                ) { change, _ ->
+                    change.consume()
+                    dragProgress = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
+                }
+            },
+        contentAlignment = Alignment.BottomStart,
+    ) {
+        Box(Modifier.fillMaxWidth().height(if (dragging) 6.dp else 3.dp).background(Color.White.copy(alpha = 0.25f)))
+        if (shown > 0f) {
+            Box(Modifier.fillMaxWidth(shown).height(if (dragging) 6.dp else 3.dp).background(Color.White))
+        }
+    }
+}
+
+@Composable
 private fun ShortActionLabeled(icon: ImageVector, label: String, onClick: () -> Unit) {
     Column(
         Modifier.clip(RoundedCornerShape(12.dp)).clickable { onClick() }.padding(4.dp),
@@ -551,14 +644,13 @@ private fun shortAgo(text: String?): String {
         .replace(" anos", " a").replace(" ano", " a")
 }
 
-/** Descricao limpa: hashtag azul + link azul clicavel (abre navegador), igual YouTube. */
 @Composable
 private fun ShortDescriptionText(text: String) {
     val context = LocalContext.current
     val annotated = remember(text) {
         buildAnnotatedString {
             var last = 0
-            Regex("(#[A-Za-z0-9_À-ÿ]+)|(https?://[^\\s<>\"']+)|(www\\.[^\\s<>\"']+)").findAll(text).forEach { m ->
+            Regex("(#[A-Za-z0-9_À-ÿ]+)|(https?://[^ <>]+)|(www[.][^ <>]+)").findAll(text).forEach { m ->
                 if (m.range.first > last) append(text.substring(last, m.range.first))
                 val v = m.value
                 val isTag = v.startsWith("#")
@@ -584,58 +676,131 @@ private fun ShortDescriptionText(text: String) {
         },
     )
 }
+
+@Composable
+private fun ShortsCircleButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(40.dp).clip(CircleShape).clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription, tint = Color.White, modifier = Modifier.size(21.dp))
+    }
+}
+
+@Composable
+private fun ShortAction(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(46.dp).clip(CircleShape).clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, label, tint = Color.White, modifier = Modifier.size(28.dp))
+    }
+}
+
+@Composable
+private fun DescStatRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.55f), modifier = Modifier.width(180.dp))
+        Text(value, style = MaterialTheme.typography.bodyMedium, color = Color.White, fontWeight = FontWeight.Medium)
+    }
+}
+
+private fun formatPlainCount(n: Long?): String {
+    if (n == null || n <= 0L) return "—"
+    return String.format("%,d", n).replace(',', '.')
+}
+
+@Composable
+private fun rememberHashtagText(text: String): AnnotatedString = remember(text) {
+    buildAnnotatedString {
+        var last = 0
+        Regex("#[A-Za-z0-9_À-ÿ]+").findAll(text).forEach { m ->
+            if (m.range.first > last) append(text.substring(last, m.range.first))
+            withStyle(SpanStyle(color = HashtagBlue)) { append(m.value) }
+            last = m.range.last + 1
+        }
+        if (last < text.length) append(text.substring(last))
+    }
+}
 '''
-PATCHES[f"{APP}/ui/screens/shorts/ShortsScreen.kt"] = [
-    InsertBefore("import com.vztechcore.vztune.ui.components.rows.SheetOptionRow",
-        "import com.vztechcore.vztune.ui.components.text.openUrlInBrowser\nimport com.vztechcore.vztune.ui.components.cards.formatViewsCompact",
-        marker="import com.vztechcore.vztune.ui.components.cards.formatViewsCompact"),
-    Replace("onQualitySelect: (String) -> Unit,", "onQualityModeSelect: (String) -> Unit,",
-            marker="onQualityModeSelect: (String) -> Unit,"),
-    Replace("targetValue = if (showDescription) 300.dp else 0.dp,",
-            "targetValue = if (showDescription) 460.dp else 0.dp,",
-            marker="if (showDescription) 460.dp else 0.dp"),
-    ReplaceBetween(
-        "            Column(\n                Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 24.dp),",
-        "            Column(\n                Modifier.align(Alignment.BottomStart).navigationBarsPadding()",
-        _RIGHT_COL,
-        marker="ShortActionLabeled(",
-    ),
-    ReplaceBetween("    if (showQuality) {", "    if (showSpeed) {", _QUALITY_SHEET, marker="QualityModeRow(\"auto\""),
-    ReplaceBetween("    if (showDescription) {", "/** Barrinha inferior de progresso do Short: mostra e permite arrastar pra buscar. */", _DESC_SHEET + "\n}\n\n", marker="DescStatColumn("),
-    InsertBefore("@Composable\nprivate fun ShortsCircleButton(", _HELPERS, marker="private fun ShortDescriptionText("),
-]
+
+
+def balance(src):
+    stack = []
+    i, n = 0, len(src)
+    line = 1
+    pairs = {')': '(', ']': '[', '}': '{'}
+    in_str = in_char = in_lc = in_bc = False
+    while i < n:
+        c = src[i]
+        if c == chr(10):
+            line += 1
+            in_lc = False
+            if in_str:
+                return "ERRO: string nao fechada na linha %d" % (line - 1)
+            i += 1; continue
+        if in_lc:
+            i += 1; continue
+        if in_bc:
+            if c == '*' and i + 1 < n and src[i + 1] == '/':
+                in_bc = False; i += 2; continue
+            i += 1; continue
+        if in_str:
+            if c == chr(92):
+                i += 2; continue
+            if c == '"':
+                in_str = False
+            i += 1; continue
+        if in_char:
+            if c == chr(92):
+                i += 2; continue
+            if c == "'":
+                in_char = False
+            i += 1; continue
+        if c == '/' and i + 1 < n and src[i + 1] == '/':
+            in_lc = True; i += 2; continue
+        if c == '/' and i + 1 < n and src[i + 1] == '*':
+            in_bc = True; i += 2; continue
+        if c == '"':
+            in_str = True; i += 1; continue
+        if c == "'":
+            in_char = True; i += 1; continue
+        if c in '([{':
+            stack.append((c, line))
+        elif c in ')]}':
+            if not stack or stack[-1][0] != pairs[c]:
+                return "ERRO: fechamento inesperado '%s' na linha %d" % (c, line)
+            stack.pop()
+        i += 1
+    if stack:
+        return "ERRO: nao fechado %s" % (stack[-1],)
+    return "ok"
+
 
 def main():
     dry = "--dry" in sys.argv
-    results, errors, staged = [], [], {}
-    for rel, ops in PATCHES.items():
-        path = os.path.join(ROOT, rel)
-        if not os.path.exists(path):
-            errors.append("[%s] arquivo nao existe" % rel); continue
-        with open(path, encoding="utf-8") as f: s = f.read()
-        for n, op in enumerate(ops, 1):
-            try:
-                s, st = op.apply(s)
-                results.append("  %-12s %s #%d" % (st, rel.split("/")[-1], n))
-            except PatchError as e:
-                errors.append("[%s] op #%d: %s" % (rel, n, e))
-        staged[rel] = s
-    print("\n".join(results))
-    if errors:
-        print("\nERROS (nada foi gravado):")
-        print("\n".join("  - " + e for e in errors))
+    path = os.path.join(ROOT, REL)
+    if not os.path.exists(path):
+        print("ERRO: nao achei", REL)
         sys.exit(1)
-    if dry:
-        print("\nDRY-RUN ok. Rode sem --dry para aplicar.")
+    st = balance(CONTENT)
+    print("Verificacao do conteudo novo:", st)
+    if st != "ok":
+        print("Conteudo novo quebrado, abortando.")
+        sys.exit(1)
+    old = open(path, encoding="utf-8").read()
+    if old == CONTENT:
+        print("ShortsScreen.kt ja esta correto.")
         return
-    changed = 0
-    for rel, s in staged.items():
-        path = os.path.join(ROOT, rel)
-        with open(path, encoding="utf-8") as f: old = f.read()
-        if old != s:
-            with open(path, "w", encoding="utf-8", newline="\n") as f: f.write(s)
-            print("alterado:", rel); changed += 1
-    print("\nPronto (%d arquivos). Compile o projeto." % changed)
+    if dry:
+        print("DRY-RUN: reescreveria", REL)
+        return
+    with open(path + ".broken2", "w", encoding="utf-8", newline=chr(10)) as f:
+        f.write(old)
+    with open(path, "w", encoding="utf-8", newline=chr(10)) as f:
+        f.write(CONTENT)
+    print("ShortsScreen.kt reescrito. Compile: ./gradlew :app:assembleDebug")
+
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,3 @@
-
 package com.vztechcore.vztune.ui.screens.shorts
 
 import android.content.Intent
@@ -50,9 +49,9 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.vztechcore.vztune.core.domain.music.Track
-import com.vztechcore.vztune.ui.components.text.openUrlInBrowser
 import com.vztechcore.vztune.ui.components.cards.formatViewsCompact
 import com.vztechcore.vztune.ui.components.rows.SheetOptionRow
+import com.vztechcore.vztune.ui.components.text.openUrlInBrowser
 import com.vztechcore.vztune.ui.icons.VzIcons
 import com.vztechcore.vztune.ui.icons.actions.Add
 import com.vztechcore.vztune.ui.icons.actions.ArrowBackIos
@@ -88,7 +87,7 @@ fun ShortsScreen(
     onTogglePlayPause: () -> Unit,
     onToggleMute: () -> Unit,
     onSpeedChange: (Float) -> Unit,
-onQualityModeSelect: (String) -> Unit,
+    onQualityModeSelect: (String) -> Unit,
     onToggleFavorite: () -> Unit,
     onToggleFollow: () -> Unit,
     onOpenChannel: () -> Unit,
@@ -132,7 +131,7 @@ onQualityModeSelect: (String) -> Unit,
     val interfaceVisible = !interfaceHidden && !zoomed
     val currentTrack = state.items.getOrElse(pagerState.settledPage) { state.items.first() }
     val bottomPad by animateDpAsState(
-targetValue = if (showDescription) 460.dp else 0.dp,
+        targetValue = if (showDescription) 460.dp else 0.dp,
         animationSpec = tween(250),
         label = "shortsDescPad",
     )
@@ -297,11 +296,12 @@ targetValue = if (showDescription) 460.dp else 0.dp,
                     Modifier.size(44.dp).clip(RoundedCornerShape(10.dp))
                         .background(Color.White.copy(alpha = 0.08f))
                         .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                        .clickable { Toast.makeText(context, "Som do Short em breve ;)", Toast.LENGTH_SHORT).show()
+                        .clickable { Toast.makeText(context, "Som do Short em breve ;)", Toast.LENGTH_SHORT).show() }
                 ) {
                     AsyncImage(model = currentTrack.thumbnailUrl, contentDescription = "Som do Short", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 }
             }
+
             Column(
                 Modifier.align(Alignment.BottomStart).navigationBarsPadding()
                     .padding(start = 14.dp, end = 84.dp, bottom = 20.dp)
@@ -367,11 +367,12 @@ targetValue = if (showDescription) 460.dp else 0.dp,
             ) {
                 Icon(VzIcons.Visibility, null, tint = Color.White, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-Text("Mostrar interface", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
-}
-}
-ShortsProgressBar(player = player, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
-}
+                Text("Mostrar interface", style = MaterialTheme.typography.labelLarge, color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        ShortsProgressBar(player = player, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+    }
 
     if (showMenu) {
         ModalBottomSheet(
@@ -405,6 +406,7 @@ ShortsProgressBar(player = player, modifier = Modifier.align(Alignment.BottomCen
             }
         }
     }
+
     if (showSpeed) {
         ModalBottomSheet(
             onDismissRequest = { showSpeed = false },
@@ -524,9 +526,8 @@ ShortsProgressBar(player = player, modifier = Modifier.align(Alignment.BottomCen
             }
         }
     }
-
 }
-/** Barrinha inferior de progresso do Short: mostra e permite arrastar pra buscar. */
+
 @Composable
 private fun ShortsProgressBar(player: ExoPlayer, modifier: Modifier = Modifier) {
     var progress by remember { mutableFloatStateOf(0f) }
@@ -577,6 +578,7 @@ private fun ShortsProgressBar(player: ExoPlayer, modifier: Modifier = Modifier) 
         }
     }
 }
+
 @Composable
 private fun ShortActionLabeled(icon: ImageVector, label: String, onClick: () -> Unit) {
     Column(
@@ -631,14 +633,13 @@ private fun shortAgo(text: String?): String {
         .replace(" anos", " a").replace(" ano", " a")
 }
 
-/** Descricao limpa: hashtag azul + link azul clicavel (abre navegador), igual YouTube. */
 @Composable
 private fun ShortDescriptionText(text: String) {
     val context = LocalContext.current
     val annotated = remember(text) {
         buildAnnotatedString {
             var last = 0
-            Regex("(#[A-Za-z0-9_À-ÿ]+)|(https?://[^\\s<>\"']+)|(www\\.[^\\s<>\"']+)").findAll(text).forEach { m ->
+            Regex("(#[A-Za-z0-9_À-ÿ]+)|(https?://[^ <>]+)|(www[.][^ <>]+)").findAll(text).forEach { m ->
                 if (m.range.first > last) append(text.substring(last, m.range.first))
                 val v = m.value
                 val isTag = v.startsWith("#")
@@ -664,10 +665,11 @@ private fun ShortDescriptionText(text: String) {
         },
     )
 }
+
 @Composable
 private fun ShortsCircleButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
     Box(
-Modifier.size(40.dp).clip(CircleShape).clickable { onClick() },
+        Modifier.size(40.dp).clip(CircleShape).clickable { onClick() },
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription, tint = Color.White, modifier = Modifier.size(21.dp))
@@ -677,7 +679,7 @@ Modifier.size(40.dp).clip(CircleShape).clickable { onClick() },
 @Composable
 private fun ShortAction(icon: ImageVector, label: String, onClick: () -> Unit) {
     Box(
-Modifier.size(46.dp).clip(CircleShape).clickable { onClick() },
+        Modifier.size(46.dp).clip(CircleShape).clickable { onClick() },
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, label, tint = Color.White, modifier = Modifier.size(28.dp))
@@ -693,7 +695,7 @@ private fun DescStatRow(label: String, value: String) {
 }
 
 private fun formatPlainCount(n: Long?): String {
-    if (n == null || n <= 0L) return "-"
+    if (n == null || n <= 0L) return "—"
     return String.format("%,d", n).replace(',', '.')
 }
 

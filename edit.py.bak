@@ -600,8 +600,8 @@ PATCHES[f"{APP}/ui/screens/shorts/ShortsScreen.kt"] = [
         _RIGHT_COL,
         marker="ShortActionLabeled(",
     ),
-    ReplaceBetween("    // ---- Sheet de qualidade ----", "    // ---- Sheet de velocidade ----", _QUALITY_SHEET, marker="QualityModeRow(\"auto\""),
-    ReplaceBetween("    if (showDescription) {", "}\n\n@Composable\nprivate fun ShortsProgressBar(", _DESC_SHEET, marker="DescStatColumn("),
+    ReplaceBetween("    if (showQuality) {", "    if (showSpeed) {", _QUALITY_SHEET, marker="QualityModeRow(\"auto\""),
+    ReplaceBetween("    if (showDescription) {", "/** Barrinha inferior de progresso do Short: mostra e permite arrastar pra buscar. */", _DESC_SHEET + "\n}\n\n", marker="DescStatColumn("),
     InsertBefore("@Composable\nprivate fun ShortsCircleButton(", _HELPERS, marker="private fun ShortDescriptionText("),
 ]
 

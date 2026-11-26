@@ -185,7 +185,7 @@ for (i in listOf(index + 1, index - 1, index + 2, index + 3)) {
                 info = cached,
                 isLoading = cached == null,
                 isFavorite = keyOf(index) in favKeys,
-selectedQuality = pickStream(cached.streams, _state.value.qualityMode)?.qualityLabel,
+selectedQuality = pickStream(cached?.streams.orEmpty(), _state.value.qualityMode)?.qualityLabel,
             )
         }
 loadJob?.cancel()
